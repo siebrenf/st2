@@ -1,0 +1,18 @@
+channels:
+  - conda-forge
+dependencies:
+  - python =3.12  # latest conda version
+  - conda-ecosystem-user-package-isolation =1.0
+
+  - diskcache
+  - loguru
+  - postgresql
+  - psycopg
+  - requests-ratelimiter
+  - xdg
+
+  # dev
+  - pydeps
+  - isort
+  - pytest
+  - black
