@@ -14,12 +14,15 @@ from st2.caching import cache
 
 def db_server_init():
     db = os.path.join(cache["data_dir"], f"sql")
+    log = os.path.join(cache["log_dir"], f"sql.txt")
     if not os.path.exists(db):
         # make the database
         sp.check_output(f"initdb -D {db} --username=postgres", shell=True)
+        sp.check_output(f"pg_ctl -D {db} -l {log} start", shell=True)
         sp.check_output(
             f"createdb --no-password --owner=postgres --user=postgres st2", shell=True
         )
+        sp.check_output(f"pg_ctl -D {db} stop", shell=True)
 
     # check if the SQL server is running
     try:
@@ -32,7 +35,6 @@ def db_server_init():
 
     if not running:
         # start the database
-        log = os.path.join(cache["log_dir"], f"sql.txt")
         sp.check_output(f"pg_ctl -D {db} -l {log} start", shell=True)
 
         def stop_sql_server():
