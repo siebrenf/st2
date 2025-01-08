@@ -7,12 +7,44 @@ from st2.logging import logger
 
 def astronomer(request):
     token = api_agent(request)[1]
-    total, current, page = db_astronomer_init(request, token)
-    if current == total:
-        return
-
-    logger.info(f"The Astronomer has found {total:_} stars in the night sky")
     with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS astronomer 
+            (
+                total integer PRIMARY KEY,
+                current integer,
+                page integer
+            )
+            """
+        )
+        cur.execute("SELECT * FROM astronomer")
+        ret = cur.fetchone()
+        if ret is None:
+            total = request.get(
+                endpoint="systems",
+                priority=3,
+                token=token,
+                params={"page": 1, "limit": 1},
+            )["meta"]["total"]
+            current = 0
+            page = 1
+            cur.execute(
+                """
+                INSERT INTO astronomer
+                (total, current, page)
+                VALUES (%s, %s, %s)
+                """,
+                (total, current, page),
+            )
+            conn.commit()
+        else:
+            total, current, page = ret
+
+        if current == total:
+            return
+
+        logger.info(f"The Astronomer has found {total:_} stars in the night sky")
         while current < total:
             # logger.debug(f'Processing page {page: >3}')
             systems = request.get(
@@ -24,10 +56,12 @@ def astronomer(request):
             for s in systems["data"]:
                 system_symbol = s["symbol"]
                 cur.execute(
-                    """INSERT INTO systems 
+                    """
+                    INSERT INTO systems 
                     (symbol, type, x, y)
                     VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (symbol) DO NOTHING""",
+                    ON CONFLICT (symbol) DO NOTHING
+                    """,
                     (system_symbol, s["type"], s["x"], s["y"]),
                 )
 
@@ -40,10 +74,12 @@ def astronomer(request):
                     orbits = wp.get("orbits")
                     orbitals = [o["symbol"] for o in wp["orbitals"]]
                     cur.execute(
-                        """INSERT INTO waypoints
+                        """
+                        INSERT INTO waypoints
                         (symbol, systemSymbol, type, x, y, orbits, orbitals, traits, chart, faction, isUnderConstruction)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (symbol) DO NOTHING""",
+                        ON CONFLICT (symbol) DO NOTHING
+                        """,
                         (
                             waypoints_symbol,
                             system_symbol,
@@ -59,77 +95,39 @@ def astronomer(request):
                         ),
                     )
                     cur.execute(
-                        """INSERT INTO system_waypoints
+                        """
+                        INSERT INTO system_waypoints
                         (systemSymbol, waypointSymbol)
                         VALUES (%s, %s)
-                        ON CONFLICT (systemSymbol, waypointSymbol) DO NOTHING""",
+                        ON CONFLICT (systemSymbol, waypointSymbol) DO NOTHING
+                        """,
                         (system_symbol, waypoints_symbol),
                     )
                 current += 1
             page += 1
             # log progress
             cur.execute(
-                """UPDATE astronomer
+                """
+                UPDATE astronomer
                 SET current = %s, page = %s
-                WHERE total = %s""",
+                WHERE total = %s
+                """,
                 (current, page, total),
             )
             conn.commit()
     logger.info(f"The Astronomer has completed its chart!")
 
 
-def db_astronomer_init(request, token):
-    """Track the astronomers' progress in a DB table"""
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_schema = 'public'
-        """
-        )
-        tables = [row[0] for row in cur.fetchall()]
-
-        if "astronomer" not in tables:
-            cur.execute(
-                """
-                CREATE TABLE astronomer (
-                    total integer PRIMARY KEY,
-                    current integer,
-                    page integer)
-                """
-            )
-
-            total = request.get(
-                endpoint="systems",
-                priority=3,
-                token=token,
-                params={"page": 1, "limit": 1},
-            )["meta"]["total"]
-            current = 0
-            page = 1
-            cur.execute(
-                """INSERT INTO astronomer
-                (total, current, page)
-                VALUES (%s, %s, %s)""",
-                (total, current, page),
-            )
-            conn.commit()
-        else:
-            cur.execute("SELECT * FROM astronomer")
-            total, current, page = cur.fetchone()
-
-        return total, current, page
-
-
 def cartographer(request):
     with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
-            CREATE TABLE IF NOT EXISTS cartographer (
+            CREATE TABLE IF NOT EXISTS cartographer 
+            (
                 index text PRIMARY KEY,
                 total integer,
-                current integer)
+                current integer
+            )
             """
         )
         conn.commit()
@@ -146,22 +144,25 @@ def cartographer(request):
                 cur.execute(query)
                 total = len(cur.fetchall())
                 cur.execute(
-                    """INSERT INTO cartographer
+                    """
+                    INSERT INTO cartographer
                     (index, total, current)
-                    VALUES (%s, %s, %s)""",
+                    VALUES (%s, %s, %s)
+                    """,
                     (index, total, current),
                 )
                 conn.commit()
             else:
                 total, current = ret[1:]
 
-        if current == total:
-            return
+            if current == total:
+                return
 
-        token = api_agent(request)[1]
-        unknown_traits = {"CRUSHING_GRAVITY", "JOVIAN", "UNDER_CONSTRUCTION"}
-        logger.info(f"The Cartographer has found {total-current:_} {index} to chart")
-        with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+            token = api_agent(request)[1]
+            unknown_traits = {"CRUSHING_GRAVITY", "JOVIAN", "UNDER_CONSTRUCTION"}
+            logger.info(
+                f"The Cartographer has found {total-current:_} {index} to chart"
+            )
             cur.execute(query)
             ret = cur.fetchall()
             while current != total:
@@ -181,7 +182,8 @@ def cartographer(request):
                         # insert the waypoint in the table
                         #   or update the values that may have been updated
                         cur.execute(
-                            """INSERT INTO waypoints
+                            """
+                            INSERT INTO waypoints
                             (symbol, systemSymbol, type, x, y, orbits, orbitals, traits, chart, faction, isUnderConstruction)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (symbol) DO UPDATE SET
@@ -210,10 +212,12 @@ def cartographer(request):
                             if trait == "UNCHARTED":
                                 continue
                             cur.execute(
-                                """INSERT INTO waypoint_traits
+                                """
+                                INSERT INTO waypoint_traits
                                 (waypointSymbol, traitSymbol) 
                                 VALUES (%s, %s)
-                                ON CONFLICT (waypointSymbol, traitSymbol) DO NOTHING""",
+                                ON CONFLICT (waypointSymbol, traitSymbol) DO NOTHING
+                                """,
                                 (wp["symbol"], trait),
                             )
 
@@ -222,9 +226,11 @@ def cartographer(request):
                             t = [t for t in wp["traits"] if t["symbol"] == trait][0]
                             description = t["description"].replace("'", "''")
                             cur.execute(
-                                """INSERT INTO traits_waypoint
+                                """
+                                INSERT INTO traits_waypoint
                                 (symbol, name, description) 
-                                VALUES (%s, %s, %s)""",
+                                VALUES (%s, %s, %s)
+                                """,
                                 (t["symbol"], t["name"], description),
                             )
                             logger.info(
@@ -233,9 +239,11 @@ def cartographer(request):
                 current += 1
                 # log progress
                 cur.execute(
-                    """UPDATE cartographer
+                    """
+                    UPDATE cartographer
                     SET current = %s
-                    WHERE index = %s""",
+                    WHERE index = %s
+                    """,
                     (current, index),
                 )
                 conn.commit()
@@ -263,5 +271,7 @@ def cartographer(request):
     ORDER BY systemSymbol
     """
     _chart_systems(index, query)
+
+    logger.info(f"The Cartographer has completed its chart!")
 
     # TODO: run the cartographer every n hours for (partially) on uncharted systems

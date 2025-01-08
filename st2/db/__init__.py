@@ -53,7 +53,7 @@ def db_tables_init():
             SELECT table_name
             FROM information_schema.tables
             WHERE table_schema = 'public'
-        """
+            """
         )
         tables = [row[0] for row in cur.fetchall()]
 
@@ -74,11 +74,13 @@ def db_tables_init():
         if "systems" not in tables:
             cur.execute(
                 """
-                CREATE TABLE systems (
+                CREATE TABLE systems 
+                (
                     symbol text PRIMARY KEY,
                     type text,
                     x integer,
-                    y integer)
+                    y integer
+                )
                 """
             )
             # sectorSymbol text, always X1
@@ -88,7 +90,8 @@ def db_tables_init():
         if "waypoints" not in tables:
             cur.execute(
                 """
-                CREATE TABLE waypoints (
+                CREATE TABLE waypoints 
+                (
                     symbol text PRIMARY KEY,
                     systemSymbol text,
                     type text,
@@ -99,7 +102,8 @@ def db_tables_init():
                     traits text[],
                     chart JSONB,
                     faction text,
-                    isUnderConstruction bool)
+                    isUnderConstruction bool
+                )
                 """
             )
             # orbitals: also in table waypoint_orbitals
@@ -109,33 +113,39 @@ def db_tables_init():
         if "traits_waypoint" not in tables:
             cur.execute(
                 """
-                CREATE TABLE traits_waypoint (
+                CREATE TABLE traits_waypoint 
+                (
                     symbol text PRIMARY KEY,
                     name text,
-                    description text)
+                    description text
+                )
                 """
             )
 
         if "traits_faction" not in tables:
             cur.execute(
                 """
-                CREATE TABLE traits_faction (
+                CREATE TABLE traits_faction 
+                (
                     symbol text PRIMARY KEY,
                     name text,
-                    description text)
+                    description text
+                )
                 """
             )
 
         if "factions" not in tables:
             cur.execute(
                 """
-                CREATE TABLE factions (
+                CREATE TABLE factions 
+                (
                     symbol text PRIMARY KEY,
                     name text,
                     description text,
                     headquarters text,
                     traits text[],
-                    isRecruiting bool)
+                    isRecruiting bool
+                )
                 """
             )
             # traits: also in table faction_traits
@@ -144,20 +154,24 @@ def db_tables_init():
         if "system_waypoints" not in tables:
             cur.execute(
                 """
-                CREATE TABLE system_waypoints (
+                CREATE TABLE system_waypoints 
+                (
                     systemSymbol text,
                     waypointSymbol text,
-                    PRIMARY KEY (systemSymbol, waypointSymbol))
+                    PRIMARY KEY (systemSymbol, waypointSymbol)
+                )
                 """
             )
 
         if "waypoint_traits" not in tables:
             cur.execute(
                 """
-                CREATE TABLE waypoint_traits (
+                CREATE TABLE waypoint_traits 
+                (
                     waypointSymbol text,
                     traitSymbol text,
-                    PRIMARY KEY (waypointSymbol, traitSymbol))
+                    PRIMARY KEY (waypointSymbol, traitSymbol)
+                )
                 """
             )
 
@@ -180,10 +194,12 @@ def db_tables_init():
         if "faction_traits" not in tables:
             cur.execute(
                 """
-                CREATE TABLE faction_traits (
+                CREATE TABLE faction_traits 
+                (
                     factionSymbol text,
                     traitSymbol text,
-                    PRIMARY KEY (factionSymbol, traitSymbol))
+                    PRIMARY KEY (factionSymbol, traitSymbol)
+                )
                 """
             )
 
@@ -204,20 +220,24 @@ def db_update_factions(request):
                 hq = None
             traits = [t["symbol"] for t in f["traits"]]
             cur.execute(
-                """INSERT INTO factions 
+                """
+                INSERT INTO factions 
                 (symbol, name, description, headquarters, traits, isRecruiting) 
                 VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (symbol) DO NOTHING""",
+                ON CONFLICT (symbol) DO NOTHING
+                """,
                 (f["symbol"], f["name"], description, hq, traits, f["isRecruiting"]),
             )
 
             # faction_traits
             for trait in traits:
                 cur.execute(
-                    """INSERT INTO faction_traits
+                    """
+                    INSERT INTO faction_traits
                     (factionSymbol, traitSymbol) 
                     VALUES (%s, %s)
-                    ON CONFLICT (factionSymbol, traitSymbol) DO NOTHING""",
+                    ON CONFLICT (factionSymbol, traitSymbol) DO NOTHING
+                    """,
                     (symbol, trait),
                 )
 
@@ -231,10 +251,12 @@ def db_update_factions(request):
             t = traits[symbol]
             description = t["description"].replace("'", "''")
             cur.execute(
-                """INSERT INTO traits_faction 
+                """
+                INSERT INTO traits_faction 
                 (symbol, name, description) 
                 VALUES (%s, %s, %s)
-                ON CONFLICT (symbol) DO NOTHING""",
+                ON CONFLICT (symbol) DO NOTHING
+                """,
                 (t["symbol"], t["name"], description),
             )
         conn.commit()
