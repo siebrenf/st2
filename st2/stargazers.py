@@ -123,23 +123,50 @@ def db_astronomer_init(request, token):
 
 
 def cartographer(request):
-    token = api_agent(request)[1]
-    md = db_cartographer_init()
+    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cartographer (
+                index text PRIMARY KEY,
+                total integer,
+                current integer)
+            """
+        )
+        conn.commit()
 
     def _chart_systems(index, query):
-        total = md[index]["total"]
-        current = md[index]["current"]
+        with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM cartographer WHERE index = %s",
+                (index,),
+            )
+            ret = cur.fetchone()
+            if ret is None:
+                current = 0
+                cur.execute(query)
+                total = len(cur.fetchall())
+                cur.execute(
+                    """INSERT INTO cartographer
+                    (index, total, current)
+                    VALUES (%s, %s, %s)""",
+                    (index, total, current),
+                )
+                conn.commit()
+            else:
+                total, current = ret[1:]
+
         if current == total:
             return
 
+        token = api_agent(request)[1]
         unknown_traits = {"CRUSHING_GRAVITY", "JOVIAN", "UNDER_CONSTRUCTION"}
-        logger.info(f"The Cartographer has found {total:_} {index}")
+        logger.info(f"The Cartographer has found {total-current:_} {index} to chart")
         with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
             cur.execute(query)
             ret = cur.fetchall()
             while current != total:
-                # logger.debug(f"Processing {index} {current+1:_}/{total:_}")
-                system_symbol = ret[current][1]
+                logger.debug(f"Processing {index} {current+1:_}/{total:_}")
+                system_symbol = ret[current][0]
                 for ret2 in request.get_all(
                     endpoint=f"systems/{system_symbol}/waypoints",
                     priority=3,
@@ -178,8 +205,10 @@ def cartographer(request):
                             ),
                         )
 
-                        # TODO: remove the UNCHARTED trait when >1 trait has been found
+                        # store traits of charted waypoints
                         for trait in traits:
+                            if trait == "UNCHARTED":
+                                continue
                             cur.execute(
                                 """INSERT INTO waypoint_traits
                                 (waypointSymbol, traitSymbol) 
@@ -188,7 +217,7 @@ def cartographer(request):
                                 (wp["symbol"], trait),
                             )
 
-                        # only bother with the unknown traits
+                        # store unknown traits
                         for trait in set(traits) & unknown_traits:
                             t = [t for t in wp["traits"] if t["symbol"] == trait][0]
                             description = t["description"].replace("'", "''")
@@ -198,7 +227,6 @@ def cartographer(request):
                                 VALUES (%s, %s, %s)""",
                                 (t["symbol"], t["name"], description),
                             )
-                            unknown_traits -= trait
                             logger.info(
                                 f"The Cartographer has discovered a new trait: {t['symbol']}!"
                             )
@@ -212,16 +240,18 @@ def cartographer(request):
                 )
                 conn.commit()
 
-    # start systems (fully charted by default, so only do once)
+    # start systems (fully charted by default)
     index = "start systems"
-    query = "SELECT * FROM waypoints WHERE type = 'ENGINEERED_ASTEROID' ORDER BY symbol"
+    query = """
+    SELECT systemSymbol 
+    FROM waypoints 
+    WHERE type = 'ENGINEERED_ASTEROID' 
+    ORDER BY systemSymbol 
+    """
     _chart_systems(index, query)
 
-    # TODO: update totals & currents
-
-    # gate systems (may be charted by other players)
+    # gate systems (can be charted by other players)
     index = "gate systems"
-    # query = "SELECT * FROM waypoints WHERE type = 'JUMP_GATE' ORDER BY symbol"
     query = """
     SELECT systemSymbol 
     FROM waypoints 
@@ -234,106 +264,4 @@ def cartographer(request):
     """
     _chart_systems(index, query)
 
-    # all systems (not sure if we should chart these)
-    index = "all systems"
-    query = """
-    SELECT symbol 
-    FROM systems 
-    EXCEPT
-    SELECT systemSymbol 
-    FROM waypoints 
-    WHERE type = 'ENGINEERED_ASTEROID'
-    ORDER BY symbol
-    """
-    _chart_systems(index, query)
-
-    # TODO: rerun the cartographer every n hours
-
-
-def db_cartographer_init():
-    """Track the cartographer' progress in a DB table"""
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_schema = 'public'
-        """
-        )
-        tables = [row[0] for row in cur.fetchall()]
-
-        md = {}
-        if "cartographer" not in tables:
-            cur.execute(
-                """
-                CREATE TABLE cartographer (
-                    index text PRIMARY KEY,
-                    total integer,
-                    current integer)
-                """
-            )
-
-            def _update_md(index, query):
-                """Update the metadata for the table and the local dict"""
-                cur.execute(query)
-                total = cur.fetchone()[0]
-                current = 0
-                cur.execute(
-                    """INSERT INTO cartographer
-                    (index, total, current)
-                    VALUES (%s, %s, %s)""",
-                    (index, total, current),
-                )
-                md[index] = {
-                    "total": total,
-                    "current": current,
-                }
-
-            # start systems (fully charted by default, so only do once)
-            index = "start systems"
-            query = "SELECT count(*) AS exact_count FROM waypoints WHERE type = 'ENGINEERED_ASTEROID'"
-            _update_md(index, query)
-
-            # systems with jump gates (may be charted by other players)
-            index = "gate systems"
-            query = """
-            SELECT COUNT(*)
-            FROM (
-                SELECT systemSymbol 
-                FROM waypoints 
-                WHERE type = 'JUMP_GATE'
-                EXCEPT
-                SELECT systemSymbol 
-                FROM waypoints 
-                WHERE type = 'ENGINEERED_ASTEROID'
-            ) AS result
-            """
-            _update_md(index, query)
-
-            # TODO: exclude fully charted systems
-            # all systems (not sure if we should chart these)
-            index = "all systems"
-            # query = "SELECT count(*) AS exact_count FROM systems"
-            query = """
-            SELECT COUNT(*)
-            FROM (
-                SELECT symbol 
-                FROM systems 
-                EXCEPT
-                SELECT systemSymbol 
-                FROM waypoints 
-                WHERE type = 'ENGINEERED_ASTEROID'
-            ) AS result
-            """
-            _update_md(index, query)
-
-            conn.commit()
-        else:
-            cur.execute("SELECT * FROM cartographer")
-            for index, total, current in cur.fetchall():
-                md[index] = {
-                    "total": total,
-                    "current": current,
-                }
-
-        return md
+    # TODO: run the cartographer every n hours for (partially) on uncharted systems

@@ -1,18 +1,28 @@
+name: st2
 channels:
   - conda-forge
 dependencies:
-  - python =3.12  # latest conda version
-  - conda-ecosystem-user-package-isolation =1.0
+  - conda-ecosystem-user-package-isolation
+  - python  # latest conda version = 3.12
 
+  - bokeh
   - diskcache
+  - graphviz
   - loguru
+  - matplotlib-base
+  - networkx
+  - numpy
+  - pandas
   - postgresql
   - psycopg
   - requests-ratelimiter
+  - seaborn
+  - scipy
+  - scikit-learn
   - xdg
 
   # dev
-  - pydeps
-  - isort
-  - pytest
   - black
+  - isort
+  - pydeps
+  - pytest
