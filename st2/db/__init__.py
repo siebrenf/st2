@@ -86,7 +86,9 @@ def db_tables_init():
                 (
                     symbol text PRIMARY KEY,
                     token text,
-                    role text
+                    role text,
+                    faction text,
+                    other text
                 )
                 """
             )

@@ -7,8 +7,8 @@ from st2.logging import logger
 DEBUG = False
 
 
-def astronomer(request):
-    token = api_agent(request)[1]
+def astronomer(request, priority=3):
+    token = api_agent(request, priority)[1]
     with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -25,7 +25,7 @@ def astronomer(request):
         if ret is None:
             total = request.get(
                 endpoint="systems",
-                priority=3,
+                priority=priority,
                 token=token,
                 params={"page": 1, "limit": 1},
             )["meta"]["total"]
@@ -52,7 +52,7 @@ def astronomer(request):
                 logger.debug(f"Processing page {page:_}")
             systems = request.get(
                 endpoint="systems",
-                priority=3,
+                priority=priority,
                 token=token,
                 params={"page": page, "limit": 20},
             )
@@ -121,7 +121,7 @@ def astronomer(request):
     logger.info(f"The Astronomer has completed its chart!")
 
 
-def cartographer(request):
+def cartographer(request, priority=3):
     with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -135,7 +135,7 @@ def cartographer(request):
         )
         conn.commit()
 
-    def _chart_systems(index, query):
+    def _chart_systems(index, query, priority):
         with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
             cur.execute(
                 "SELECT * FROM cartographer WHERE index = %s",
@@ -161,7 +161,7 @@ def cartographer(request):
             if current == total:
                 return
 
-            token = api_agent(request)[1]
+            token = api_agent(request, priority)[1]
             unknown_traits = {"CRUSHING_GRAVITY", "JOVIAN", "UNDER_CONSTRUCTION"}
             logger.info(
                 f"The Cartographer has found {total-current:_} {index} to chart"
@@ -328,7 +328,7 @@ def cartographer(request):
     WHERE type = 'ENGINEERED_ASTEROID' 
     ORDER BY systemSymbol 
     """
-    _chart_systems(index, query)
+    _chart_systems(index, query, priority)
 
     # gate systems (can be charted by other players)
     index = "gate systems"
@@ -342,7 +342,7 @@ def cartographer(request):
     WHERE type = 'ENGINEERED_ASTEROID'
     ORDER BY systemSymbol
     """
-    _chart_systems(index, query)
+    _chart_systems(index, query, priority)
 
     logger.info(f"The Cartographer has completed its chart!")
 

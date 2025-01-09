@@ -4,7 +4,7 @@ import string
 import psycopg
 
 
-def api_agent(request):
+def api_agent(request, priority):
     """
     Register an agent to use for agent-independent API requests.
     This is to notice server resets immediately.
@@ -17,14 +17,14 @@ def api_agent(request):
         )
         ret = cur.fetchone()
         if ret is None:
-            symbol, token = register_random_agent(request)
+            data = register_random_agent(request, priority)
             cur.execute(
                 """
                 INSERT INTO agents
                 (symbol, token, role)
                 VALUES (%s, %s, %s)
                 """,
-                (symbol, token, role),
+                (data["agent"]["symbol"], data["token"], role),
             )
             conn.commit()
         else:
@@ -32,7 +32,7 @@ def api_agent(request):
     return symbol, token
 
 
-def register_random_agent(request, faction="COSMIC", max_tries=10):
+def register_random_agent(request, priority, faction="COSMIC", max_tries=10):
     tries = []
     while len(tries) < max_tries:
         try:
@@ -40,8 +40,8 @@ def register_random_agent(request, faction="COSMIC", max_tries=10):
                 random.choices(string.ascii_lowercase + string.digits, k=8)
             )
             payload = {"symbol": symbol, "faction": faction}
-            token = request.post("register", 3, None, payload)["data"]["token"]
-            return symbol, token
+            data = request.post("register", priority, None, payload)["data"]
+            return data  # keys: ['token', 'agent', 'contract', 'faction', 'ship']
         except Exception as e:
             tries.append(e)
     for error in tries:
