@@ -17,10 +17,18 @@ def db_server_init():
     log = os.path.join(cache["log_dir"], f"sql.txt")
     if not os.path.exists(db):
         # make the database
-        sp.check_output(f"initdb -D {db} --username=postgres", shell=True)
-        sp.check_output(f"pg_ctl -D {db} -l {log} start", shell=True)
+        if not os.path.exists(cache["data_dir"]):
+            os.makedirs(cache["data_dir"], exist_ok=True)
         sp.check_output(
-            f"createdb --no-password --owner=postgres --user=postgres st2", shell=True
+            f"initdb -D {db} --username=postgres", shell=True, stderr=sp.STDOUT
+        )
+        if not os.path.exists(cache["log_dir"]):
+            os.makedirs(cache["log_dir"], exist_ok=True)
+        sp.check_output(f"pg_ctl -D {db} -l {log} start", shell=True, stderr=sp.STDOUT)
+        sp.check_output(
+            f"createdb --no-password --owner=postgres --user=postgres st2",
+            shell=True,
+            stderr=sp.STDOUT,
         )
         sp.check_output(f"pg_ctl -D {db} stop", shell=True)
 
@@ -71,6 +79,18 @@ def db_tables_init():
         #     print(row)
 
         # Create missing tables
+        if "agents" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE agents
+                (
+                    symbol text PRIMARY KEY,
+                    token text,
+                    role text
+                )
+                """
+            )
+
         if "systems" not in tables:
             cur.execute(
                 """
@@ -150,6 +170,123 @@ def db_tables_init():
             )
             # traits: also in table faction_traits
 
+        if "jump_gates" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE jump_gates 
+                (
+                    symbol text PRIMARY KEY,
+                    connections text[]
+                )
+                """
+            )
+
+        if "markets" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE markets 
+                (
+                    symbol text PRIMARY KEY,
+                    imports text[],
+                    exports text[],
+                    exchange text[]
+                )
+                """
+            )
+
+        if "market_transactions" not in tables:
+            # - Create a waypoint specific transactions table:
+            #   CREATE TABLE transactions_wp1 PARTITION OF transactions FOR VALUES IN ('wp1');
+            # - Use st2.read(timestamp) as timestamp
+            cur.execute(
+                """
+                CREATE TABLE market_transactions
+                (
+                    waypointSymbol text,
+                    shipSymbol text,
+                    tradeSymbol text,
+                    type text,
+                    units integer,
+                    pricePerUnit integer,
+                    totalPrice integer,
+                    timestamp timestamptz,
+                    PRIMARY KEY (waypointSymbol, timestamp)
+                ) PARTITION BY LIST (waypointSymbol)
+                """
+            )
+
+        if "tradegoods" not in tables:
+            # - Create a waypoint specific tradegoods table:
+            #   CREATE TABLE tradegoods_wp1 PARTITION OF tradegoods FOR VALUES IN ('wp1');
+            # - Use st2.now() as timestamp
+            cur.execute(
+                """
+                CREATE TABLE tradegoods
+                (
+                    waypointSymbol text,
+                    symbol text,
+                    tradeVolume integer,
+                    type text,
+                    supply text,
+                    activity text,
+                    purchasePrice integer,
+                    sellPrice integer,
+                    timestamp timestamptz,
+                    PRIMARY KEY (waypointSymbol, symbol, timestamp)
+                ) PARTITION BY LIST (waypointSymbol)
+                """
+            )
+
+        if "shipyards" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE shipyards 
+                (
+                    symbol text PRIMARY KEY,
+                    shipTypes text[],
+                    modificationsFee integer
+                )
+                """
+            )
+
+        if "shipyard_transactions" not in tables:
+            # - Create a waypoint specific transactions table:
+            #   CREATE TABLE transactions_wp1 PARTITION OF transactions FOR VALUES IN ('wp1');
+            # - Use st2.read(timestamp) as timestamp
+            cur.execute(
+                """
+                CREATE TABLE shipyard_transactions
+                (
+                    shipSymbol text,
+                    shipType text,
+                    waypointSymbol text,
+                    agentSymbol text,
+                    price integer,
+                    timestamp timestamptz,
+                    PRIMARY KEY (waypointSymbol, timestamp)
+                ) PARTITION BY LIST (waypointSymbol)
+                """
+            )
+
+        if "ships" not in tables:
+            # - Create a waypoint specific tradegoods table:
+            #   CREATE TABLE tradegoods_wp1 PARTITION OF tradegoods FOR VALUES IN ('wp1');
+            # - Use st2.now() as timestamp
+            cur.execute(
+                """
+                CREATE TABLE ships
+                (
+                    waypointSymbol text,
+                    type text,
+                    supply text,
+                    activity text,
+                    purchasePrice integer,
+                    timestamp timestamptz,
+                    PRIMARY KEY (waypointSymbol, type, timestamp)
+                ) PARTITION BY LIST (waypointSymbol)
+                """
+            )
+
         # intermediary tables
         if "system_waypoints" not in tables:
             cur.execute(
@@ -174,22 +311,6 @@ def db_tables_init():
                 )
                 """
             )
-
-        # if "waypoint_orbitals" not in tables:
-        #     cur.execute("""
-        #         CREATE TABLE waypoint_orbitals (
-        #             waypointSymbol text,
-        #             orbitalSymbol text,
-        #             PRIMARY KEY (waypointSymbol, orbitalSymbol))
-        #         """)
-
-        # if "waypoint_chart" not in tables:
-        #     cur.execute("""
-        #         CREATE TABLE waypoint_chart (
-        #             waypointSymbol text PRIMARY KEY,
-        #             submittedBy text,
-        #             submittedOn timestamptz)
-        #         """)
 
         if "faction_traits" not in tables:
             cur.execute(
@@ -246,7 +367,6 @@ def db_update_factions(request):
         for f in factions.values():
             for t in f["traits"]:
                 traits[t["symbol"]] = t
-
         for symbol in sorted(traits):
             t = traits[symbol]
             description = t["description"].replace("'", "''")

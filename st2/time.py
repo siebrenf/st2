@@ -7,27 +7,19 @@ from time import sleep  # noqa: to prevent namespace clashes
 # git issue:  https://github.com/microsoft/WSL/issues/10006
 def now():
     """current time (UTC) as a datetime object"""
-    t = datetime.datetime.now(datetime.timezone.utc)
-    return t
+    return datetime.datetime.now(datetime.timezone.utc)
 
 
 def read(t: str):
     """from ISO 8601 format string to datetime"""
-    t = datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%S.%fZ")
-    t = t.replace(tzinfo=datetime.timezone.utc)
-    return t
+    return datetime.datetime.fromisoformat(t)
 
 
 def write(t: datetime.datetime = None):
     """from datetime to ISO 8601 format string"""
     if t is None:
         t = now()
-    t = t.isoformat()[:-6]  # remove timezone suffix
-    if len(t) == 19:
-        t += ".000Z"
-    else:
-        t = f"{t[:23]}Z"
-    return t
+    return f"{t.isoformat()[:23]}Z"
 
 
 def remaining(t: str or datetime.datetime):

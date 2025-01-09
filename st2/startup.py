@@ -31,7 +31,6 @@ def game_server():
     # server reset specific variables
     data_dir = os.path.join(XDG_DATA_HOME, "st2", f"{last_reset}_{next_reset[:10]}")
     log_dir = os.path.join(data_dir, "logs")
-    os.makedirs(log_dir, exist_ok=True)
     cache.set("data_dir", data_dir)
     cache.set("log_dir", log_dir)
 

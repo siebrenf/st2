@@ -8,6 +8,8 @@ from requests_ratelimiter import LimiterSession
 from st2.exceptions import GameError, ServerResetError
 from st2.logging import logger
 
+DEBUG = False
+
 
 class Request:
     """
@@ -62,8 +64,7 @@ class Request:
             data = dumps(data)
 
         # debug spurious API calls
-        debug = False
-        if debug:
+        if DEBUG:
             d = f"{data=}" if data else ""
             p = f"{params=}" if params and params.get("page", 1) != 1 else ""
             logger.debug(f"{endpoint=} {d} {p}")

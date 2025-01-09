@@ -4,6 +4,8 @@ from psycopg.types.json import Jsonb
 from st2.agent import api_agent
 from st2.logging import logger
 
+DEBUG = False
+
 
 def astronomer(request):
     token = api_agent(request)[1]
@@ -46,7 +48,8 @@ def astronomer(request):
 
         logger.info(f"The Astronomer has found {total:_} stars in the night sky")
         while current < total:
-            # logger.debug(f'Processing page {page: >3}')
+            if DEBUG:
+                logger.debug(f"Processing page {page:_}")
             systems = request.get(
                 endpoint="systems",
                 priority=3,
@@ -166,7 +169,8 @@ def cartographer(request):
             cur.execute(query)
             ret = cur.fetchall()
             while current != total:
-                logger.debug(f"Processing {index} {current+1:_}/{total:_}")
+                if DEBUG:
+                    logger.debug(f"Processing {current+1:_}/{total:_}")
                 system_symbol = ret[current][0]
                 for ret2 in request.get_all(
                     endpoint=f"systems/{system_symbol}/waypoints",
@@ -207,10 +211,18 @@ def cartographer(request):
                             ),
                         )
 
+                        if traits in [["UNCHARTED"], []]:
+                            continue
+
+                        if wp["type"] == "JUMP_GATE":
+                            _chart_gate(wp, token, cur)
+                        if "MARKETPLACE" in traits:
+                            _chart_market(wp, token, cur)
+                        if "SHIPYARD" in traits:
+                            _chart_shipyard(wp, token, cur)
+
                         # store traits of charted waypoints
                         for trait in traits:
-                            if trait == "UNCHARTED":
-                                continue
                             cur.execute(
                                 """
                                 INSERT INTO waypoint_traits
@@ -247,6 +259,66 @@ def cartographer(request):
                     (current, index),
                 )
                 conn.commit()
+
+    def _chart_gate(wp, token, cur):
+        connections = request.get(
+            endpoint=f"systems/{wp['systemSymbol']}/waypoints/{wp['symbol']}/jump-gate",
+            priority=3,
+            token=token,
+        )["data"]["connections"]
+        cur.execute(
+            """
+            INSERT INTO jump_gates
+            (symbol, connections)
+            VALUES (%s, %s)
+            ON CONFLICT (symbol) DO NOTHING
+            """,
+            (
+                wp["symbol"],
+                connections,
+            ),
+        )
+
+    def _chart_market(wp, token, cur):
+        ret = request.get(
+            endpoint=f"systems/{wp['systemSymbol']}/waypoints/{wp['symbol']}/market",
+            priority=3,
+            token=token,
+        )["data"]
+        cur.execute(
+            """
+            INSERT INTO markets
+            (symbol, imports, exports, exchange)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (symbol) DO NOTHING
+            """,
+            (
+                wp["symbol"],
+                [good["symbol"] for good in ret["imports"]],
+                [good["symbol"] for good in ret["exports"]],
+                [good["symbol"] for good in ret["exchange"]],
+            ),
+        )
+
+    def _chart_shipyard(wp, token, cur):
+        ret = request.get(
+            endpoint=f"systems/{wp['systemSymbol']}/waypoints/{wp['symbol']}/shipyard",
+            priority=3,
+            token=token,
+        )["data"]
+        cur.execute(
+            """
+            INSERT INTO shipyards
+            (symbol, shipTypes, modificationsFee)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (symbol) DO NOTHING
+            """,
+            (
+                wp["symbol"],
+                [ship["type"] for ship in ret["shipTypes"]],
+                ret["modificationsFee"],
+            ),
+        )
 
     # start systems (fully charted by default)
     index = "start systems"
