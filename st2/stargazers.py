@@ -5,6 +5,7 @@ from psycopg.types.json import Jsonb
 
 from st2.agent import api_agent
 from st2.logging import logger
+from st2.db import chart_gate, chart_market, chart_shipyard
 
 DEBUG = False
 
@@ -218,11 +219,11 @@ def cartographer(request, priority=3):
                             continue
 
                         if wp["type"] == "JUMP_GATE":
-                            _chart_gate(wp, token, cur)
+                            chart_gate(wp, request, token, cur)
                         if "MARKETPLACE" in traits:
-                            _chart_market(wp, token, cur)
+                            chart_market(wp, request, token, cur)
                         if "SHIPYARD" in traits:
-                            _chart_shipyard(wp, token, cur)
+                            chart_shipyard(wp, request, token, cur)
 
                         # store traits of charted waypoints
                         for trait in traits:
@@ -262,66 +263,6 @@ def cartographer(request, priority=3):
                     (current, index),
                 )
                 conn.commit()
-
-    def _chart_gate(wp, token, cur):
-        connections = request.get(
-            endpoint=f"systems/{wp['systemSymbol']}/waypoints/{wp['symbol']}/jump-gate",
-            priority=3,
-            token=token,
-        )["data"]["connections"]
-        cur.execute(
-            """
-            INSERT INTO jump_gates
-            (symbol, connections)
-            VALUES (%s, %s)
-            ON CONFLICT (symbol) DO NOTHING
-            """,
-            (
-                wp["symbol"],
-                connections,
-            ),
-        )
-
-    def _chart_market(wp, token, cur):
-        ret = request.get(
-            endpoint=f"systems/{wp['systemSymbol']}/waypoints/{wp['symbol']}/market",
-            priority=3,
-            token=token,
-        )["data"]
-        cur.execute(
-            """
-            INSERT INTO markets
-            (symbol, imports, exports, exchange)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (symbol) DO NOTHING
-            """,
-            (
-                wp["symbol"],
-                [good["symbol"] for good in ret["imports"]],
-                [good["symbol"] for good in ret["exports"]],
-                [good["symbol"] for good in ret["exchange"]],
-            ),
-        )
-
-    def _chart_shipyard(wp, token, cur):
-        ret = request.get(
-            endpoint=f"systems/{wp['systemSymbol']}/waypoints/{wp['symbol']}/shipyard",
-            priority=3,
-            token=token,
-        )["data"]
-        cur.execute(
-            """
-            INSERT INTO shipyards
-            (symbol, shipTypes, modificationsFee)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (symbol) DO NOTHING
-            """,
-            (
-                wp["symbol"],
-                [ship["type"] for ship in ret["shipTypes"]],
-                ret["modificationsFee"],
-            ),
-        )
 
     # start systems (fully charted by default)
     index = "start systems"

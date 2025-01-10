@@ -57,7 +57,7 @@ class Request:
         else:
             raise NotImplementedError
         url = self.base_url + endpoint
-        headers = self.headers
+        headers = self.headers.copy()
         if token:
             headers["Authorization"] = f"Bearer {token}"
         if data:

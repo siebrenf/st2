@@ -10,6 +10,7 @@ import subprocess as sp
 import psycopg
 
 from st2.caching import cache
+from st2 import time
 
 
 def db_server_init():
@@ -89,6 +90,54 @@ def db_tables_init():
                     role text,
                     faction text,
                     other text
+                )
+                """
+            )
+
+        if "ships" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE ships
+                (
+                    symbol text PRIMARY KEY,
+                    agentSymbol text,
+                    nav JsonB,
+                    crew JsonB,
+                    fuel JsonB,
+                    cooldown JsonB,
+                    frame JsonB,
+                    reactor JsonB,
+                    engine JsonB,
+                    modules JsonB,
+                    mounts JsonB,
+                    registration JsonB,
+                    cargo JsonB,
+                )
+                """
+            )
+
+        if "tasks" not in tables:
+            """
+            Ship tasks:
+             - If task is None or "idle", the ship is idle.
+               - None if for new ships that will receive a task momentarily.
+               - "idle" ships are ready to accept any task.
+             - To use an idle ship, set a task & add the ship to a ship-manager process.
+             - To commandeer a ship, overwrite the next task (and set the cancel command if needed).
+            
+            Tasks should:
+             - check the table regularly for external cancel commands.
+             - update current/next/cancel in the table.
+             - self destruct when the current task finishes and the next task is "idle".
+            """
+            cur.execute(
+                """
+                CREATE TABLE tasks
+                (
+                    symbol text PRIMARY KEY,
+                    current text,
+                    cancel bool,  -- cancel current, go to next
+                    next text
                 )
                 """
             )
@@ -178,6 +227,7 @@ def db_tables_init():
                 CREATE TABLE jump_gates 
                 (
                     symbol text PRIMARY KEY,
+                    systemSymbol text,
                     connections text[]
                 )
                 """
@@ -189,6 +239,7 @@ def db_tables_init():
                 CREATE TABLE markets 
                 (
                     symbol text PRIMARY KEY,
+                    systemSymbol text,
                     imports text[],
                     exports text[],
                     exchange text[]
@@ -199,12 +250,12 @@ def db_tables_init():
         if "market_transactions" not in tables:
             # - Create a waypoint specific transactions table:
             #   CREATE TABLE transactions_wp1 PARTITION OF transactions FOR VALUES IN ('wp1');
-            # - Use st2.read(timestamp) as timestamp
             cur.execute(
                 """
                 CREATE TABLE market_transactions
                 (
                     waypointSymbol text,
+                    systemSymbol text,
                     shipSymbol text,
                     tradeSymbol text,
                     type text,
@@ -220,12 +271,13 @@ def db_tables_init():
         if "market_tradegoods" not in tables:
             # - Create a waypoint specific tradegoods table:
             #   CREATE TABLE tradegoods_wp1 PARTITION OF tradegoods FOR VALUES IN ('wp1');
-            # - Use st2.now() as timestamp
+            # - Use st2.time.now() as timestamp
             cur.execute(
                 """
                 CREATE TABLE market_tradegoods
                 (
                     waypointSymbol text,
+                    systemSymbol text,
                     symbol text,
                     tradeVolume integer,
                     type text,
@@ -245,6 +297,7 @@ def db_tables_init():
                 CREATE TABLE shipyards 
                 (
                     symbol text PRIMARY KEY,
+                    systemSymbol text,
                     shipTypes text[],
                     modificationsFee integer
                 )
@@ -254,15 +307,16 @@ def db_tables_init():
         if "shipyard_transactions" not in tables:
             # - Create a waypoint specific transactions table:
             #   CREATE TABLE transactions_wp1 PARTITION OF transactions FOR VALUES IN ('wp1');
-            # - Use st2.read(timestamp) as timestamp
+            # - Use st2.time.read(timestamp) as timestamp
             cur.execute(
                 """
                 CREATE TABLE shipyard_transactions
                 (
-                    shipSymbol text,
-                    shipType text,
                     waypointSymbol text,
+                    systemSymbol text,
+                    shipSymbol text,
                     agentSymbol text,
+                    shipType text,
                     price integer,
                     timestamp timestamptz,
                     PRIMARY KEY (waypointSymbol, timestamp)
@@ -273,12 +327,13 @@ def db_tables_init():
         if "shipyard_ships" not in tables:
             # - Create a waypoint specific tradegoods table:
             #   CREATE TABLE tradegoods_wp1 PARTITION OF tradegoods FOR VALUES IN ('wp1');
-            # - Use st2.now() as timestamp
+            # - Use st2.time.now() as timestamp
             cur.execute(
                 """
                 CREATE TABLE shipyard_ships
                 (
                     waypointSymbol text,
+                    systemSymbol text,
                     type text,
                     supply text,
                     activity text,
@@ -382,3 +437,153 @@ def db_update_factions(request):
                 (t["symbol"], t["name"], description),
             )
         conn.commit()
+
+
+def chart_gate(symbol, request, token, cur):
+    system_symbol = symbol.rsplit("-", 1)[0]
+    connections = request.get(
+        endpoint=f"systems/{system_symbol}/waypoints/{symbol}/jump-gate",
+        priority=3,
+        token=token,
+    )["data"]["connections"]
+    cur.execute(
+        """
+        INSERT INTO jump_gates
+        (symbol, systemSymbol, connections)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (symbol) DO NOTHING
+        """,
+        (
+            symbol,
+            system_symbol,
+            connections,
+        ),
+    )
+
+
+def chart_market(symbol, request, token, cur):
+    system_symbol = symbol.rsplit("-", 1)[0]
+    ret = request.get(
+        endpoint=f"systems/{system_symbol}/waypoints/{symbol}/market",
+        priority=3,
+        token=token,
+    )["data"]
+    cur.execute(
+        """
+        INSERT INTO markets
+        (symbol, systemSymbol, imports, exports, exchange)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (symbol) DO NOTHING
+        """,
+        (
+            symbol,
+            system_symbol,
+            [good["symbol"] for good in ret["imports"]],
+            [good["symbol"] for good in ret["exports"]],
+            [good["symbol"] for good in ret["exchange"]],
+        ),
+    )
+    # TODO: split into charting (above part only) and logging (lower part only)?
+    timestamp = time.now()
+    for t in ret.get("tradeGoods", []):
+        cur.execute(
+            """
+            INSERT INTO market_tradegoods
+            (waypointSymbol, systemSymbol, symbol, tradeVolume, type,
+             supply, activity, purchasePrice, sellPrice, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (waypointSymbol, symbol, timestamp) DO NOTHING
+            """,
+            (
+                symbol,
+                system_symbol,
+                t["symbol"],
+                t["tradeVolume"],
+                t["type"],
+                t["supply"],
+                t["activity"],
+                t["purchasePrice"],
+                t["sellPrice"],
+                timestamp,
+            ),
+        )
+    for t in ret.get("transactions", []):
+        cur.execute(
+            """
+            INSERT INTO market_transactions
+            (waypointSymbol, systemSymbol, shipSymbol, tradeSymbol,
+             type, units, pricePerUnit, totalPrice, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (waypointSymbol, timestamp) DO NOTHING
+            """,
+            (
+                symbol,
+                system_symbol,
+                t["shipSymbol"],
+                t["tradeSymbol"],
+                t["type"],
+                t["units"],
+                t["pricePerUnit"],
+                t["totalPrice"],
+                time.read(t["timestamp"]),
+            ),
+        )
+
+
+def chart_shipyard(symbol, request, token, cur):
+    system_symbol = symbol.rsplit("-", 1)[0]
+    ret = request.get(
+        endpoint=f"systems/{system_symbol}/waypoints/{symbol}/shipyard",
+        priority=3,
+        token=token,
+    )["data"]
+    cur.execute(
+        """
+        INSERT INTO shipyards
+        (symbol, systemSymbol, shipTypes, modificationsFee)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (symbol) DO NOTHING
+        """,
+        (
+            symbol,
+            system_symbol,
+            [ship["type"] for ship in ret["shipTypes"]],
+            ret["modificationsFee"],
+        ),
+    )
+    for s in ret.get("ships", []):
+        timestamp = time.now()
+        pass  # TODO
+    for s in ret.get("transactions", []):
+        pass  # TODO
+
+
+def insert_ship(ship, agent_symbol, cur):
+    cur.execute(
+        """
+        INSERT INTO ships
+        (symbol, agentSymbol, nav, crew, fuel, cooldown, frame,
+         reactor, engine, modules, mounts, registration, cargo)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            ship["symbol"],
+            agent_symbol,
+            ship["nav"],
+            ship["crew"],
+            ship["fuel"],
+            ship["cooldown"],
+            ship["frame"],
+            ship["reactor"],
+            ship["engine"],
+            ship["modules"],
+            ship["mounts"],
+            ship["registration"],
+            ship["cargo"],
+        ),
+    )
+
+    cur.execute(
+        "INSERT INTO tasks (symbol, current, cancel, next) VALUES (%s, %s, %s, %s)",
+        (ship["symbol"], None, False, None)
+    )

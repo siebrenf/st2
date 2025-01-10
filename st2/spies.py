@@ -1,20 +1,26 @@
 import psycopg
 
 from st2.agent import register_random_agent
+from st2.logging import logger
+from st2.db import insert_ship
 
 DEBUG = False
 
 
-def espionage(request, priority=3):
+def spymaster(request, priority=3):
     # get a dict of start systems per faction
     faction2start_system2agent = {}
+    faction2hq = {}
     with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
             SELECT systemSymbol, faction
             FROM waypoints 
-            WHERE type = 'ENGINEERED_ASTEROID' 
-            ORDER BY faction
+            WHERE type = 'ENGINEERED_ASTEROID'
+            EXCEPT 
+            SELECT headquarters, symbol
+            FROM factions
+            ORDER BY faction, systemSymbol
             """
         )
         for system, faction in cur.fetchall():
@@ -23,10 +29,25 @@ def espionage(request, priority=3):
             if system not in faction2start_system2agent[faction]:
                 faction2start_system2agent[faction][system] = None
 
-    # get agents for each start system
+        if DEBUG:
+            cur.execute(
+                """
+                SELECT headquarters, symbol
+                FROM factions
+                ORDER BY symbol
+                """
+            )
+            for system, faction in cur.fetchall():
+                faction2hq[faction] = system
+
+    # get agents for each start system per faction
     role = "spy"
     with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         for faction in faction2start_system2agent:
+            if DEBUG:
+                n = len(faction2start_system2agent[faction])
+                logger.debug(f"{faction} has {n} start systems: ")
+
             # Load agents
             cur.execute(
                 """
@@ -42,13 +63,19 @@ def espionage(request, priority=3):
                     agent_symbol,
                     token,
                 )
+                if DEBUG:
+                    if system_symbol == faction2hq[faction]:
+                        logger.debug(f" - {system_symbol} (faction HQ)")
+                    else:
+                        logger.debug(f" - {system_symbol}")
 
             # Register agents
             while None in faction2start_system2agent[faction].values():
                 data = register_random_agent(request, priority, faction)
                 agent_symbol = data["agent"]["symbol"]
+                token = data["token"]
                 system_symbol = data["ship"]["nav"]["systemSymbol"]
-                if faction2start_system2agent[faction][system_symbol] is not None:
+                if faction2start_system2agent[faction].get(system_symbol):
                     continue
 
                 cur.execute(
@@ -57,21 +84,50 @@ def espionage(request, priority=3):
                     (symbol, token, role, faction, other)
                     VALUES (%s, %s, %s, %s, %s)
                     """,
-                    (agent_symbol, data["token"], role, faction, system_symbol),
+                    (agent_symbol, token, role, faction, system_symbol),
                 )
+                for ship in request.get("my/ships", token=token, priority=priority)["data"]:
+                    insert_ship(ship, agent_symbol, cur)
                 conn.commit()
                 faction2start_system2agent[faction][system_symbol] = (
                     agent_symbol,
                     token,
                 )
+                if DEBUG:
+                    if system_symbol == faction2hq[faction]:
+                        logger.debug(f" - {system_symbol} (faction HQ)")
+                    else:
+                        logger.debug(f" - {system_symbol}")
 
     for faction in faction2start_system2agent:
         for system_symbol, (agent_symbol, token) in faction2start_system2agent[faction].items():
             pass  # TODO: insert probes into each MARKETPLACE & start collecting data
 
-            # identify all markets
+            with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+                # identify all markets
+                cur.execute(
+                    """
+                    SELECT symbol, traits
+                    FROM waypoints
+                    WHERE systemSymbol = %s
+                    AND %s = ANY(traits)
+                    """,
+                    (system_symbol, "MARKETPLACE")
+                )
+                ret = cur.fetchall()
+                markets = [wp[0] for wp in ret]
 
-            # identify all shipyards
+                # identify all and shipyards that sell probes
+                shipyards = []
+                for wp, traits in ret:  # all shipyards are also markets
+                    if "SHIPYARD" not in traits:
+                        continue
+                    cur.execute("SELECT shipTypes FROM shipyards WHERE symbol = %s", (wp,))
+                    ship_types = cur.fetchone()[0]
+                    if 'SHIP_PROBE' in ship_types:
+                        shipyards.append(wp)
+
+                ships = request.get("my/ships", token=token, priority=priority)["data"]
 
             # if starting ships are not logged:
             #     fly starting frigate to second shipyard with probes
@@ -85,5 +141,3 @@ def espionage(request, priority=3):
             #     if ship is not at its market:
             #         navigate to the market
             #     collect data on timer
-
-
