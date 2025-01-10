@@ -217,13 +217,13 @@ def db_tables_init():
                 """
             )
 
-        if "tradegoods" not in tables:
+        if "market_tradegoods" not in tables:
             # - Create a waypoint specific tradegoods table:
             #   CREATE TABLE tradegoods_wp1 PARTITION OF tradegoods FOR VALUES IN ('wp1');
             # - Use st2.now() as timestamp
             cur.execute(
                 """
-                CREATE TABLE tradegoods
+                CREATE TABLE market_tradegoods
                 (
                     waypointSymbol text,
                     symbol text,
@@ -270,13 +270,13 @@ def db_tables_init():
                 """
             )
 
-        if "ships" not in tables:
+        if "shipyard_ships" not in tables:
             # - Create a waypoint specific tradegoods table:
             #   CREATE TABLE tradegoods_wp1 PARTITION OF tradegoods FOR VALUES IN ('wp1');
             # - Use st2.now() as timestamp
             cur.execute(
                 """
-                CREATE TABLE ships
+                CREATE TABLE shipyard_ships
                 (
                     waypointSymbol text,
                     type text,

@@ -1,7 +1,6 @@
 import psycopg
 
 from st2.agent import register_random_agent
-from st2.logging import logger
 
 DEBUG = False
 
@@ -45,16 +44,11 @@ def espionage(request, priority=3):
                 )
 
             # Register agents
-            missing = [
-                system
-                for (system, agent) in faction2start_system2agent[faction]
-                if agent is None
-            ]
-            while missing:
+            while None in faction2start_system2agent[faction].values():
                 data = register_random_agent(request, priority, faction)
                 agent_symbol = data["agent"]["symbol"]
                 system_symbol = data["ship"]["nav"]["systemSymbol"]
-                if system_symbol not in missing:
+                if faction2start_system2agent[faction][system_symbol] is not None:
                     continue
 
                 cur.execute(
@@ -66,12 +60,30 @@ def espionage(request, priority=3):
                     (agent_symbol, data["token"], role, faction, system_symbol),
                 )
                 conn.commit()
-                missing.remove(system_symbol)
                 faction2start_system2agent[faction][system_symbol] = (
                     agent_symbol,
                     token,
                 )
 
     for faction in faction2start_system2agent:
-        for agent_symbol, token in faction2start_system2agent[faction].values():
+        for system_symbol, (agent_symbol, token) in faction2start_system2agent[faction].items():
             pass  # TODO: insert probes into each MARKETPLACE & start collecting data
+
+            # identify all markets
+
+            # identify all shipyards
+
+            # if starting ships are not logged:
+            #     fly starting frigate to second shipyard with probes
+            #     log starting ships to shipyards with probes
+
+            # for wp in markets:
+            #     check log for probe
+            #     if probe is None:
+            #         buy cheapest probe
+            #         log (probe, wp) in db
+            #     if ship is not at its market:
+            #         navigate to the market
+            #     collect data on timer
+
+
