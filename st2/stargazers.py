@@ -4,8 +4,8 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from st2.agent import api_agent
-from st2.logging import logger
 from st2.db import chart_gate, chart_market, chart_shipyard
+from st2.logging import logger
 
 DEBUG = False
 
@@ -50,7 +50,7 @@ def astronomer(request, priority=3):
             return
 
         logger.info(f"The Astronomer has found {total:_} stars in the night sky")
-        total_pages = math.ceil(total/20)
+        total_pages = math.ceil(total / 20)
         while current < total:
             if DEBUG:
                 logger.debug(f"Processing page {page:_}/{total_pages}")
