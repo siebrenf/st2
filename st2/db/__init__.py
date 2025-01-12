@@ -9,8 +9,8 @@ import subprocess as sp
 
 import psycopg
 
-from st2.caching import cache
 from st2 import time
+from st2.caching import cache
 
 
 def db_server_init():
@@ -111,7 +111,7 @@ def db_tables_init():
                     modules JsonB,
                     mounts JsonB,
                     registration JsonB,
-                    cargo JsonB,
+                    cargo JsonB
                 )
                 """
             )
@@ -123,21 +123,24 @@ def db_tables_init():
                - None if for new ships that will receive a task momentarily.
                - "idle" ships are ready to accept any task.
              - To use an idle ship, set a task & add the ship to a ship-manager process.
-             - To commandeer a ship, overwrite the next task (and set the cancel command if needed).
-            
+             - To commandeer a ship, overwrite the queued task (and cancel command if needed).
+
             Tasks should:
              - check the table regularly for external cancel commands.
-             - update current/next/cancel in the table.
-             - self destruct when the current task finishes and the next task is "idle".
+             - update current/queued/cancel in the table.
+             - self destruct when the current task finishes and the queued task is "idle".
             """
             cur.execute(
                 """
                 CREATE TABLE tasks
                 (
                     symbol text PRIMARY KEY,
+                    agentSymbol text,
                     current text,
-                    cancel bool,  -- cancel current, go to next
-                    next text
+                    queued text,
+                    cancel bool,  -- cancel current task, start queued task
+                    pname text,  -- process name (which should manage this task)
+                    pid integer  -- process ID (use to check if restarts occurred)
                 )
                 """
             )
@@ -584,6 +587,9 @@ def insert_ship(ship, agent_symbol, cur):
     )
 
     cur.execute(
-        "INSERT INTO tasks (symbol, current, cancel, next) VALUES (%s, %s, %s, %s)",
-        (ship["symbol"], None, False, None)
+        """
+        INSERT INTO tasks (symbol, agentSymbol, current, queued, cancel, pname, pid) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """,
+        (ship["symbol"], agent_symbol, None, None, False, None, None),
     )

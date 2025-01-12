@@ -1,8 +1,8 @@
 import psycopg
 
 from st2.agent import register_random_agent
-from st2.logging import logger
 from st2.db import insert_ship
+from st2.logging import logger
 
 DEBUG = False
 
@@ -86,7 +86,9 @@ def spymaster(request, priority=3):
                     """,
                     (agent_symbol, token, role, faction, system_symbol),
                 )
-                for ship in request.get("my/ships", token=token, priority=priority)["data"]:
+                for ship in request.get("my/ships", token=token, priority=priority)[
+                    "data"
+                ]:
                     insert_ship(ship, agent_symbol, cur)
                 conn.commit()
                 faction2start_system2agent[faction][system_symbol] = (
@@ -100,10 +102,14 @@ def spymaster(request, priority=3):
                         logger.debug(f" - {system_symbol}")
 
     for faction in faction2start_system2agent:
-        for system_symbol, (agent_symbol, token) in faction2start_system2agent[faction].items():
+        for system_symbol, (agent_symbol, token) in faction2start_system2agent[
+            faction
+        ].items():
             pass  # TODO: insert probes into each MARKETPLACE & start collecting data
 
-            with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+            with psycopg.connect(
+                f"dbname=st2 user=postgres"
+            ) as conn, conn.cursor() as cur:
                 # identify all markets
                 cur.execute(
                     """
@@ -112,7 +118,7 @@ def spymaster(request, priority=3):
                     WHERE systemSymbol = %s
                     AND %s = ANY(traits)
                     """,
-                    (system_symbol, "MARKETPLACE")
+                    (system_symbol, "MARKETPLACE"),
                 )
                 ret = cur.fetchall()
                 markets = [wp[0] for wp in ret]
@@ -122,12 +128,65 @@ def spymaster(request, priority=3):
                 for wp, traits in ret:  # all shipyards are also markets
                     if "SHIPYARD" not in traits:
                         continue
-                    cur.execute("SELECT shipTypes FROM shipyards WHERE symbol = %s", (wp,))
+                    cur.execute(
+                        "SELECT shipTypes FROM shipyards WHERE symbol = %s", (wp,)
+                    )
                     ship_types = cur.fetchone()[0]
-                    if 'SHIP_PROBE' in ship_types:
+                    if "SHIP_PROBE" in ship_types:
                         shipyards.append(wp)
 
-                ships = request.get("my/ships", token=token, priority=priority)["data"]
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM ships
+                    WHERE agentSymbol = %s
+                    """,
+                    (agent_symbol,),
+                )
+                ret = cur.fetchall()
+                for ship in ret:
+                    ship_symbol = ship[0]
+                    cur.execute(
+                        """
+                        SELECT *
+                        FROM tasks
+                        WHERE symbol = %s
+                        """,
+                        (ship_symbol,),
+                    )
+                    _, current, queued, cancel, pid = cur.fetchone()
+                    if current is None:
+                        # idle, unmanaged ship
+                        cur.execute(
+                            """
+                            UPDATE tasks
+                            SET queued = %s
+                            WHERE symbol = %s
+                            """,
+                            (
+                                task,
+                                ship_symbol,
+                            ),
+                        )
+                    elif check_pid(pid):
+                        # busy, managed ship
+                        continue
+                    else:
+                        # busy, unmanaged ship
+                        cur.execute(
+                            """
+                            UPDATE tasks
+                            SET current = %s, queued = %s, cancel = %s, pid = %s
+                            WHERE symbol = %s
+                            """,
+                            (
+                                None,
+                                task,
+                                False,
+                                None,
+                                ship_symbol,
+                            ),
+                        )
 
             # if starting ships are not logged:
             #     fly starting frigate to second shipyard with probes
