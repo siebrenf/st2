@@ -72,13 +72,6 @@ def db_tables_init():
         #     conn.commit()
         # tables = []
 
-        # # print a table
-        # table = ""
-        # cur.execute(f"SELECT * FROM {table}")
-        # ret = cur.fetchall()
-        # for row in ret:
-        #     print(row)
-
         # Create missing tables
         if "agents" not in tables:
             cur.execute(
@@ -140,7 +133,7 @@ def db_tables_init():
                     queued text,
                     cancel bool,  -- cancel current task, start queued task
                     pname text,  -- process name (which should manage this task)
-                    pid integer  -- process ID (use to check if restarts occurred)
+                    pid uuid  -- process ID (use to check if restarts occurred)
                 )
                 """
             )
@@ -593,3 +586,51 @@ def insert_ship(ship, agent_symbol, cur):
         """,
         (ship["symbol"], agent_symbol, None, None, False, None, None),
     )
+
+
+def print_tables():
+    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            """
+        )
+        return [row[0] for row in cur.fetchall()]
+
+
+def print_table(table):
+    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        # print a table's columns
+        cur.execute(
+            """
+            SELECT *
+            FROM information_schema.columns
+            WHERE table_name = %s
+            ORDER BY ordinal_position
+            """,
+            (table,),
+        )
+        ret = cur.fetchall()
+        header = []
+        dtypes = []
+        for row in ret:
+            name = row[3]
+            dtype = row[7]
+            header.append(name)
+            dtypes.append(dtype)
+        print(header)
+        print(dtypes)
+
+        # print a table's rows
+        cur.execute(f"SELECT * FROM {table}")
+        ret = cur.fetchall()
+        for row in ret:
+            print(row)
+
+
+def delete_table(table):
+    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(f"DROP TABLE {table}")
+        conn.commit()

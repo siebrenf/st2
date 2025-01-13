@@ -4,17 +4,19 @@ from time import sleep
 
 import psycopg
 
+from st2.logging import logger
 
-def taskmaster(name, uuid):
-    t = TaskMaster(name, uuid)
+
+def taskmaster(pname, pid):
+    t = TaskMaster(pname, pid)
     t.run()
 
 
 class TaskMaster:
 
-    def __init__(self, name, uuid):
-        self.name = name
-        self.uuid = uuid
+    def __init__(self, pname, pid):
+        self.name = pname
+        self.pid = pid
         self._tasks = {}
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._run_event_loop, daemon=False)
@@ -80,17 +82,16 @@ class TaskMaster:
 
     def run(self):
         with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT *
-                FROM tasks
-                WHERE pname = %s
-                """,
-                (self.name,),
-            )
-            for task in cur.fetchall():
-                commit = False
-                (
+            while True:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM tasks
+                    WHERE pname = %s
+                    """,
+                    (self.name,),
+                )
+                for (
                     ship_symbol,
                     agent_symbol,
                     current_task,
@@ -98,88 +99,97 @@ class TaskMaster:
                     cancel_task,
                     pname,
                     pid,
-                ) = task
-                if pid != self.uuid:
-                    # uuid changed: a script restart occurred
-                    if current_task is not None:
-                        # continue the previous task
-                        task = self.get_task(ship_symbol, current_task)
+                ) in cur.fetchall():
+                    commit = False
+                    if pid != self.pid:
+                        # uuid changed: a script restart occurred
+                        if current_task is not None:
+                            # continue the previous task
+                            task = self.get_task(ship_symbol, agent_symbol, current_task)
+                            self.put(ship_symbol, task)
+                            logger.warning(
+                                f"Restarting {ship_symbol} task {current_task}"
+                            )
+                        pid = self.pid
+                        cur.execute(
+                            """
+                            UPDATE tasks
+                            SET pid = %s
+                            WHERE symbol = %s
+                            """,
+                            (pid, ship_symbol),
+                        )
+                        commit = True
+
+                    if self.done(ship_symbol):
+                        ret = self.get(ship_symbol)
+                        if ret:
+                            print(ret)  # TODO: do we need the coroutine result?
+                        current_task = None
+                        cur.execute(
+                            """
+                            UPDATE tasks
+                            SET current = %s
+                            WHERE symbol = %s
+                            """,
+                            (current_task, ship_symbol),
+                        )
+                        commit = True
+
+                    if cancel_task:
+                        self.cancel(ship_symbol)
+                        current_task = None
+                        cancel_task = False
+                        cur.execute(
+                            """
+                            UPDATE tasks
+                            SET current = %s,
+                                cancel = %s
+                            WHERE symbol = %s
+                            """,
+                            (current_task, cancel_task, ship_symbol),
+                        )
+                        commit = True
+
+                    if current_task is None and queued_task is not None:
+                        current_task = queued_task
+                        queued_task = None
+                        task = self.get_task(ship_symbol, agent_symbol, current_task)
                         self.put(ship_symbol, task)
-                    pid = self.uuid
-                    cur.execute(
-                        """
-                        UPDATE tasks
-                        SET (
-                            pid = %s
+                        cur.execute(
+                            """
+                            UPDATE tasks
+                            SET current = %s,
+                                queued = %s
+                            WHERE symbol = %s
+                            """,
+                            (current_task, queued_task, ship_symbol),
                         )
-                        WHERE ship = %s
-                        """,
-                        (pid, ship_symbol),
-                    )
-                    commit = True
+                        commit = True
 
-                if self.done(ship_symbol):
-                    ret = self.get(ship_symbol)
-                    print(ret)  # TODO: do we need the coroutine result?
-                    current_task = None
-                    cur.execute(
-                        """
-                        UPDATE tasks
-                        SET (
-                            current = %s
-                        )
-                        WHERE ship = %s
-                        """,
-                        (current_task, ship_symbol),
-                    )
-                    commit = True
+                    if commit:
+                        conn.commit()
 
-                if cancel_task:
-                    self.cancel(ship_symbol)
-                    current_task = None
-                    cancel_task = False
-                    cur.execute(
-                        """
-                        UPDATE tasks
-                        SET (
-                            current = %s,
-                            cancel = %s,
-                        )
-                        WHERE ship = %s
-                        """,
-                        (current_task, cancel_task, ship_symbol),
-                    )
-                    commit = True
-
-                if current_task is None and queued_task is not None:
-                    current_task = queued_task
-                    queued_task = None
-                    task = self.get_task(ship_symbol, current_task)
-                    self.put(ship_symbol, task)
-                    cur.execute(
-                        """
-                        UPDATE tasks
-                        SET (
-                            current = %s,
-                            queued = %s,
-                        )
-                        WHERE ship = %s
-                        """,
-                        (current_task, queued_task, ship_symbol),
-                    )
-                    commit = True
-
-                if commit:
-                    conn.commit()
+                sleep(0.1)  # TODO: remove?
 
     @staticmethod
-    def get_task(ship_symbol, task):
+    def get_task(ship_symbol, agent_symbol, task):
         task = task.split(" ")
-        if task[0] == "probe":
+        if task[0] == "test":
+            coro = _test_coroutine(*task[1:])
+        elif task[0] == "probe":
             coro = ai_probe_waypoint(
                 ship=ship_symbol,
+                agent=agent_symbol,
                 waypoint=task[1],
             )
         else:
             raise ValueError(f"task not recognized: {ship_symbol} {task}")
         return coro
+
+
+async def _test_coroutine(name, seconds=1):
+    print(f"{name} will sleep for {seconds} sec.")
+    await asyncio.sleep(seconds)
+    print(f"{name} is done after {seconds} seconds")
+    return name, seconds
