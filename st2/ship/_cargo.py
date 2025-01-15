@@ -1,7 +1,8 @@
-from st2.logging import logger
 from psycopg import connect
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+
+from st2.logging import logger
 
 
 def cargo_yield(self):
@@ -42,15 +43,19 @@ def sell(self, symbol, units, verbose=True):
 def _get_trade_volume(self, symbol):
     # assumes the database will be updated frequently
     # enough to capture changes in tradeVolume
-    tv = connect("dbname=st2 user=postgres").execute(
-        """
-        SELECT tradeVolume 
-        FROM market_tradegoods 
-        WHERE waypointSymbol = %s 
-        AND symbol = %s
-        """,
-        (self["nav"]["waypointSymbol"], symbol),
-    ).fetchone()[0]
+    tv = (
+        connect("dbname=st2 user=postgres")
+        .execute(
+            """
+            SELECT tradeVolume 
+            FROM market_tradegoods 
+            WHERE waypointSymbol = %s 
+            AND symbol = %s
+            """,
+            (self["nav"]["waypointSymbol"], symbol),
+        )
+        .fetchone()[0]
+    )
     return tv
 
 
@@ -60,8 +65,8 @@ def _buy_sell(self, symbol, units, action, verbose=True):
         data={"symbol": symbol, "units": units},
     )["data"]
     self._update(data, ["cargo"])
-    # TODO: update agent with data["agent"](?)
-    # TODO: update transactions with data["transaction"](?)
+    # TODO: log data["agent"]
+    # TODO: log data["transaction"]
     price = data["transaction"]["totalPrice"]
     if verbose:
         wp = self["nav"]["waypointSymbol"]
@@ -71,19 +76,22 @@ def _buy_sell(self, symbol, units, action, verbose=True):
 
 
 def transfer(self, symbol, units, ship, verbose=True):
-    """Transfer cargo between ships.
-    If the ship argument is a string. Cargo transfer will happen blindly.
-    If the ship argument is a class object, it's cargo manifest is updated.
-    Returns the number of transferred units."""
+    """Transfer cargo between ships"""
+    # TODO: use multi-line query to update both ships at once
+
     # match the status of the target ship
     if isinstance(ship, str):
-        ship = connect(
-            "dbname=st2 user=postgres",
-            row_factory=dict_row,
-        ).execute(
-            "SELECT * FROM ships WHERE symbol = %s",
-            (ship,),
-        ).fetchone()
+        ship = (
+            connect(
+                "dbname=st2 user=postgres",
+                row_factory=dict_row,
+            )
+            .execute(
+                "SELECT * FROM ships WHERE symbol = %s",
+                (ship,),
+            )
+            .fetchone()
+        )
     if ship["nav"]["status"] == "DOCKED":
         self.dock()
     else:
@@ -115,10 +123,10 @@ def transfer(self, symbol, units, ship, verbose=True):
     else:
         ship["cargo"]["inventory"].append(md_good)  # noqa
     ship["cargo"]["units"] += units
-    with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+    with connect("dbname=st2 user=postgres") as conn:
         conn.execute(
             f"UPDATE ships SET cargo = %s WHERE symbol = %s",
-            (Jsonb(ship["cargo"]), ship["symbol"])
+            (Jsonb(ship["cargo"]), ship["symbol"]),
         )
         conn.commit()
 
@@ -194,8 +202,8 @@ def transfer(self, symbol, units, ship, verbose=True):
 def jettison(self, symbol, units, verbose=False):
     """Jettison cargo from your ship's cargo hold"""
     data = self.request.post(
-        f'my/ships/{self["symbol"]}/jettison',
-        data={"symbol": symbol, "units": units})["data"]
+        f'my/ships/{self["symbol"]}/jettison', data={"symbol": symbol, "units": units}
+    )["data"]
     self._update(data, ["cargo"])
     if verbose:
         logger.info(f"{self.name()} jettisoned {units} {symbol}")
@@ -211,6 +219,9 @@ def supply(self, symbol, units, verbose=True):
         data={"shipSymbol": self["symbol"], "tradeSymbol": symbol, "units": units},
     )["data"]
     self._update(data, ["cargo"])
+
+    # TODO: log data["construction"]
+
     if verbose:
         if data["construction"]["isComplete"]:
             logger.info(

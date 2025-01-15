@@ -6,10 +6,13 @@ def navigate(self, waypoint, verbose=True):
     self.orbit()
 
     data = self.request.post(
-        f'my/ships/{self["symbol"]}/navigate',
-        data={"waypointSymbol": waypoint}
+        f'my/ships/{self["symbol"]}/navigate', data={"waypointSymbol": waypoint}
     )["data"]
     self._update(data, ["fuel", "nav"])
+
+    # TODO: log data["events"]
+    # TODO: log distance, mode, nav time & fuel cost?
+    # TODO: create table navigates
 
     if verbose:
         t2 = round(self.nav_remaining())
@@ -42,7 +45,8 @@ def jump(self, waypoint, verbose=True):
     )["data"]
     self._update(data, ["nav", "cooldown"])
 
-    # TODO: log transaction + agent
+    # TODO: log data["agent"]
+    # TODO: log data["transaction"]
 
     if verbose:
         wp = self["nav"]["waypointSymbol"]

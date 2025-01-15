@@ -7,7 +7,9 @@ def refuel(self, units=None, from_cargo=False):
     if units:
         payload["units"] = units
     data = self.request.post(
-        f'my/ships/{self["symbol"]}/refuel', self["agent"],
-        data=payload)["data"]
+        f'my/ships/{self["symbol"]}/refuel', self["agent"], data=payload
+    )["data"]
     self._update(data, ["fuel"])
-    return data["transaction"]["totalPrice"]
+
+    # TODO: log data["agent"]
+    # TODO: log data["transaction"]

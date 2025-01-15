@@ -1,9 +1,4 @@
-# import re
-# from functools import wraps
 from st2.logging import logger
-from st2 import time
-# from st2.exceptions import ExtractDestabilizedError, GameError
-# from st2 import surveys
 
 
 def survey(self, verbose=True):
@@ -11,7 +6,8 @@ def survey(self, verbose=True):
 
     data = self.request.post(f'my/ships/{self["symbol"]}/survey')["data"]
     self._update(data, ["cooldown"])
-    # TODO: add data["surveys"] to the DB
+    # TODO: log data["surveys"]
+    # TODO: create table/module surveys
 
     if verbose:
         for s in data["surveys"]:
@@ -69,8 +65,11 @@ def extract(self, verbose=True):
     #     action = "extract_survey"
     self._update(data, ["cargo", "cooldown"])
 
-    # TODO: log extracts+action in the DB
-    # TODO: log events
+    # TODO: ability to use surveys
+    # TODO: log data["extraction"] + tool and use of survey
+    # TODO: log data["events"]
+    # TODO: create table extracts
+    # TODO: create table events
 
     if verbose:
         for event in data["events"]:
@@ -86,7 +85,8 @@ def siphon(self, verbose=True):
     data = self.request.post(f'my/ships/{self["symbol"]}/siphon')["data"]
     self._update(data, ["cargo", "cooldown"])
 
-    # TODO: log siphon in the DB
+    # TODO: log data["siphon"] + tool
+    # TODO: log data["events"]
 
     if verbose:
         for event in data["events"]:

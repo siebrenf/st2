@@ -1,17 +1,19 @@
-from st2.logging import logger
 from psycopg import connect
 from psycopg.types.json import Jsonb
+
 from st2 import time
+from st2.logging import logger
 
 
 def contract(self):
     """Request a new contract. Ship must be present at a faction controlled waypoint"""
     self.dock()
 
-    data = self.request.post(
-        f'my/ships/{self["symbol"]}/negotiate/contract'
-    )["data"]["contract"]
+    data = self.request.post(f'my/ships/{self["symbol"]}/negotiate/contract')["data"][
+        "contract"
+    ]
     with connect("dbname=st2 user=postgres") as conn:
+        # TODO: create table contracts
         conn.execute(
             """
             INSERT INTO contracts
@@ -39,7 +41,7 @@ def deliver(self, symbol, units, contract, verbose=True):
 
     data = self.request.post(
         f'my/contracts/{contract["id"]}/deliver',
-        data={"shipSymbol": self["symbol"], "tradeSymbol": symbol, "units": units}
+        data={"shipSymbol": self["symbol"], "tradeSymbol": symbol, "units": units},
     )["data"]
     self._update(data, ["cargo"])
 
@@ -57,11 +59,6 @@ def deliver(self, symbol, units, contract, verbose=True):
         )
         conn.commit()
 
-    # # update contract
-    # contract["terms"] = data["contract"]["terms"]
-    # contract["fulfilled"] = data["contract"]["fulfilled"]
-    # wp = self["nav"]["waypointSymbol"]
-    # contract.delivery_data[wp][symbol]["units"] -= units
     if verbose:
         wp = self["nav"]["waypointSymbol"]
         logger.info(f"{self.name()} delivered {units} {symbol} at {wp}")

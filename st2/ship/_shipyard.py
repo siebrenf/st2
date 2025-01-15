@@ -1,5 +1,6 @@
-from st2 import time
 from psycopg import connect
+
+from st2 import time
 
 
 def shipyard(self):

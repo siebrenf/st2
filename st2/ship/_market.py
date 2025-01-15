@@ -1,5 +1,6 @@
-from st2 import time
 from psycopg import connect
+
+from st2 import time
 
 
 def market(self):
@@ -7,7 +8,7 @@ def market(self):
     waypoint_symbol = self["nav"]["waypointSymbol"]
     system_symbol = self["nav"]["systemSymbol"]
     data = self.request.get(
-        f'systems/{system_symbol}/waypoints/{waypoint_symbol}/market',
+        f"systems/{system_symbol}/waypoints/{waypoint_symbol}/market",
     )["data"]
     timestamp = time.now()
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:

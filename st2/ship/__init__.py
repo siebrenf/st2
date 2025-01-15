@@ -1,23 +1,21 @@
-from st2 import time
-from st2.request import RequestMp
-
 from psycopg import connect
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-# __all__ = [
-#     "Ship",
-#     "ship_buy",
-#     "ship_list",
-#     "ship_get",
-# ]
+from st2 import time
+from st2.logging import logger
+from st2.request import RequestMp
 
 
 class Ship(dict):
     def __init__(self, symbol, qa_pairs, priority):
-        with connect("dbname=st2 user=postgres",  row_factory=dict_row) as conn:
-            data = conn.execute("SELECT * FROM ships WHERE symbol = %s", (symbol,)).fetchone()
-            token = conn.execute("SELECT token FROM agents WHERE symbol = %s", (data["agentSymbol"],)).fetchone()[0]
+        with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+            data = conn.execute(
+                "SELECT * FROM ships WHERE symbol = %s", (symbol,)
+            ).fetchone()
+            token = conn.execute(
+                "SELECT token FROM agents WHERE symbol = %s", (data["agentSymbol"],)
+            ).fetchone()[0]
         super().__init__(data)
         self.request = RequestMp(qa_pairs, priority, token)
         # if "expiration" not in self["cooldown"]:
@@ -32,33 +30,33 @@ class Ship(dict):
     def cooldown_remaining(self):
         return time.remaining(self["cooldown"]["expiration"])
 
-    def status(self, key="condition"):
-        if key == "condition":
-            return {
-                "frame": self["frame"]["condition"],
-                "reactor": self["reactor"]["condition"],
-                "engine": self["engine"]["condition"],
-            }
-        elif key == "integrity":
-            return {
-                "frame": self["frame"]["integrity"],
-                "reactor": self["reactor"]["integrity"],
-                "engine": self["engine"]["integrity"],
-            }
-        else:
-            raise ValueError
+    # def status(self, key="condition"):
+    #     if key == "condition":
+    #         return {
+    #             "frame": self["frame"]["condition"],
+    #             "reactor": self["reactor"]["condition"],
+    #             "engine": self["engine"]["condition"],
+    #         }
+    #     elif key == "integrity":
+    #         return {
+    #             "frame": self["frame"]["integrity"],
+    #             "reactor": self["reactor"]["integrity"],
+    #             "engine": self["engine"]["integrity"],
+    #         }
+    #     else:
+    #         raise ValueError
 
     def _update(self, data=None, keys=None):
         """Update the ship data in the local dict and the remote database"""
         if keys is None:
             keys = data.keys()
-        with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+        with connect("dbname=st2 user=postgres") as conn:
             for key in keys:
                 if data:
                     self[key] = data[key]
                 conn.execute(
                     f"UPDATE ships SET {key} = %s WHERE symbol = %s",
-                    (Jsonb(self[key]), self["symbol"])
+                    (Jsonb(self[key]), self["symbol"]),
                 )
             conn.commit()
 
@@ -84,21 +82,62 @@ class Ship(dict):
     def refresh(self):
         """Update the ship with the API server"""
         data = self.request.get(f'my/ships/{self["symbol"]}')["data"]
-        self._update(data)
+        self._update(data)  # TODO: update whole row at once
 
-    # def buy_ship(self, ship_type, verbose=True):
-    #     """
-    #     Purchase the specified ship_type at the current waypoint's shipyard.
-    #     Returns the new ship instance.
-    #     """
-    #     waypoint = self["nav"]["waypointSymbol"]
-    #     data = self.request.post(
-    #         f"my/ships",
-    #         data={"shipType": ship_type, "waypointSymbol": waypoint},
-    #     )["data"]
-    #
-    #     ship = Ship(data["symbol"], qa_pairs=self.request.q)
-    #     return ship
+    def buy_ship(self, ship_type, verbose=True):
+        """
+        Purchase the specified ship_type at the current waypoint's shipyard.
+        Returns the new ship instance.
+        """
+        waypoint = self["nav"]["waypointSymbol"]
+        data = self.request.post(
+            f"my/ships",
+            data={"shipType": ship_type, "waypointSymbol": waypoint},
+        )["data"]
+
+        # TODO: log data["agent"]
+        # TODO: log data["transaction"]
+
+        ship = data["ship"]
+        agent_symbol = self["agent_symbol"]
+        with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO ships
+                (symbol, agentSymbol, nav, crew, fuel, cooldown, frame,
+                 reactor, engine, modules, mounts, registration, cargo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    ship["symbol"],
+                    agent_symbol,
+                    Jsonb(ship["nav"]),
+                    Jsonb(ship["crew"]),
+                    Jsonb(ship["fuel"]),
+                    Jsonb(ship["cooldown"]),
+                    Jsonb(ship["frame"]),
+                    Jsonb(ship["reactor"]),
+                    Jsonb(ship["engine"]),
+                    Jsonb(ship["modules"]),
+                    Jsonb(ship["mounts"]),
+                    Jsonb(ship["registration"]),
+                    Jsonb(ship["cargo"]),
+                ),
+            )
+
+            cur.execute(
+                """
+                INSERT INTO tasks (symbol, agentSymbol, current, queued, cancel, pname, pid) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (ship["symbol"], agent_symbol, None, None, False, None, None),
+            )
+
+        if verbose:
+            logger.info(
+                f"{data['symbol']} bought at {waypoint} "
+                f'for {data["transaction"]["price"]} credits'
+            )
 
     # import methods
     from ._cargo import buy, cargo_yield, jettison, sell, supply, transfer
@@ -109,52 +148,3 @@ class Ship(dict):
     from ._mounts import extract, siphon, survey
     from ._nav import jump, nav_patch, navigate
     from ._shipyard import shipyard
-
-
-# def ship_buy(ship_type, waypoint, agent=None, verbose=True):
-#     """
-#     Purchase the specified ship_type at the waypoint's shipyard.
-#     Requires a ship at the waypoint.
-#     Returns the new ship instance.
-#     """
-#     payload =
-#     data = request.post(f"my/ships", agent, payload)["data"]
-#     ship = ship_get(data["ship"])
-#
-#     if verbose:
-#         logger.info(
-#             f"{ship.name()} bought at {waypoint} "
-#             f'for {data["transaction"]["price"]} credits'
-#         )
-#     # noinspection PyArgumentList
-#     ship.shipyard()
-#     # noinspection PyArgumentList
-#     ship.market()
-#     return ship
-
-
-# def ship_list(get_all=False, agent=None, page=1):
-#     """list all ship classes (max 20 per function call)"""
-#     if get_all:
-#         data = []
-#         for ret in request.get_all("my/ships", agent):
-#             data.extend(ret["data"])
-#     else:
-#         payload = {"page": page, "limit": 20}
-#         data = request.get("my/ships", agent, payload)["data"]
-#     return [ship_get(d) for d in data]
-#
-#
-# def ship_get(symbol: str or Ship):
-#     """Return a Ship class instance from the cache"""
-#     if isinstance(symbol, str):  # ship instance
-#         symbol = symbol.upper()
-#     elif isinstance(symbol, dict):  # ship instance
-#         symbol = symbol["symbol"]
-#     else:
-#         raise ValueError("Need Ship or ship symbol")
-#     ship = cache.get(("ship", symbol))
-#     if ship is None:
-#         ship = Ship(symbol)
-#         cache[("ship", symbol)] = ship
-#     return ship
