@@ -1,35 +1,73 @@
-from spacepyrates import time
-from spacepyrates.caching import cache
-from spacepyrates.data.gathering import log_trade
-from spacepyrates.logging import logger
-from spacepyrates.request import request
+from st2 import time
+from psycopg import connect
 
 
-def market(self, log=True):
+def market(self):
     """get all marketplace details"""
-    # if self._in_transit(verbose):
-    #     return
-    # if self._no_trait("MARKETPLACE", verbose=verbose):
-    #     return
-
-    data = request.get(
-        f'systems/{self["nav"]["systemSymbol"]}/waypoints/{self["nav"]["waypointSymbol"]}/market',
-        self["agent"],
+    waypoint_symbol = self["nav"]["waypointSymbol"]
+    system_symbol = self["nav"]["systemSymbol"]
+    data = self.request.get(
+        f'systems/{system_symbol}/waypoints/{waypoint_symbol}/market',
     )["data"]
-    # TODO: test & remove when the WSL2 time desync is fixed
-    n = 0
-    while "tradeGoods" not in data:
-        time.sleep(1)
-        data = request.get(
-            f'systems/{self["nav"]["systemSymbol"]}/waypoints/{self["nav"]["waypointSymbol"]}/market',
-            self["agent"],
-        )["data"]
-        n += 1
-        logger.debug(f"ship.market() failed ({n} sec)")
-    data["time"] = time.write()
-
-    key = ("market", self["nav"]["waypointSymbol"], None)
-    cache.set(key=key, value=data)  # live prices, for get_price()
-    if log:
-        log_trade(data)
+    timestamp = time.now()
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO markets
+            (symbol, systemSymbol, imports, exports, exchange)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (symbol) DO NOTHING
+            """,
+            (
+                waypoint_symbol,
+                system_symbol,
+                [good["symbol"] for good in data["imports"]],
+                [good["symbol"] for good in data["exports"]],
+                [good["symbol"] for good in data["exchange"]],
+            ),
+        )
+        for t in data.get("tradeGoods", []):
+            cur.execute(
+                """
+                INSERT INTO market_tradegoods
+                (waypointSymbol, systemSymbol, symbol, tradeVolume, type,
+                 supply, activity, purchasePrice, sellPrice, timestamp)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (waypointSymbol, symbol, timestamp) DO NOTHING
+                """,
+                (
+                    waypoint_symbol,
+                    system_symbol,
+                    t["symbol"],
+                    t["tradeVolume"],
+                    t["type"],
+                    t["supply"],
+                    t["activity"],
+                    t["purchasePrice"],
+                    t["sellPrice"],
+                    timestamp,
+                ),
+            )
+        for t in data.get("transactions", []):
+            cur.execute(
+                """
+                INSERT INTO market_transactions
+                (waypointSymbol, systemSymbol, shipSymbol, tradeSymbol,
+                 type, units, pricePerUnit, totalPrice, timestamp)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (waypointSymbol, timestamp) DO NOTHING
+                """,
+                (
+                    waypoint_symbol,
+                    system_symbol,
+                    t["shipSymbol"],
+                    t["tradeSymbol"],
+                    t["type"],
+                    t["units"],
+                    t["pricePerUnit"],
+                    t["totalPrice"],
+                    time.read(t["timestamp"]),
+                ),
+            )
+        conn.commit()
     return data
