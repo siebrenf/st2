@@ -187,9 +187,7 @@ class RequestMp:
         self.token = token
         self.sleep = 0.01
 
-    def _request(
-        self, method, endpoint, priority, token, data=None, params=None
-    ):
+    def _request(self, method, endpoint, priority, token, data=None, params=None):
         if priority is None:
             priority = self.priority
         if token is None:

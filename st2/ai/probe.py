@@ -1,9 +1,10 @@
-from psycopg import connect
 from asyncio import sleep
 
-from st2.request import RequestMp
-from st2 import time
+from psycopg import connect
 from psycopg.types.json import Jsonb
+
+from st2 import time
+from st2.request import RequestMp
 
 
 async def ai_probe_waypoint(ship_symbol, waypoint_symbol, qa_pairs, priority=3):
@@ -34,7 +35,7 @@ async def ai_probe_waypoint(ship_symbol, waypoint_symbol, qa_pairs, priority=3):
                 endpoint=f"my/ships/{ship_symbol}/navigate",
                 priority=priority,
                 token=token,
-                data={"waypointSymbol": waypoint_symbol}
+                data={"waypointSymbol": waypoint_symbol},
             )
             cur.execute(
                 """

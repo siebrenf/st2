@@ -107,9 +107,7 @@ def spymaster(request, priority=3):
         ].items():
             pass  # TODO: insert probes into each MARKETPLACE & start collecting data
 
-            with connect(
-                "dbname=st2 user=postgres"
-            ) as conn, conn.cursor() as cur:
+            with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
                 # identify all markets
                 cur.execute(
                     """

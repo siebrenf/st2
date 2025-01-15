@@ -107,7 +107,9 @@ class TaskMaster:
                         # uuid changed: a script restart occurred
                         if current_task is not None:
                             # continue the previous task
-                            task = self.get_task(ship_symbol, agent_symbol, current_task)
+                            task = self.get_task(
+                                ship_symbol, agent_symbol, current_task
+                            )
                             self.put(ship_symbol, task)
                             logger.warning(
                                 f"Restarting {ship_symbol} task {current_task}"
