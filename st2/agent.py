@@ -1,7 +1,7 @@
 import random
 import string
 
-import psycopg
+from psycopg import connect
 
 
 def api_agent(request, priority):
@@ -10,7 +10,7 @@ def api_agent(request, priority):
     This is to notice server resets immediately.
     """
     role = "reset detection"
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT * FROM agents WHERE role = %s",
             (role,),

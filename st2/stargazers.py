@@ -1,6 +1,6 @@
 import math
 
-import psycopg
+from psycopg import connect
 from psycopg.types.json import Jsonb
 
 from st2.agent import api_agent
@@ -12,7 +12,7 @@ DEBUG = False
 
 def astronomer(request, priority=3):
     token = api_agent(request, priority)[1]
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS astronomer 
@@ -126,7 +126,7 @@ def astronomer(request, priority=3):
 
 
 def cartographer(request, priority=3):
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS cartographer 
@@ -140,7 +140,7 @@ def cartographer(request, priority=3):
         conn.commit()
 
     def _chart_systems(index, query, priority):
-        with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
             cur.execute(
                 "SELECT * FROM cartographer WHERE index = %s",
                 (index,),

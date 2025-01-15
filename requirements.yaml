@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - conda-ecosystem-user-package-isolation
-  - python  # latest conda version = 3.12
+  - python  >=3.10
 
   - bokeh
   - diskcache

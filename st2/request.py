@@ -179,15 +179,21 @@ class RequestMp:
     See main.py.
     """
 
-    def __init__(self, qa_pairs):
+    def __init__(self, qa_pairs, priority=0, token=None):
         self.queues = {}
         for priority, (queue, answer_dict) in enumerate(qa_pairs):
             self.queues[priority] = (queue, answer_dict)
+        self.priority = priority
+        self.token = token
         self.sleep = 0.01
 
     def _request(
-        self, method, endpoint, priority=0, token=None, data=None, params=None
+        self, method, endpoint, priority, token, data=None, params=None
     ):
+        if priority is None:
+            priority = self.priority
+        if token is None:
+            token = self.token
         queue, answer_dict = self.queues[priority]
         uuid = uuid1()
         queue.put((uuid, method, endpoint, token, data, params))
@@ -195,7 +201,7 @@ class RequestMp:
             sleep(self.sleep)
         return answer_dict.pop(uuid)
 
-    def get(self, endpoint, priority=0, token=None, params=None):
+    def get(self, endpoint, priority=None, token=None, params=None):
         if endpoint == "status":
             endpoint = ""
         if params is None:
@@ -203,7 +209,7 @@ class RequestMp:
 
         return self._request("get", endpoint, priority, token, None, params)
 
-    def get_all(self, endpoint, priority=0, token=None):
+    def get_all(self, endpoint, priority=None, token=None):
         """yield all results from the get request, not just the first 20 results."""
         total = 0
         page = 0
@@ -215,10 +221,10 @@ class RequestMp:
             if total == resp_json["meta"]["total"]:
                 break
 
-    def post(self, endpoint, priority=0, token=None, data=None):
+    def post(self, endpoint, priority=None, token=None, data=None):
         return self._request("post", endpoint, priority, token, data)
 
-    def patch(self, endpoint, priority=0, token=None, data=None):
+    def patch(self, endpoint, priority=None, token=None, data=None):
         return self._request("patch", endpoint, priority, token, data)
 
 

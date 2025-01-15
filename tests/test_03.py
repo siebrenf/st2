@@ -1,7 +1,7 @@
 import multiprocessing as mp
 from uuid import uuid1
 
-import psycopg
+from psycopg import connect
 
 from st2.ai import taskmaster
 from st2.startup import db_server, game_server
@@ -19,7 +19,7 @@ def test_taskmaster():
     )
     test_process.start()
 
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO tasks (symbol, agentSymbol, current, queued, cancel, pname, pid) 

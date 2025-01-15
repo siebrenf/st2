@@ -7,7 +7,8 @@ import atexit
 import os
 import subprocess as sp
 
-import psycopg
+from psycopg import connect
+from psycopg.types.json import Jsonb
 
 from st2 import time
 from st2.caching import cache
@@ -54,7 +55,7 @@ def db_server_init():
 
 
 def db_tables_init():
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
 
         # Fetch existing table names
         cur.execute(
@@ -384,7 +385,7 @@ def db_update_factions(request):
         for f in fs["data"]:
             factions[f["symbol"]] = f
 
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         # insert factions & faction_traits
         for symbol in sorted(factions):
             f = factions[symbol]
@@ -547,11 +548,45 @@ def chart_shipyard(symbol, request, token, cur):
             ret["modificationsFee"],
         ),
     )
+    timestamp = time.now()
     for s in ret.get("ships", []):
-        timestamp = time.now()
-        pass  # TODO
+        cur.execute(
+            """
+            INSERT INTO shipyard_ships
+            (waypointSymbol, systemSymbol, type,
+             supply, activity, purchasePrice, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (waypointSymbol, symbol, timestamp) DO NOTHING
+            """,
+            (
+                symbol,
+                system_symbol,
+                s["type"],
+                s["supply"],
+                s["activity"],
+                s["purchasePrice"],
+                timestamp,
+            ),
+        )
     for s in ret.get("transactions", []):
-        pass  # TODO
+        cur.execute(
+            """
+            INSERT INTO shipyard_transactions
+            (waypointSymbol, systemSymbol, shipSymbol,
+             agentSymbol, shipType, price, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (waypointSymbol, timestamp) DO NOTHING
+            """,
+            (
+                symbol,
+                system_symbol,
+                s["shipSymbol"],
+                s["agentSymbol"],
+                s["shipType"],
+                s["price"],
+                time.read(s["timestamp"]),
+            ),
+        )
 
 
 def insert_ship(ship, agent_symbol, cur):
@@ -565,17 +600,17 @@ def insert_ship(ship, agent_symbol, cur):
         (
             ship["symbol"],
             agent_symbol,
-            ship["nav"],
-            ship["crew"],
-            ship["fuel"],
-            ship["cooldown"],
-            ship["frame"],
-            ship["reactor"],
-            ship["engine"],
-            ship["modules"],
-            ship["mounts"],
-            ship["registration"],
-            ship["cargo"],
+            Jsonb(ship["nav"]),
+            Jsonb(ship["crew"]),
+            Jsonb(ship["fuel"]),
+            Jsonb(ship["cooldown"]),
+            Jsonb(ship["frame"]),
+            Jsonb(ship["reactor"]),
+            Jsonb(ship["engine"]),
+            Jsonb(ship["modules"]),
+            Jsonb(ship["mounts"]),
+            Jsonb(ship["registration"]),
+            Jsonb(ship["cargo"]),
         ),
     )
 
@@ -589,7 +624,7 @@ def insert_ship(ship, agent_symbol, cur):
 
 
 def print_tables():
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
             SELECT table_name
@@ -601,7 +636,7 @@ def print_tables():
 
 
 def print_table(table):
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         # print a table's columns
         cur.execute(
             """
@@ -631,6 +666,6 @@ def print_table(table):
 
 
 def delete_table(table):
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(f"DROP TABLE {table}")
         conn.commit()

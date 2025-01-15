@@ -2,25 +2,27 @@ import asyncio
 import threading
 from time import sleep
 
-import psycopg
+from psycopg import connect
 
 from st2.logging import logger
 
 
-def taskmaster(pname, pid):
-    t = TaskMaster(pname, pid)
+def taskmaster(*args, **kwargs):
+    t = TaskMaster(*args, **kwargs)
     t.run()
 
 
 class TaskMaster:
 
-    def __init__(self, pname, pid):
+    def __init__(self, pname, pid, qa_pairs):
         self.name = pname
         self.pid = pid
+        self.qa_pairs = qa_pairs
         self._tasks = {}
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._run_event_loop, daemon=False)
         self._thread.start()
+        self._loaded = set()
 
     def _run_event_loop(self):
         asyncio.set_event_loop(self._loop)
@@ -81,7 +83,7 @@ class TaskMaster:
         self.terminate()
 
     def run(self):
-        with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
             while True:
                 cur.execute(
                     """
@@ -172,19 +174,22 @@ class TaskMaster:
 
                 sleep(0.1)  # TODO: remove?
 
-    @staticmethod
-    def get_task(ship_symbol, agent_symbol, task):
+    def get_task(self, ship_symbol, agent_symbol, task):
         task = task.split(" ")
-        if task[0] == "test":
-            coro = _test_coroutine(*task[1:])
-        elif task[0] == "probe":
-            coro = ai_probe_waypoint(
-                ship=ship_symbol,
-                agent=agent_symbol,
-                waypoint=task[1],
-            )
-        else:
-            raise ValueError(f"task not recognized: {ship_symbol} {task}")
+        match task[0]:
+            case "test":
+                coro = _test_coroutine(*task[1:])
+            case "probe":
+                if "ai_probe_waypoint" not in self._loaded:
+                    self._loaded.add("ai_probe_waypoint")
+                    from st2.ai.probe import ai_probe_waypoint
+                coro = ai_probe_waypoint(
+                    ship=ship_symbol,
+                    waypoint=task[1],
+                    qa_pairs=self.qa_pairs,
+                )
+            case _:
+                raise ValueError(f"task not recognized: {ship_symbol} {task}")
         return coro
 
 

@@ -1,4 +1,4 @@
-import psycopg
+from psycopg import connect
 
 from st2.agent import register_random_agent
 from st2.db import insert_ship
@@ -11,7 +11,7 @@ def spymaster(request, priority=3):
     # get a dict of start systems per faction
     faction2start_system2agent = {}
     faction2hq = {}
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
             SELECT systemSymbol, faction
@@ -42,7 +42,7 @@ def spymaster(request, priority=3):
 
     # get agents for each start system per faction
     role = "spy"
-    with psycopg.connect(f"dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         for faction in faction2start_system2agent:
             if DEBUG:
                 n = len(faction2start_system2agent[faction])
@@ -107,8 +107,8 @@ def spymaster(request, priority=3):
         ].items():
             pass  # TODO: insert probes into each MARKETPLACE & start collecting data
 
-            with psycopg.connect(
-                f"dbname=st2 user=postgres"
+            with connect(
+                "dbname=st2 user=postgres"
             ) as conn, conn.cursor() as cur:
                 # identify all markets
                 cur.execute(
