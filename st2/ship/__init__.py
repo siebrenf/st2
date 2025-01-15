@@ -48,14 +48,6 @@ class Ship(dict):
         else:
             raise ValueError
 
-    # def _update_cache(self, data=None, keys=None):
-    #     if data and keys:
-    #         if isinstance(keys, str):
-    #             keys = [keys]
-    #         for key in keys:
-    #             self[key] = data[key]
-    #     cache[("ship", self["symbol"])] = self
-
     def _update(self, data=None, keys=None):
         """Update the ship data in the local dict and the remote database"""
         if keys is None:
@@ -65,7 +57,7 @@ class Ship(dict):
                 if data:
                     self[key] = data[key]
                 conn.execute(
-                    f"UPDATE ships SET {k} = %s WHERE symbol = %s",
+                    f"UPDATE ships SET {key} = %s WHERE symbol = %s",
                     (Jsonb(self[key]), self["symbol"])
                 )
             conn.commit()
@@ -89,14 +81,10 @@ class Ship(dict):
                 self["nav"]["status"] = "IN_ORBIT"
                 self._update(keys=["nav"])
 
-    # def refresh(self, data=None):
-    #     if data is None:
-    #         data = request.get(f'my/ships/{self["symbol"]}', self["agent"])["data"]
-    #     for k, v in data.items():
-    #         self[k] = v
-    #     if "expiration" not in self["cooldown"]:
-    #         self["cooldown"]["expiration"] = time.write()
-    #     self._update_cache()
+    def refresh(self):
+        """Update the ship with the API server"""
+        data = self.request.get(f'my/ships/{self["symbol"]}')["data"]
+        self._update(data)
 
     # def buy_ship(self, ship_type, verbose=True):
     #     """
@@ -104,17 +92,23 @@ class Ship(dict):
     #     Returns the new ship instance.
     #     """
     #     waypoint = self["nav"]["waypointSymbol"]
-    #     return ship_buy(ship_type, waypoint, self["agent"], verbose)
+    #     data = self.request.post(
+    #         f"my/ships",
+    #         data={"shipType": ship_type, "waypointSymbol": waypoint},
+    #     )["data"]
+    #
+    #     ship = Ship(data["symbol"], qa_pairs=self.request.q)
+    #     return ship
 
     # import methods
-    from ._cargo import buy, cargo_yield, jettison, refine, sell, supply, transfer
+    from ._cargo import buy, cargo_yield, jettison, sell, supply, transfer
     from ._contract import contract, deliver
     from ._fuel import refuel
     from ._market import market
     from ._misc import chart
-    from ._mounts import extract, mount_install, mount_remove, scan, siphon, survey
-    from ._nav import jump, nav_patch, navigate, warp
-    from ._shipyard import repair, scrap, shipyard
+    from ._mounts import extract, siphon, survey
+    from ._nav import jump, nav_patch, navigate
+    from ._shipyard import shipyard
 
 
 # def ship_buy(ship_type, waypoint, agent=None, verbose=True):
@@ -123,7 +117,7 @@ class Ship(dict):
 #     Requires a ship at the waypoint.
 #     Returns the new ship instance.
 #     """
-#     payload = {"shipType": ship_type, "waypointSymbol": waypoint}
+#     payload =
 #     data = request.post(f"my/ships", agent, payload)["data"]
 #     ship = ship_get(data["ship"])
 #
@@ -137,8 +131,8 @@ class Ship(dict):
 #     # noinspection PyArgumentList
 #     ship.market()
 #     return ship
-#
-#
+
+
 # def ship_list(get_all=False, agent=None, page=1):
 #     """list all ship classes (max 20 per function call)"""
 #     if get_all:

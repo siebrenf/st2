@@ -42,7 +42,6 @@ def sell(self, symbol, units, verbose=True):
 def _get_trade_volume(self, symbol):
     # assumes the database will be updated frequently
     # enough to capture changes in tradeVolume
-    wp = self["nav"]["waypointSymbol"]
     tv = connect("dbname=st2 user=postgres").execute(
         """
         SELECT tradeVolume 
@@ -50,7 +49,7 @@ def _get_trade_volume(self, symbol):
         WHERE waypointSymbol = %s 
         AND symbol = %s
         """,
-        (wp, symbol),
+        (self["nav"]["waypointSymbol"], symbol),
     ).fetchone()[0]
     return tv
 

@@ -11,24 +11,26 @@ def contract(self):
     data = self.request.post(
         f'my/ships/{self["symbol"]}/negotiate/contract'
     )["data"]["contract"]
-    connect("dbname=st2 user=postgres").execute(
-        """
-        INSERT INTO contracts
-        (id, agentSymbol, factionSymbol, type, terms,
-         accepted, fulfilled, deadlineToAccept)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            data["id"],
-            self["agent"],
-            data["factionSymbol"],
-            data["type"],
-            Jsonb(data["terms"]),
-            data["accepted"],
-            data["fulfilled"],
-            time.read(data["deadlineToAccept"]),
-        ),
-    )
+    with connect("dbname=st2 user=postgres") as conn:
+        conn.execute(
+            """
+            INSERT INTO contracts
+            (id, agentSymbol, factionSymbol, type, terms,
+             accepted, fulfilled, deadlineToAccept)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                data["id"],
+                self["agent"],
+                data["factionSymbol"],
+                data["type"],
+                Jsonb(data["terms"]),
+                data["accepted"],
+                data["fulfilled"],
+                time.read(data["deadlineToAccept"]),
+            ),
+        )
+        conn.commit()
     return data
 
 
@@ -41,17 +43,20 @@ def deliver(self, symbol, units, contract, verbose=True):
     )["data"]
     self._update(data, ["cargo"])
 
-    connect("dbname=st2 user=postgres").execute(
-        """
-        UPDATE contracts
-        SET terms = %s
-        WHERE id = %s
-        """,
-        (
-            Jsonb(data["contract"]["terms"]),
-            data["contract"]["id"],
-        ),
-    )
+    with connect("dbname=st2 user=postgres") as conn:
+        conn.execute(
+            """
+            UPDATE contracts
+            SET terms = %s
+            WHERE id = %s
+            """,
+            (
+                Jsonb(data["contract"]["terms"]),
+                data["contract"]["id"],
+            ),
+        )
+        conn.commit()
+
     # # update contract
     # contract["terms"] = data["contract"]["terms"]
     # contract["fulfilled"] = data["contract"]["fulfilled"]

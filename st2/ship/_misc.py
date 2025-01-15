@@ -1,23 +1,35 @@
-from spacepyrates.caching import cache
-from spacepyrates.logging import logger
-from spacepyrates.request import request
+from psycopg import connect
+from psycopg.types.json import Jsonb
 
 
-def chart(self, verbose=True):
+def chart(self):
     """Command a ship to chart the waypoint at its current location."""
-    # if self._in_transit(verbose):
-    #     return
-    # if self._no_trait("UNCHARTED", verbose=verbose):
-    #     return
-
-    data = request.post(f'my/ships/{self["symbol"]}/chart', self["agent"])["data"]
-    # clear from cache so it's updated upon use
-    key = ("system_waypoints", self["nav"]["systemSymbol"], None)
-    _ = cache.pop(key)
-
-    if verbose:
-        wp = self["nav"]["waypointSymbol"]
-        traits = ", ".join(sorted(t["symbol"] for t in data["traits"]))
-        logger.info(f"{self.name()} charted {wp}. Traits: {traits}")
-
+    data = self.request.post(f'my/ships/{self["symbol"]}/chart')["data"]["waypoint"]
+    with connect("dbname=st2 user=postgres") as conn:
+        conn.execute(
+            """
+            INSERT INTO waypoints
+            (symbol, systemSymbol, type, x, y, orbits, orbitals, traits, chart, faction, isUnderConstruction)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (symbol) DO UPDATE 
+            SET traits = EXCLUDED.traits, 
+                chart = EXCLUDED.chart, 
+                faction = EXCLUDED.faction,
+                isUnderConstruction = EXCLUDED.isUnderConstruction
+            """,
+            (
+                data["symbol"],
+                data["systemSymbol"],
+                data["type"],
+                data["x"],
+                data["y"],
+                data.get("orbits"),
+                [o["symbol"] for o in data["orbitals"]],
+                [t["symbol"] for t in data["traits"]],
+                Jsonb(data.get("chart")),
+                data.get("faction", {}).get("symbol"),
+                data["isUnderConstruction"],
+            ),
+        )
+        conn.commit()
     return data
