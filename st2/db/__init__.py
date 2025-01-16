@@ -12,6 +12,7 @@ from psycopg.types.json import Jsonb
 
 from st2 import time
 from st2.caching import cache
+from st2.db.static.traits import TRAITS_FACTION
 
 
 def db_server_init():
@@ -88,6 +89,39 @@ def db_tables_init():
                 """
             )
 
+        if "agents_public" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE agents_public
+                (
+                    accountId text,
+                    symbol text PRIMARY KEY,
+                    headquarters text,
+                    credits integer,
+                    startingFaction text,
+                    shipCount integer,
+                    timestamp timestamptz
+                )
+                """
+            )
+
+        if "contracts" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE contracts
+                (
+                    id text PRIMARY KEY, 
+                    agentSymbol text, 
+                    factionSymbol text, 
+                    type text,  -- PROCUREMENT/TRANSPORT/SHUTTLE
+                    terms JsonB,
+                    accepted bool, 
+                    fulfilled bool, 
+                    deadlineToAccept timestamptz
+                )
+                """
+            )
+
         if "ships" not in tables:
             cur.execute(
                 """
@@ -152,7 +186,6 @@ def db_tables_init():
                 """
             )
             # sectorSymbol text, always X1
-            # waypoints: see table system_waypoints
             # factions JSONB, always empty
 
         if "waypoints" not in tables:
@@ -174,14 +207,12 @@ def db_tables_init():
                 )
                 """
             )
-            # orbitals: also in table waypoint_orbitals
-            # traits: also in table waypoint_traits
             # modifiers JSONB, always empty
 
         if "traits_waypoint" not in tables:
             cur.execute(
                 """
-                CREATE TABLE traits_waypoint 
+                CREATE TABLE traits_waypoint
                 (
                     symbol text PRIMARY KEY,
                     name text,
@@ -193,7 +224,7 @@ def db_tables_init():
         if "traits_faction" not in tables:
             cur.execute(
                 """
-                CREATE TABLE traits_faction 
+                CREATE TABLE traits_faction
                 (
                     symbol text PRIMARY KEY,
                     name text,
@@ -216,7 +247,6 @@ def db_tables_init():
                 )
                 """
             )
-            # traits: also in table faction_traits
 
         if "jump_gates" not in tables:
             cur.execute(
@@ -277,7 +307,7 @@ def db_tables_init():
                     systemSymbol text,
                     symbol text,
                     tradeVolume integer,
-                    type text,
+                    type text,  --IMPORT/EXPORT/EXCHANGE
                     supply text,
                     activity text,
                     purchasePrice integer,
@@ -341,39 +371,62 @@ def db_tables_init():
                 """
             )
 
-        # intermediary tables
-        if "system_waypoints" not in tables:
+        if "events" not in tables:
             cur.execute(
                 """
-                CREATE TABLE system_waypoints 
+                CREATE TABLE events
                 (
-                    systemSymbol text,
-                    waypointSymbol text,
-                    PRIMARY KEY (systemSymbol, waypointSymbol)
+                    symbol text,
+                    shipSymbol text,
+                    activity text,
+                    component text,
+                    timestamp timestamptz
                 )
                 """
             )
 
-        if "waypoint_traits" not in tables:
+        if "navigation" not in tables:
             cur.execute(
                 """
-                CREATE TABLE waypoint_traits 
+                CREATE TABLE navigation
                 (
-                    waypointSymbol text,
-                    traitSymbol text,
-                    PRIMARY KEY (waypointSymbol, traitSymbol)
+                    distance float8,
+                    time float8,
+                    fuel integer,
+                    flightMode text,
+                    speed integer,
+                    frame text,
+                    frame_condition float8,
+                    frame_integrity float8,
+                    reactor text,
+                    reactor_condition float8,
+                    reactor_integrity float8,
+                    engine text,
+                    engine_condition float8,
+                    engine_integrity float8
                 )
                 """
             )
 
-        if "faction_traits" not in tables:
+        if "extraction" not in tables:
             cur.execute(
                 """
-                CREATE TABLE faction_traits 
+                CREATE TABLE extraction
                 (
-                    factionSymbol text,
-                    traitSymbol text,
-                    PRIMARY KEY (factionSymbol, traitSymbol)
+                    symbol text,
+                    units integer,
+                    survey JsonB,
+                    cargo_full bool,
+                    mount text,
+                    frame text,
+                    frame_condition float8,
+                    frame_integrity float8,
+                    reactor text,
+                    reactor_condition float8,
+                    reactor_integrity float8,
+                    engine text,
+                    engine_condition float8,
+                    engine_integrity float8
                 )
                 """
             )
@@ -404,223 +457,21 @@ def db_update_factions(request):
                 (f["symbol"], f["name"], description, hq, traits, f["isRecruiting"]),
             )
 
-            # faction_traits
-            for trait in traits:
+        # traits_faction
+        for trait in traits:
+            if TRAITS_FACTION.get(trait) is None:
+                t = traits[symbol]
+                description = t["description"].replace("'", "''")
                 cur.execute(
                     """
-                    INSERT INTO faction_traits
-                    (factionSymbol, traitSymbol) 
-                    VALUES (%s, %s)
-                    ON CONFLICT (factionSymbol, traitSymbol) DO NOTHING
+                    INSERT INTO traits_faction
+                    (symbol, name, description)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (symbol) DO NOTHING
                     """,
-                    (symbol, trait),
+                    (t["symbol"], t["name"], description),
                 )
-
-        # traits_faction
-        traits = {}
-        for f in factions.values():
-            for t in f["traits"]:
-                traits[t["symbol"]] = t
-        for symbol in sorted(traits):
-            t = traits[symbol]
-            description = t["description"].replace("'", "''")
-            cur.execute(
-                """
-                INSERT INTO traits_faction 
-                (symbol, name, description) 
-                VALUES (%s, %s, %s)
-                ON CONFLICT (symbol) DO NOTHING
-                """,
-                (t["symbol"], t["name"], description),
-            )
         conn.commit()
-
-
-def chart_gate(symbol, request, token, cur):
-    system_symbol = symbol.rsplit("-", 1)[0]
-    connections = request.get(
-        endpoint=f"systems/{system_symbol}/waypoints/{symbol}/jump-gate",
-        priority=3,
-        token=token,
-    )["data"]["connections"]
-    cur.execute(
-        """
-        INSERT INTO jump_gates
-        (symbol, systemSymbol, connections)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (symbol) DO NOTHING
-        """,
-        (
-            symbol,
-            system_symbol,
-            connections,
-        ),
-    )
-
-
-def chart_market(symbol, request, token, cur):
-    system_symbol = symbol.rsplit("-", 1)[0]
-    ret = request.get(
-        endpoint=f"systems/{system_symbol}/waypoints/{symbol}/market",
-        priority=3,
-        token=token,
-    )["data"]
-    cur.execute(
-        """
-        INSERT INTO markets
-        (symbol, systemSymbol, imports, exports, exchange)
-        VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (symbol) DO NOTHING
-        """,
-        (
-            symbol,
-            system_symbol,
-            [good["symbol"] for good in ret["imports"]],
-            [good["symbol"] for good in ret["exports"]],
-            [good["symbol"] for good in ret["exchange"]],
-        ),
-    )
-    # TODO: split into charting (above part only) and logging (lower part only)?
-    timestamp = time.now()
-    for t in ret.get("tradeGoods", []):
-        cur.execute(
-            """
-            INSERT INTO market_tradegoods
-            (waypointSymbol, systemSymbol, symbol, tradeVolume, type,
-             supply, activity, purchasePrice, sellPrice, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (waypointSymbol, symbol, timestamp) DO NOTHING
-            """,
-            (
-                symbol,
-                system_symbol,
-                t["symbol"],
-                t["tradeVolume"],
-                t["type"],
-                t["supply"],
-                t["activity"],
-                t["purchasePrice"],
-                t["sellPrice"],
-                timestamp,
-            ),
-        )
-    for t in ret.get("transactions", []):
-        cur.execute(
-            """
-            INSERT INTO market_transactions
-            (waypointSymbol, systemSymbol, shipSymbol, tradeSymbol,
-             type, units, pricePerUnit, totalPrice, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (waypointSymbol, timestamp) DO NOTHING
-            """,
-            (
-                symbol,
-                system_symbol,
-                t["shipSymbol"],
-                t["tradeSymbol"],
-                t["type"],
-                t["units"],
-                t["pricePerUnit"],
-                t["totalPrice"],
-                time.read(t["timestamp"]),
-            ),
-        )
-
-
-def chart_shipyard(symbol, request, token, cur):
-    system_symbol = symbol.rsplit("-", 1)[0]
-    ret = request.get(
-        endpoint=f"systems/{system_symbol}/waypoints/{symbol}/shipyard",
-        priority=3,
-        token=token,
-    )["data"]
-    cur.execute(
-        """
-        INSERT INTO shipyards
-        (symbol, systemSymbol, shipTypes, modificationsFee)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (symbol) DO NOTHING
-        """,
-        (
-            symbol,
-            system_symbol,
-            [ship["type"] for ship in ret["shipTypes"]],
-            ret["modificationsFee"],
-        ),
-    )
-    timestamp = time.now()
-    for s in ret.get("ships", []):
-        cur.execute(
-            """
-            INSERT INTO shipyard_ships
-            (waypointSymbol, systemSymbol, type,
-             supply, activity, purchasePrice, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (waypointSymbol, symbol, timestamp) DO NOTHING
-            """,
-            (
-                symbol,
-                system_symbol,
-                s["type"],
-                s["supply"],
-                s["activity"],
-                s["purchasePrice"],
-                timestamp,
-            ),
-        )
-    for s in ret.get("transactions", []):
-        cur.execute(
-            """
-            INSERT INTO shipyard_transactions
-            (waypointSymbol, systemSymbol, shipSymbol,
-             agentSymbol, shipType, price, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (waypointSymbol, timestamp) DO NOTHING
-            """,
-            (
-                symbol,
-                system_symbol,
-                s["shipSymbol"],
-                s["agentSymbol"],
-                s["shipType"],
-                s["price"],
-                time.read(s["timestamp"]),
-            ),
-        )
-
-
-def insert_ship(ship, agent_symbol, cur):
-    cur.execute(
-        """
-        INSERT INTO ships
-        (symbol, agentSymbol, nav, crew, fuel, cooldown, frame,
-         reactor, engine, modules, mounts, registration, cargo)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            ship["symbol"],
-            agent_symbol,
-            Jsonb(ship["nav"]),
-            Jsonb(ship["crew"]),
-            Jsonb(ship["fuel"]),
-            Jsonb(ship["cooldown"]),
-            Jsonb(ship["frame"]),
-            Jsonb(ship["reactor"]),
-            Jsonb(ship["engine"]),
-            Jsonb(ship["modules"]),
-            Jsonb(ship["mounts"]),
-            Jsonb(ship["registration"]),
-            Jsonb(ship["cargo"]),
-        ),
-    )
-
-    cur.execute(
-        """
-        INSERT INTO tasks (symbol, agentSymbol, current, queued, cancel, pname, pid) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """,
-        (ship["symbol"], agent_symbol, None, None, False, None, None),
-    )
 
 
 def print_tables():
@@ -669,3 +520,18 @@ def delete_table(table):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(f"DROP TABLE {table}")
         conn.commit()
+
+
+def delete_tables():
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            """
+        )
+        for row in cur.fetchall():
+            table = row[0]
+            cur.execute(f"DROP TABLE {table}")
+            conn.commit()
