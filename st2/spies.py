@@ -1,7 +1,6 @@
 from psycopg import connect
 
 from st2.agent import register_random_agent
-from st2.db import insert_ship
 from st2.logging import logger
 
 DEBUG = False
@@ -198,3 +197,37 @@ def spymaster(request, priority=3):
             #     if ship is not at its market:
             #         navigate to the market
             #     collect data on timer
+
+
+def insert_ship(ship, agent_symbol, cur):
+    cur.execute(
+        """
+        INSERT INTO ships
+        (symbol, agentSymbol, nav, crew, fuel, cooldown, frame,
+         reactor, engine, modules, mounts, registration, cargo)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            ship["symbol"],
+            agent_symbol,
+            Jsonb(ship["nav"]),
+            Jsonb(ship["crew"]),
+            Jsonb(ship["fuel"]),
+            Jsonb(ship["cooldown"]),
+            Jsonb(ship["frame"]),
+            Jsonb(ship["reactor"]),
+            Jsonb(ship["engine"]),
+            Jsonb(ship["modules"]),
+            Jsonb(ship["mounts"]),
+            Jsonb(ship["registration"]),
+            Jsonb(ship["cargo"]),
+        ),
+    )
+
+    cur.execute(
+        """
+        INSERT INTO tasks (symbol, agentSymbol, current, queued, cancel, pname, pid) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """,
+        (ship["symbol"], agent_symbol, None, None, False, None, None),
+    )

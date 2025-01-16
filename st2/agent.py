@@ -111,8 +111,8 @@ def register_agent(
                 cur.execute(
                     """
                     INSERT INTO agents_public
-                    (accountId, symbol, headquarters, credits,
-                     startingFaction, shipCount, timestamp)
+                    ("accountId", "symbol", "headquarters", "credits",
+                     "startingFaction", "shipCount", "timestamp")
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
@@ -131,8 +131,8 @@ def register_agent(
                 cur.execute(
                     """
                     INSERT INTO contracts
-                    (id, agentSymbol, factionSymbol, type, terms,
-                     accepted, fulfilled, deadlineToAccept)
+                    ("id", "agentSymbol", "factionSymbol", "type", "terms",
+                     "accepted", "fulfilled", "deadlineToAccept")
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
@@ -152,8 +152,8 @@ def register_agent(
                 cur.execute(
                     """
                     INSERT INTO ships
-                    (symbol, agentSymbol, nav, crew, fuel, cooldown, frame,
-                     reactor, engine, modules, mounts, registration, cargo)
+                    ("symbol", "agentSymbol", "nav", "crew", "fuel", "cooldown", "frame",
+                     "reactor", "engine", "modules", "mounts", "registration", "cargo")
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
@@ -174,7 +174,7 @@ def register_agent(
                 )
                 cur.execute(
                     """
-                    INSERT INTO tasks (symbol, agentSymbol, current, queued, cancel, pname, pid) 
+                    INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
                     (ship["symbol"], symbol, None, None, False, None, None),
@@ -187,8 +187,8 @@ def register_agent(
                 cur.execute(
                     """
                     INSERT INTO ships
-                    (symbol, agentSymbol, nav, crew, fuel, cooldown, frame,
-                     reactor, engine, modules, mounts, registration, cargo)
+                    ("symbol", "agentSymbol", "nav", "crew", "fuel", "cooldown", "frame",
+                     "reactor", "engine", "modules", "mounts", "registration", "cargo")
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
@@ -209,7 +209,7 @@ def register_agent(
                 )
                 cur.execute(
                     """
-                    INSERT INTO tasks (symbol, agentSymbol, current, queued, cancel, pname, pid) 
+                    INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
                     (ship["symbol"], symbol, None, None, False, None, None),

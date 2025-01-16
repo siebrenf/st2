@@ -83,9 +83,9 @@ def astronomer(request, priority=3):
                     cur.execute(
                         """
                         INSERT INTO waypoints
-                        (symbol, systemSymbol, type, x, y, orbits, orbitals)
+                        ("symbol", "systemSymbol", "type", "x", "y", "orbits", "orbitals")
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (symbol) DO NOTHING
+                        ON CONFLICT ("symbol") DO NOTHING
                         """,
                         (
                             waypoints_symbol,
@@ -129,24 +129,24 @@ def cartographer(request, priority=3):
     # start systems (fully charted by default)
     index = "start systems"
     query = """
-    SELECT systemSymbol 
-    FROM waypoints 
-    WHERE type = 'ENGINEERED_ASTEROID' 
-    ORDER BY systemSymbol 
+    SELECT "systemSymbol" 
+    FROM "waypoints" 
+    WHERE "type" = 'ENGINEERED_ASTEROID' 
+    ORDER BY "systemSymbol"
     """
     _chart_systems(request, index, query, priority)
 
     # gate systems (can be charted by other players)
     index = "gate systems"
     query = """
-    SELECT systemSymbol 
-    FROM waypoints 
-    WHERE type = 'JUMP_GATE'
+    SELECT "systemSymbol" 
+    FROM "waypoints" 
+    WHERE "type" = 'JUMP_GATE'
     EXCEPT
-    SELECT systemSymbol 
-    FROM waypoints 
-    WHERE type = 'ENGINEERED_ASTEROID'
-    ORDER BY systemSymbol
+    SELECT "systemSymbol" 
+    FROM "waypoints" 
+    WHERE "type" = 'ENGINEERED_ASTEROID'
+    ORDER BY "systemSymbol"
     """
     _chart_systems(request, index, query, priority)
 
@@ -201,12 +201,12 @@ def _chart_systems(request, index, query, priority):
                     faction = wp.get("faction", {}).get("symbol")
                     cur.execute(
                         """
-                        UPDATE waypoints
-                        SET traits = %s,
-                            chart = %s,
-                            faction = %s,
-                            isUnderConstruction = %s
-                        WHERE symbol = %s
+                        UPDATE "waypoints"
+                        SET "traits" = %s,
+                            "chart" = %s,
+                            "faction" = %s,
+                            "isUnderConstruction" = %s
+                        WHERE "symbol" = %s
                         """,
                         (
                             traits,
@@ -265,10 +265,10 @@ def _chart_gate(symbol, request, token, cur):
     )["data"]["connections"]
     cur.execute(
         """
-        INSERT INTO jump_gates
-        (symbol, systemSymbol, connections)
+        INSERT INTO "jump_gates"
+        ("symbol", "systemSymbol", "connections")
         VALUES (%s, %s, %s)
-        ON CONFLICT (symbol) DO NOTHING
+        ON CONFLICT ("symbol") DO NOTHING
         """,
         (
             symbol,
@@ -287,10 +287,10 @@ def _chart_market(symbol, request, token, cur):
     )["data"]
     cur.execute(
         """
-        INSERT INTO markets
-        (symbol, systemSymbol, imports, exports, exchange)
+        INSERT INTO "markets"
+        ("symbol", "systemSymbol", "imports", "exports", "exchange")
         VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (symbol) DO NOTHING
+        ON CONFLICT ("symbol") DO NOTHING
         """,
         (
             symbol,
@@ -311,10 +311,10 @@ def _chart_shipyard(symbol, request, token, cur):
     )["data"]
     cur.execute(
         """
-        INSERT INTO shipyards
-        (symbol, systemSymbol, shipTypes, modificationsFee)
+        INSERT INTO "shipyards"
+        ("symbol", "systemSymbol", "shipTypes", "modificationsFee")
         VALUES (%s, %s, %s, %s)
-        ON CONFLICT (symbol) DO NOTHING
+        ON CONFLICT ("symbol") DO NOTHING
         """,
         (
             symbol,

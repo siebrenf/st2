@@ -8,9 +8,7 @@ import os
 import subprocess as sp
 
 from psycopg import connect
-from psycopg.types.json import Jsonb
 
-from st2 import time
 from st2.caching import cache
 from st2.db.static.traits import TRAITS_FACTION
 
@@ -80,11 +78,11 @@ def db_tables_init():
                 """
                 CREATE TABLE agents
                 (
-                    symbol text PRIMARY KEY,
-                    token text,
-                    role text,
-                    faction text,
-                    other text
+                    "symbol" text PRIMARY KEY,
+                    "token" text,
+                    "role" text,
+                    "faction" text,
+                    "other" text
                 )
                 """
             )
@@ -94,13 +92,13 @@ def db_tables_init():
                 """
                 CREATE TABLE agents_public
                 (
-                    accountId text,
-                    symbol text PRIMARY KEY,
-                    headquarters text,
-                    credits integer,
-                    startingFaction text,
-                    shipCount integer,
-                    timestamp timestamptz
+                    "accountId" text,
+                    "symbol" text PRIMARY KEY,
+                    "headquarters" text,
+                    "credits" integer,
+                    "startingFaction" text,
+                    "shipCount" integer,
+                    "timestamp" timestamptz
                 )
                 """
             )
@@ -110,14 +108,14 @@ def db_tables_init():
                 """
                 CREATE TABLE contracts
                 (
-                    id text PRIMARY KEY, 
-                    agentSymbol text, 
-                    factionSymbol text, 
-                    type text,  -- PROCUREMENT/TRANSPORT/SHUTTLE
-                    terms JsonB,
-                    accepted bool, 
-                    fulfilled bool, 
-                    deadlineToAccept timestamptz
+                    "id" text PRIMARY KEY, 
+                    "agentSymbol" text, 
+                    "factionSymbol" text, 
+                    "type" text,  -- PROCUREMENT/TRANSPORT/SHUTTLE
+                    "terms" JsonB,
+                    "accepted" bool, 
+                    "fulfilled" bool, 
+                    "deadlineToAccept" timestamptz
                 )
                 """
             )
@@ -127,19 +125,19 @@ def db_tables_init():
                 """
                 CREATE TABLE ships
                 (
-                    symbol text PRIMARY KEY,
-                    agentSymbol text,
-                    nav JsonB,
-                    crew JsonB,
-                    fuel JsonB,
-                    cooldown JsonB,
-                    frame JsonB,
-                    reactor JsonB,
-                    engine JsonB,
-                    modules JsonB,
-                    mounts JsonB,
-                    registration JsonB,
-                    cargo JsonB
+                    "symbol" text PRIMARY KEY,
+                    "agentSymbol" text,
+                    "nav" JsonB,
+                    "crew" JsonB,
+                    "fuel" JsonB,
+                    "cooldown" JsonB,
+                    "frame" JsonB,
+                    "reactor" JsonB,
+                    "engine" JsonB,
+                    "modules" JsonB,
+                    "mounts" JsonB,
+                    "registration" JsonB,
+                    "cargo" JsonB
                 )
                 """
             )
@@ -162,13 +160,13 @@ def db_tables_init():
                 """
                 CREATE TABLE tasks
                 (
-                    symbol text PRIMARY KEY,
-                    agentSymbol text,
-                    current text,
-                    queued text,
-                    cancel bool,  -- cancel current task, start queued task
-                    pname text,  -- process name (which should manage this task)
-                    pid uuid  -- process ID (use to check if restarts occurred)
+                    "symbol" text PRIMARY KEY,
+                    "agentSymbol" text,
+                    "current" text,
+                    "queued" text,
+                    "cancel" bool,  -- cancel current task, start queued task
+                    "pname" text,  -- process name (which should manage this task)
+                    "pid" uuid  -- process ID (use to check if restarts occurred)
                 )
                 """
             )
@@ -193,17 +191,17 @@ def db_tables_init():
                 """
                 CREATE TABLE waypoints 
                 (
-                    symbol text PRIMARY KEY,
-                    systemSymbol text,
-                    type text,
-                    x integer,
-                    y integer,
-                    orbits text,
-                    orbitals text[],
-                    traits text[],
-                    chart JSONB,
-                    faction text,
-                    isUnderConstruction bool
+                    "symbol" text PRIMARY KEY,
+                    "systemSymbol" text,
+                    "type" text,
+                    "x" integer,
+                    "y" integer,
+                    "orbits" text,
+                    "orbitals" text[],
+                    "traits" text[],
+                    "chart" JSONB,
+                    "faction" text,
+                    "isUnderConstruction" bool
                 )
                 """
             )
@@ -238,12 +236,12 @@ def db_tables_init():
                 """
                 CREATE TABLE factions 
                 (
-                    symbol text PRIMARY KEY,
-                    name text,
-                    description text,
-                    headquarters text,
-                    traits text[],
-                    isRecruiting bool
+                    "symbol" text PRIMARY KEY,
+                    "name" text,
+                    "description" text,
+                    "headquarters" text,
+                    "traits" text[],
+                    "isRecruiting" bool
                 )
                 """
             )
@@ -253,9 +251,9 @@ def db_tables_init():
                 """
                 CREATE TABLE jump_gates 
                 (
-                    symbol text PRIMARY KEY,
-                    systemSymbol text,
-                    connections text[]
+                    "symbol" text PRIMARY KEY,
+                    "systemSymbol" text,
+                    "connections" text[]
                 )
                 """
             )
@@ -265,11 +263,11 @@ def db_tables_init():
                 """
                 CREATE TABLE markets 
                 (
-                    symbol text PRIMARY KEY,
-                    systemSymbol text,
-                    imports text[],
-                    exports text[],
-                    exchange text[]
+                    "symbol" text PRIMARY KEY,
+                    "systemSymbol" text,
+                    "imports" text[],
+                    "exports" text[],
+                    "exchange" text[]
                 )
                 """
             )
@@ -281,17 +279,17 @@ def db_tables_init():
                 """
                 CREATE TABLE market_transactions
                 (
-                    waypointSymbol text,
-                    systemSymbol text,
-                    shipSymbol text,
-                    tradeSymbol text,
-                    type text,
-                    units integer,
-                    pricePerUnit integer,
-                    totalPrice integer,
-                    timestamp timestamptz,
-                    PRIMARY KEY (waypointSymbol, timestamp)
-                ) PARTITION BY LIST (waypointSymbol)
+                    "waypointSymbol" text,
+                    "systemSymbol" text,
+                    "shipSymbol" text,
+                    "tradeSymbol" text,
+                    "type" text,
+                    "units" integer,
+                    "pricePerUnit" integer,
+                    "totalPrice" integer,
+                    "timestamp" timestamptz,
+                    PRIMARY KEY ("waypointSymbol", "timestamp")
+                ) PARTITION BY LIST ("waypointSymbol")
                 """
             )
 
@@ -303,18 +301,18 @@ def db_tables_init():
                 """
                 CREATE TABLE market_tradegoods
                 (
-                    waypointSymbol text,
-                    systemSymbol text,
-                    symbol text,
-                    tradeVolume integer,
-                    type text,  --IMPORT/EXPORT/EXCHANGE
-                    supply text,
-                    activity text,
-                    purchasePrice integer,
-                    sellPrice integer,
-                    timestamp timestamptz,
-                    PRIMARY KEY (waypointSymbol, symbol, timestamp)
-                ) PARTITION BY LIST (waypointSymbol)
+                    "waypointSymbol" text,
+                    "systemSymbol" text,
+                    "symbol" text,
+                    "tradeVolume" integer,
+                    "type" text,  --IMPORT/EXPORT/EXCHANGE
+                    "supply" text,
+                    "activity" text,
+                    "purchasePrice" integer,
+                    "sellPrice" integer,
+                    "timestamp" timestamptz,
+                    PRIMARY KEY ("waypointSymbol", "symbol", "timestamp")
+                ) PARTITION BY LIST ("waypointSymbol")
                 """
             )
 
@@ -323,10 +321,10 @@ def db_tables_init():
                 """
                 CREATE TABLE shipyards 
                 (
-                    symbol text PRIMARY KEY,
-                    systemSymbol text,
-                    shipTypes text[],
-                    modificationsFee integer
+                    "symbol" text PRIMARY KEY,
+                    "systemSymbol" text,
+                    "shipTypes" text[],
+                    "modificationsFee" integer
                 )
                 """
             )
@@ -339,15 +337,15 @@ def db_tables_init():
                 """
                 CREATE TABLE shipyard_transactions
                 (
-                    waypointSymbol text,
-                    systemSymbol text,
-                    shipSymbol text,
-                    agentSymbol text,
-                    shipType text,
-                    price integer,
-                    timestamp timestamptz,
-                    PRIMARY KEY (waypointSymbol, timestamp)
-                ) PARTITION BY LIST (waypointSymbol)
+                    "waypointSymbol" text,
+                    "systemSymbol" text,
+                    "shipSymbol" text,
+                    "agentSymbol" text,
+                    "shipType" text,
+                    "price" integer,
+                    "timestamp" timestamptz,
+                    PRIMARY KEY ("waypointSymbol", "timestamp")
+                ) PARTITION BY LIST ("waypointSymbol")
                 """
             )
 
@@ -359,15 +357,15 @@ def db_tables_init():
                 """
                 CREATE TABLE shipyard_ships
                 (
-                    waypointSymbol text,
-                    systemSymbol text,
-                    type text,
-                    supply text,
-                    activity text,
-                    purchasePrice integer,
-                    timestamp timestamptz,
-                    PRIMARY KEY (waypointSymbol, type, timestamp)
-                ) PARTITION BY LIST (waypointSymbol)
+                    "waypointSymbol" text,
+                    "systemSymbol" text,
+                    "type" text,
+                    "supply" text,
+                    "activity" text,
+                    "purchasePrice" integer,
+                    "timestamp" timestamptz,
+                    PRIMARY KEY ("waypointSymbol", "type", "timestamp")
+                ) PARTITION BY LIST ("waypointSymbol")
                 """
             )
 
@@ -376,11 +374,11 @@ def db_tables_init():
                 """
                 CREATE TABLE events
                 (
-                    symbol text,
-                    shipSymbol text,
-                    activity text,
-                    component text,
-                    timestamp timestamptz
+                    "symbol" text,
+                    "shipSymbol" text,
+                    "activity" text,
+                    "component" text,
+                    "timestamp" timestamptz
                 )
                 """
             )
@@ -390,20 +388,20 @@ def db_tables_init():
                 """
                 CREATE TABLE navigation
                 (
-                    distance float8,
-                    time float8,
-                    fuel integer,
-                    flightMode text,
-                    speed integer,
-                    frame text,
-                    frame_condition float8,
-                    frame_integrity float8,
-                    reactor text,
-                    reactor_condition float8,
-                    reactor_integrity float8,
-                    engine text,
-                    engine_condition float8,
-                    engine_integrity float8
+                    "distance" float8,
+                    "time" float8,
+                    "fuel" integer,
+                    "flightMode" text,
+                    "speed" integer,
+                    "frame" text,
+                    "frame_condition" float8,
+                    "frame_integrity" float8,
+                    "reactor" text,
+                    "reactor_condition" float8,
+                    "reactor_integrity" float8,
+                    "engine" text,
+                    "engine_condition" float8,
+                    "engine_integrity" float8
                 )
                 """
             )
@@ -413,20 +411,20 @@ def db_tables_init():
                 """
                 CREATE TABLE extraction
                 (
-                    symbol text,
-                    units integer,
-                    survey JsonB,
-                    cargo_full bool,
-                    mount text,
-                    frame text,
-                    frame_condition float8,
-                    frame_integrity float8,
-                    reactor text,
-                    reactor_condition float8,
-                    reactor_integrity float8,
-                    engine text,
-                    engine_condition float8,
-                    engine_integrity float8
+                    "symbol" text,
+                    "units" integer,
+                    "survey" JsonB,
+                    "cargo_full" bool,
+                    "mount" text,
+                    "frame" text,
+                    "frame_condition" float8,
+                    "frame_integrity" float8,
+                    "reactor" text,
+                    "reactor_condition" float8,
+                    "reactor_integrity" float8,
+                    "engine" text,
+                    "engine_condition" float8,
+                    "engine_integrity" float8
                 )
                 """
             )
@@ -450,9 +448,9 @@ def db_update_factions(request):
             cur.execute(
                 """
                 INSERT INTO factions 
-                (symbol, name, description, headquarters, traits, isRecruiting) 
+                ("symbol", "name", "description", "headquarters", "traits", "isRecruiting")
                 VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (symbol) DO NOTHING
+                ON CONFLICT ("symbol") DO NOTHING
                 """,
                 (f["symbol"], f["name"], description, hq, traits, f["isRecruiting"]),
             )

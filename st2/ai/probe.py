@@ -12,8 +12,8 @@ async def ai_probe_waypoint(ship_symbol, waypoint_symbol, qa_pairs, priority=3):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT agentSymbol, nav FROM ships
-            WHERE symbol = %s
+            SELECT "agentSymbol", "nav" FROM ships
+            WHERE "symbol" = %s
             """,
             (ship_symbol,),
         )
