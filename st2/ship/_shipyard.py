@@ -11,60 +11,60 @@ def shipyard(self):
         f'systems/{self["nav"]["systemSymbol"]}/waypoints/{self["nav"]["waypointSymbol"]}/shipyard',
     )["data"]
     timestamp = time.now()
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO shipyards
-            (symbol, systemSymbol, shipTypes, modificationsFee)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (symbol) DO NOTHING
-            """,
-            (
-                waypoint_symbol,
-                system_symbol,
-                [ship["type"] for ship in data["shipTypes"]],
-                data["modificationsFee"],
-            ),
-        )
-        for s in data.get("ships", []):
+    with connect("dbname=st2 user=postgres") as conn:
+        with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO shipyard_ships
-                (waypointSymbol, systemSymbol, type,
-                 supply, activity, purchasePrice, timestamp)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (waypointSymbol, symbol, timestamp) DO NOTHING
+                INSERT INTO shipyards
+                ("symbol", "systemSymbol", "shipTypes", "modificationsFee")
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT ("symbol") DO NOTHING
                 """,
                 (
                     waypoint_symbol,
                     system_symbol,
-                    s["type"],
-                    s["supply"],
-                    s["activity"],
-                    s["purchasePrice"],
-                    timestamp,
+                    [ship["type"] for ship in data["shipTypes"]],
+                    data["modificationsFee"],
                 ),
             )
-        for s in data.get("transactions", []):
-            cur.execute(
-                """
-                INSERT INTO shipyard_transactions
-                (waypointSymbol, systemSymbol, shipSymbol,
-                 agentSymbol, shipType, price, timestamp)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (waypointSymbol, timestamp) DO NOTHING
-                """,
-                (
-                    waypoint_symbol,
-                    system_symbol,
-                    s["shipSymbol"],
-                    s["agentSymbol"],
-                    s["shipType"],
-                    s["price"],
-                    time.read(s["timestamp"]),
-                ),
-            )
-        conn.commit()
+            for s in data.get("ships", []):
+                cur.execute(
+                    """
+                    INSERT INTO shipyard_ships
+                    ("waypointSymbol", "systemSymbol", "type",
+                     "supply", "activity", "purchasePrice", "timestamp")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT ("waypointSymbol", "symbol", "timestamp") DO NOTHING
+                    """,
+                    (
+                        waypoint_symbol,
+                        system_symbol,
+                        s["type"],
+                        s["supply"],
+                        s["activity"],
+                        s["purchasePrice"],
+                        timestamp,
+                    ),
+                )
+            for s in data.get("transactions", []):
+                cur.execute(
+                    """
+                    INSERT INTO shipyard_transactions
+                    ("waypointSymbol", "systemSymbol", "shipSymbol",
+                     "agentSymbol", "shipType", "price", "timestamp")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT ("waypointSymbol", "timestamp") DO NOTHING
+                    """,
+                    (
+                        waypoint_symbol,
+                        system_symbol,
+                        s["shipSymbol"],
+                        s["agentSymbol"],
+                        s["shipType"],
+                        s["price"],
+                        time.read(s["timestamp"]),
+                    ),
+                )
     return data
 
 

@@ -13,26 +13,25 @@ def contract(self):
         "contract"
     ]
     with connect("dbname=st2 user=postgres") as conn:
-        # TODO: create table contracts
-        conn.execute(
-            """
-            INSERT INTO contracts
-            (id, agentSymbol, factionSymbol, type, terms,
-             accepted, fulfilled, deadlineToAccept)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                data["id"],
-                self["agent"],
-                data["factionSymbol"],
-                data["type"],
-                Jsonb(data["terms"]),
-                data["accepted"],
-                data["fulfilled"],
-                time.read(data["deadlineToAccept"]),
-            ),
-        )
-        conn.commit()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO contracts
+                ("id", "agentSymbol", "factionSymbol", "type", "terms",
+                 "accepted", "fulfilled", "deadlineToAccept")
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    data["id"],
+                    self["agent"],
+                    data["factionSymbol"],
+                    data["type"],
+                    Jsonb(data["terms"]),
+                    data["accepted"],
+                    data["fulfilled"],
+                    time.read(data["deadlineToAccept"]),
+                ),
+            )
     return data
 
 
@@ -43,21 +42,21 @@ def deliver(self, symbol, units, contract, verbose=True):
         f'my/contracts/{contract["id"]}/deliver',
         data={"shipSymbol": self["symbol"], "tradeSymbol": symbol, "units": units},
     )["data"]
-    self._update(data, ["cargo"])
+    self._update(data)
 
     with connect("dbname=st2 user=postgres") as conn:
-        conn.execute(
-            """
-            UPDATE contracts
-            SET terms = %s
-            WHERE id = %s
-            """,
-            (
-                Jsonb(data["contract"]["terms"]),
-                data["contract"]["id"],
-            ),
-        )
-        conn.commit()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE contracts
+                SET terms = %s
+                WHERE id = %s
+                """,
+                (
+                    Jsonb(data["contract"]["terms"]),
+                    data["contract"]["id"],
+                ),
+            )
 
     if verbose:
         wp = self["nav"]["waypointSymbol"]

@@ -1,4 +1,17 @@
+import math
+
+from psycopg import connect
+
+from st2 import time
 from st2.logging import logger
+
+
+def dist(x1, y1, x2, y2):
+    # Pythagorean theorem
+    a = math.pow(x1 - x2, 2)
+    b = math.pow(y1 - y2, 2)
+    c = math.sqrt(a + b)
+    return c
 
 
 def navigate(self, waypoint, verbose=True):
@@ -8,11 +21,48 @@ def navigate(self, waypoint, verbose=True):
     data = self.request.post(
         f'my/ships/{self["symbol"]}/navigate', data={"waypointSymbol": waypoint}
     )["data"]
-    self._update(data, ["fuel", "nav"])
+    self._update(data)
 
-    # TODO: log data["events"]
-    # TODO: log distance, mode, nav time & fuel cost?
-    # TODO: create table navigates
+    # Log travel distance/travel time/fuel use etc.
+    origin = self["nav"]["route"]["origin"]
+    destination = self["nav"]["route"]["destination"]
+    distance = dist(
+        origin["x"],
+        origin["y"],
+        destination["x"],
+        destination["y"],
+    )
+    t0 = time.read(self["nav"]["route"]["departureTime"])
+    t1 = time.read(self["nav"]["route"]["arrival"])
+    travel_time = (t1 - t0).seconds
+    with connect("dbname=st2 user=postgres") as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO navigation
+                ("distance", "time", "fuel", "flightMode", "speed",
+                "frame", "frame_condition", "frame_integrity", 
+                "reactor", "reactor_condition", "reactor_integrity", 
+                "engine", "engine_condition", "engine_integrity")
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    distance,
+                    travel_time,
+                    self["fuel"]["consumed"]["amount"],
+                    self["nav"]["flightMode"],
+                    self["engine"]["speed"],
+                    self["frame"]["symbol"],
+                    self["frame"]["condition"],
+                    self["frame"]["integrity"],
+                    self["reactor"]["symbol"],
+                    self["reactor"]["condition"],
+                    self["reactor"]["integrity"],
+                    self["engine"]["symbol"],
+                    self["engine"]["condition"],
+                    self["engine"]["integrity"],
+                ),
+            )
 
     if verbose:
         t2 = round(self.nav_remaining())
@@ -25,15 +75,11 @@ def navigate(self, waypoint, verbose=True):
 
 def nav_patch(self, mode):
     """update the nav configuration of the ship"""
-    options = ("DRIFT", "STEALTH", "CRUISE", "BURN")
-    if mode not in options:
-        raise ValueError(f"nav_patch {options=}")
-
     data = self.request.patch(
         f'my/ships/{self["symbol"]}/nav',
         data={"flightMode": mode},
     )["data"]
-    self._update(data, ["nav"])
+    self._update(data)
 
 
 def jump(self, waypoint, verbose=True):
@@ -43,10 +89,7 @@ def jump(self, waypoint, verbose=True):
         f'my/ships/{self["symbol"]}/jump',
         data={"waypointSymbol": waypoint},
     )["data"]
-    self._update(data, ["nav", "cooldown"])
-
-    # TODO: log data["agent"]
-    # TODO: log data["transaction"]
+    self._update(data)
 
     if verbose:
         wp = self["nav"]["waypointSymbol"]

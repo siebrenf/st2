@@ -1,5 +1,4 @@
 from psycopg import connect
-from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from st2.logging import logger
@@ -41,21 +40,18 @@ def sell(self, symbol, units, verbose=True):
 
 
 def _get_trade_volume(self, symbol):
-    # assumes the database will be updated frequently
-    # enough to capture changes in tradeVolume
-    tv = (
-        connect("dbname=st2 user=postgres")
-        .execute(
-            """
-            SELECT tradeVolume 
-            FROM market_tradegoods 
-            WHERE waypointSymbol = %s 
-            AND symbol = %s
-            """,
-            (self["nav"]["waypointSymbol"], symbol),
-        )
-        .fetchone()[0]
-    )
+    with connect("dbname=st2 user=postgres") as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT "tradeVolume" 
+                FROM market_tradegoods 
+                WHERE "waypointSymbol" = %s 
+                AND symbol = %s
+                """,
+                (self["nav"]["waypointSymbol"], symbol),
+            )
+            tv = cur.fetchone()[0]
     return tv
 
 
@@ -64,9 +60,8 @@ def _buy_sell(self, symbol, units, action, verbose=True):
         endpoint=f'my/ships/{self["symbol"]}/{action}',
         data={"symbol": symbol, "units": units},
     )["data"]
-    self._update(data, ["cargo"])
-    # TODO: log data["agent"]
-    # TODO: log data["transaction"]
+    self._update(data)
+
     price = data["transaction"]["totalPrice"]
     if verbose:
         wp = self["nav"]["waypointSymbol"]
@@ -77,21 +72,15 @@ def _buy_sell(self, symbol, units, action, verbose=True):
 
 def transfer(self, symbol, units, ship, verbose=True):
     """Transfer cargo between ships"""
-    # TODO: use multi-line query to update both ships at once
-
     # match the status of the target ship
     if isinstance(ship, str):
-        ship = (
-            connect(
-                "dbname=st2 user=postgres",
-                row_factory=dict_row,
-            )
-            .execute(
-                "SELECT * FROM ships WHERE symbol = %s",
-                (ship,),
-            )
-            .fetchone()
-        )
+        with connect("dbname=st2 user=postgres") as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT * FROM ships WHERE symbol = %s",
+                    (ship,),
+                )
+                ship = cur.fetchone()
     if ship["nav"]["status"] == "DOCKED":
         self.dock()
     else:
@@ -113,7 +102,7 @@ def transfer(self, symbol, units, ship, verbose=True):
             "shipSymbol": ship["symbol"],
         },
     )["data"]
-    self._update(data, ["cargo"])
+    self._update(data)
 
     # update the cargo manifest of the target ship
     for md in ship["cargo"]["inventory"]:
@@ -124,11 +113,11 @@ def transfer(self, symbol, units, ship, verbose=True):
         ship["cargo"]["inventory"].append(md_good)  # noqa
     ship["cargo"]["units"] += units
     with connect("dbname=st2 user=postgres") as conn:
-        conn.execute(
-            f"UPDATE ships SET cargo = %s WHERE symbol = %s",
-            (Jsonb(ship["cargo"]), ship["symbol"]),
-        )
-        conn.commit()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE ships SET cargo = %s WHERE symbol = %s",
+                (Jsonb(ship["cargo"]), ship["symbol"]),
+            )
 
     if verbose:
         logger.info(f"{self.name()} transferred {units} {symbol} to {ship['symbol']}")
@@ -204,7 +193,7 @@ def jettison(self, symbol, units, verbose=False):
     data = self.request.post(
         f'my/ships/{self["symbol"]}/jettison', data={"symbol": symbol, "units": units}
     )["data"]
-    self._update(data, ["cargo"])
+    self._update(data)
     if verbose:
         logger.info(f"{self.name()} jettisoned {units} {symbol}")
 
@@ -218,7 +207,7 @@ def supply(self, symbol, units, verbose=True):
         f'{self["nav"]["waypointSymbol"]}/construction/supply',
         data={"shipSymbol": self["symbol"], "tradeSymbol": symbol, "units": units},
     )["data"]
-    self._update(data, ["cargo"])
+    self._update(data)
 
     # TODO: log data["construction"]
 
