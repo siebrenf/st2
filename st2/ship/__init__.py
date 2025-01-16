@@ -10,12 +10,13 @@ from st2.request import RequestMp
 class Ship(dict):
     def __init__(self, symbol, qa_pairs, priority):
         with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-            data = conn.execute(
-                "SELECT * FROM ships WHERE symbol = %s", (symbol,)
-            ).fetchone()
-            token = conn.execute(
-                "SELECT token FROM agents WHERE symbol = %s", (data["agentSymbol"],)
-            ).fetchone()[0]
+            with conn.cursor() as cur:
+                data = cur.execute(
+                    "SELECT * FROM ships WHERE symbol = %s", (symbol,)
+                ).fetchone()
+                token = cur.execute(
+                    "SELECT token FROM agents WHERE symbol = %s", (data["agentSymbol"],)
+                ).fetchone()[0]
         super().__init__(data)
         self.request = RequestMp(qa_pairs, priority, token)
         # if "expiration" not in self["cooldown"]:
@@ -49,16 +50,18 @@ class Ship(dict):
     def _update(self, data=None, keys=None):
         """Update the ship data in the local dict and the remote database"""
         if keys is None:
-            keys = data.keys()
-        with connect("dbname=st2 user=postgres") as conn:
+            keys = list(data)[2:]  # skip shipSymbol & agentSymbol
+        if data:
             for key in keys:
-                if data:
-                    self[key] = data[key]
-                conn.execute(
-                    f"UPDATE ships SET {key} = %s WHERE symbol = %s",
-                    (Jsonb(self[key]), self["symbol"]),
-                )
-            conn.commit()
+                self[key] = data[key]
+
+        updates = ", ".join([f"{key} = %s" for key in keys])
+        query = f"UPDATE ships SET {updates} WHERE symbol = %s"
+        params = [Jsonb(self[key]) for key in keys] + [self["symbol"]]
+        with connect("dbname=st2 user=postgres") as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                # conn.commit()
 
     def dock(self):
         self._status()
