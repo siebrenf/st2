@@ -75,11 +75,12 @@ def navigate(self, waypoint, verbose=True):
 
 def nav_patch(self, mode):
     """update the nav configuration of the ship"""
-    data = self.request.patch(
-        f'my/ships/{self["symbol"]}/nav',
-        data={"flightMode": mode},
-    )["data"]
-    self._update(data)
+    if mode != self["nav"]["flightMode"]:
+        nav = self.request.patch(
+            f'my/ships/{self["symbol"]}/nav',
+            data={"flightMode": mode},
+        )["data"]
+        self._update({"nav": nav})
 
 
 def jump(self, waypoint, verbose=True):

@@ -149,6 +149,7 @@ def register_agent(
 
             if insert_ship:
                 ship = data["ship"]
+                ship["cooldown"]["expiration"] = time.write()
                 cur.execute(
                     """
                     INSERT INTO ships
@@ -184,6 +185,7 @@ def register_agent(
                 ship = request.get(f"my/ships/{symbol}-2", priority, data["token"])[
                     "data"
                 ]
+                ship["cooldown"]["expiration"] = time.write()
                 cur.execute(
                     """
                     INSERT INTO ships

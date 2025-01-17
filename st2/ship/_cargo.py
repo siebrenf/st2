@@ -14,10 +14,10 @@ def buy(self, symbol, units, verbose=True):
 
     # split the purchase order by trade volume
     price = 0
-    trade_volume = self._get_trade_volume(symbol)
+    trade_volume = _get_trade_volume(self, symbol)
     while units > 0:
         u = min(trade_volume, units)
-        price += self._buy_sell(symbol, u, "purchase", verbose)
+        price += _buy_sell(self, symbol, u, "purchase", verbose)
         units -= u
 
     self.market()
@@ -29,10 +29,10 @@ def sell(self, symbol, units, verbose=True):
 
     # split the sell order by trade volume
     price = 0
-    trade_volume = self._get_trade_volume(symbol)
+    trade_volume = _get_trade_volume(self, symbol)
     while units > 0:
         u = min(trade_volume, units)
-        price += self._buy_sell(symbol, u, "sell", verbose)
+        price += _buy_sell(self, symbol, u, "sell", verbose)
         units -= u
 
     self.market()
@@ -51,8 +51,13 @@ def _get_trade_volume(self, symbol):
                 """,
                 (self["nav"]["waypointSymbol"], symbol),
             )
-            tv = cur.fetchone()[0]
-    return tv
+            ret = cur.fetchone()
+    if ret:
+        tv = ret[0]
+        return tv
+    else:
+        self.market()
+        return _get_trade_volume(self, symbol)
 
 
 def _buy_sell(self, symbol, units, action, verbose=True):
@@ -193,6 +198,7 @@ def jettison(self, symbol, units, verbose=False):
     data = self.request.post(
         f'my/ships/{self["symbol"]}/jettison', data={"symbol": symbol, "units": units}
     )["data"]
+    units = self["cargo"]["units"] - data["cargo"]["units"]
     self._update(data)
     if verbose:
         logger.info(f"{self.name()} jettisoned {units} {symbol}")

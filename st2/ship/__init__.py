@@ -16,11 +16,9 @@ class Ship(dict):
                 ).fetchone()
                 token = cur.execute(
                     "SELECT token FROM agents WHERE symbol = %s", (data["agentSymbol"],)
-                ).fetchone()[0]
+                ).fetchone()["token"]
         super().__init__(data)
         self.request = RequestMp(qa_pairs, priority, token)
-        # if "expiration" not in self["cooldown"]:
-        #     self["cooldown"]["expiration"] = time.write()
 
     def name(self):
         return f'{self["registration"]["role"].capitalize()} {self["frame"]["name"].lower()} {self["symbol"]}'
@@ -73,7 +71,7 @@ class Ship(dict):
         with connect("dbname=st2 user=postgres") as conn:
             with conn.cursor() as cur:
                 if keys:
-                    updates = ", ".join([f'"{key}" = %s' for key in data.keys()])
+                    updates = ", ".join([f'"{key}" = %s' for key in keys])
                     query = f"UPDATE ships SET {updates} WHERE symbol = %s"
                     params = [Jsonb(self[key]) for key in keys] + [self["symbol"]]
                     cur.execute(query, params)
@@ -180,13 +178,14 @@ class Ship(dict):
         Purchase the specified ship_type at the current waypoint's shipyard.
         Returns the new ship instance.
         """
-        agent_symbol = self["agent_symbol"]
+        agent_symbol = self["agentSymbol"]
         waypoint_symbol = self["nav"]["waypointSymbol"]
         system_symbol = self["nav"]["systemSymbol"]
         data = self.request.post(
             f"my/ships",
             data={"shipType": ship_type, "waypointSymbol": waypoint_symbol},
         )["data"]
+        data["cooldown"]["expiration"] = time.write()
 
         with connect("dbname=st2 user=postgres") as conn:
             with conn.cursor() as cur:

@@ -6,7 +6,5 @@ def refuel(self, units=None, from_cargo=False):
     payload = {"fromCargo": from_cargo}
     if units:
         payload["units"] = units
-    data = self.request.post(
-        f'my/ships/{self["symbol"]}/refuel', self["agent"], data=payload
-    )["data"]
+    data = self.request.post(f'my/ships/{self["symbol"]}/refuel', data=payload)["data"]
     self._update(data)

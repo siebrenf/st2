@@ -34,7 +34,7 @@ def shipyard(self):
                     ("waypointSymbol", "systemSymbol", "type",
                      "supply", "activity", "purchasePrice", "timestamp")
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT ("waypointSymbol", "symbol", "timestamp") DO NOTHING
+                    ON CONFLICT ("waypointSymbol", "type", "timestamp") DO NOTHING
                     """,
                     (
                         waypoint_symbol,

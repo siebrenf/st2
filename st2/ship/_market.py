@@ -44,7 +44,7 @@ def market(self):
                         t["tradeVolume"],
                         t["type"],
                         t["supply"],
-                        t["activity"],
+                        t.get("activity"),
                         t["purchasePrice"],
                         t["sellPrice"],
                         timestamp,

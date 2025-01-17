@@ -93,7 +93,7 @@ def db_tables_init():
                 CREATE TABLE agents_public
                 (
                     "accountId" text,
-                    "symbol" text PRIMARY KEY,
+                    "symbol" text,
                     "headquarters" text,
                     "credits" integer,
                     "startingFaction" text,
@@ -289,9 +289,10 @@ def db_tables_init():
                     "totalPrice" integer,
                     "timestamp" timestamptz,
                     PRIMARY KEY ("waypointSymbol", "timestamp")
-                ) PARTITION BY LIST ("waypointSymbol")
+                )
                 """
             )
+            #  PARTITION BY LIST ("waypointSymbol")
 
         if "market_tradegoods" not in tables:
             # - Create a waypoint specific tradegoods table:
@@ -312,9 +313,10 @@ def db_tables_init():
                     "sellPrice" integer,
                     "timestamp" timestamptz,
                     PRIMARY KEY ("waypointSymbol", "symbol", "timestamp")
-                ) PARTITION BY LIST ("waypointSymbol")
+                )
                 """
             )
+            #  PARTITION BY LIST ("waypointSymbol")
 
         if "shipyards" not in tables:
             cur.execute(
@@ -345,9 +347,10 @@ def db_tables_init():
                     "price" integer,
                     "timestamp" timestamptz,
                     PRIMARY KEY ("waypointSymbol", "timestamp")
-                ) PARTITION BY LIST ("waypointSymbol")
+                )
                 """
             )
+            #  PARTITION BY LIST ("waypointSymbol")
 
         if "shipyard_ships" not in tables:
             # - Create a waypoint specific tradegoods table:
@@ -365,9 +368,10 @@ def db_tables_init():
                     "purchasePrice" integer,
                     "timestamp" timestamptz,
                     PRIMARY KEY ("waypointSymbol", "type", "timestamp")
-                ) PARTITION BY LIST ("waypointSymbol")
+                )
                 """
             )
+            # PARTITION BY LIST ("waypointSymbol")
 
         if "events" not in tables:
             cur.execute(
