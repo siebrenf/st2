@@ -197,7 +197,10 @@ class RequestMp:
         queue.put((uuid, method, endpoint, token, data, params))
         while uuid not in answer_dict:
             sleep(self.sleep)
-        return answer_dict.pop(uuid)
+        ret = answer_dict.pop(uuid)
+        if isinstance(ret, Exception):
+            raise ret
+        return ret
 
     def get(self, endpoint, priority=None, token=None, params=None):
         if endpoint == "status":
@@ -243,8 +246,10 @@ def messenger(qa_pairs):
             if queue.empty():
                 continue  # next queue
             uuid, method, endpoint, token, data, params = queue.get()
-            answer_dict[uuid] = session._request(  # noqa
-                method, endpoint, token, data, params
-            )
+            try:
+                ret = session._request(method, endpoint, token, data, params)  # noqa
+            except Exception as exc:
+                ret = exc
+            answer_dict[uuid] = ret
             break  # next iteration
         sleep(0.01)  # no requests
