@@ -7,38 +7,38 @@ from psycopg.types.json import Jsonb
 from st2 import time
 
 
-def api_agent(request, priority):
+def api_agent(request, priority=0):
     """
     Register an agent to use for agent-independent API requests.
     This is to notice server resets immediately.
     """
     role = "reset detection"
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT symbol, token, role FROM agents WHERE role = %s",
-            (role,),
-        )
-        ret = cur.fetchone()
-        if ret is None:
-            data = register_random_agent(
-                request,
-                priority,
-                insert_ship=False,
-                insert_probe=False,
-            )
-            symbol = data["agent"]["symbol"]
-            token = data["token"]
+    with connect("dbname=st2 user=postgres") as conn:
+        with conn.cursor() as cur:
             cur.execute(
-                """
-                UPDATE agents
-                SET role = %s
-                WHERE symbol = %s
-                """,
-                (role, symbol),
+                "SELECT symbol, token, role FROM agents WHERE role = %s",
+                (role,),
             )
-            conn.commit()
-        else:
-            symbol, token, role = ret
+            ret = cur.fetchone()
+            if ret is None:
+                data = register_random_agent(
+                    request,
+                    priority,
+                    insert_ship=False,
+                    insert_probe=False,
+                )
+                symbol = data["agent"]["symbol"]
+                token = data["token"]
+                cur.execute(
+                    """
+                    UPDATE agents
+                    SET role = %s
+                    WHERE symbol = %s
+                    """,
+                    (role, symbol),
+                )
+            else:
+                symbol, token, role = ret
     return symbol, token
 
 

@@ -195,6 +195,7 @@ def _chart_systems(request, index, query, priority):
                 token=token,
             ):
                 for wp in ret2["data"]:
+                    symbol = wp["symbol"]
                     traits = [t["symbol"] for t in wp["traits"]]
                     # update the values that may have been updated
                     chart = Jsonb(wp.get("chart"))
@@ -213,7 +214,7 @@ def _chart_systems(request, index, query, priority):
                             chart,
                             faction,
                             wp["isUnderConstruction"],
-                            wp["symbol"],
+                            symbol,
                         ),
                     )
 
@@ -221,11 +222,11 @@ def _chart_systems(request, index, query, priority):
                         continue
 
                     if wp["type"] == "JUMP_GATE":
-                        _chart_gate(wp, request, token, cur)
+                        _get_gate(symbol, system_symbol, request, token, cur)
                     if "MARKETPLACE" in traits:
-                        _chart_market(wp, request, token, cur)
+                        _get_market(symbol, system_symbol, request, token, cur)
                     if "SHIPYARD" in traits:
-                        _chart_shipyard(wp, request, token, cur)
+                        _get_shipyard(symbol, system_symbol, request, token, cur)
 
                     # store unknown traits
                     for trait in traits:
@@ -256,8 +257,7 @@ def _chart_systems(request, index, query, priority):
             conn.commit()
 
 
-def _chart_gate(symbol, request, token, cur):
-    system_symbol = symbol.rsplit("-", 1)[0]
+def _get_gate(symbol, system_symbol, request, token, cur):
     connections = request.get(
         endpoint=f"systems/{system_symbol}/waypoints/{symbol}/jump-gate",
         priority=3,
@@ -278,8 +278,7 @@ def _chart_gate(symbol, request, token, cur):
     )
 
 
-def _chart_market(symbol, request, token, cur):
-    system_symbol = symbol.rsplit("-", 1)[0]
+def _get_market(symbol, system_symbol, request, token, cur):
     ret = request.get(
         endpoint=f"systems/{system_symbol}/waypoints/{symbol}/market",
         priority=3,
@@ -302,8 +301,7 @@ def _chart_market(symbol, request, token, cur):
     )
 
 
-def _chart_shipyard(symbol, request, token, cur):
-    system_symbol = symbol.rsplit("-", 1)[0]
+def _get_shipyard(symbol, system_symbol, request, token, cur):
     ret = request.get(
         endpoint=f"systems/{system_symbol}/waypoints/{symbol}/shipyard",
         priority=3,
