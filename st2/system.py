@@ -355,7 +355,7 @@ class System:
                 return sorted(row[0] for row in cur.fetchall())
 
     @staticmethod
-    def trades(symbol: str, type: str = None):
+    def markets_with(symbol: str, type: str = None):
         """
         Return a dict with all waypoints trading the good in the requested type
 
@@ -410,6 +410,69 @@ class System:
                     ORDER BY "waypointSymbol", "timestamp" DESC
                     """,
                     (symbol, list(wps)),
+                )
+                ret = cur.fetchall()
+
+                # create a dictionary for each waypoint,
+                #   with the latest tradeGood info as value
+                #   (None if the market has never been visited)
+                md = {}
+                for wp in wps:
+                    md[wp] = None
+                    for n, tg in enumerate(ret):
+                        if tg["waypointSymbol"] == wp:
+                            md[wp] = ret.pop(n)
+                            break
+        return md
+
+    @staticmethod
+    def ship_types():
+        """
+        List of shipTypes
+
+        :return: List of shipTypes
+        """
+        with connect("dbname=st2 user=postgres") as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT value
+                    FROM (
+                        SELECT unnest("shipTypes") AS value FROM shipyards
+                    ) AS all_values
+                    """
+                )
+                return sorted(row[0] for row in cur.fetchall())
+
+    def shipyards_with(self, type: str):
+        """
+        Return a dict with all waypoints trading the good in the requested type
+
+        :param type: shipTypes (e.g. "SHIP_PROBE")
+        :return: dict with waypoints as key and their latest ship as values
+        """
+        with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT "symbol"
+                    FROM shipyards
+                    WHERE %s = ANY("shipTypes")
+                    ORDER BY "symbol"
+                    """,
+                    (type,),
+                )
+                wps = [wp["symbol"] for wp in cur.fetchall()]
+
+                cur.execute(
+                    """
+                    SELECT DISTINCT ON ("waypointSymbol") * 
+                    FROM shipyard_ships
+                    WHERE type = %s
+                      AND "systemSymbol" = %s
+                    ORDER BY "waypointSymbol", "timestamp" DESC
+                    """,
+                    (type, self.symbol),
                 )
                 ret = cur.fetchall()
 
