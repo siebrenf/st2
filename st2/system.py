@@ -1,6 +1,11 @@
+from operator import itemgetter
+
+import networkx as nx
+import numpy as np
 from psycopg import connect
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+from scipy.spatial.distance import cdist
 
 from st2.agent import api_agent
 from st2.db.static.traits import TRAITS_WAYPOINT
@@ -13,46 +18,40 @@ class System:
     # listed here for code autocompletion
     gate: dict = None
     markets: dict = None
-    shipyard: dict = None
+    shipyards: dict = None
     uncharted: dict = None
+    graph: nx.Graph = None
 
-    def __init__(self, symbol, request, priority=None):
+    def __init__(self, symbol, request, token=None, priority=None):
         self.symbol = symbol
         self.waypoints = {}
         self.request = request
         if priority:
-            self.request.priority = priority
-        if self.request.token is None:
-            self.request.token = api_agent(request)[1]
+            self.priority = priority
+        else:
+            self.priority = self.request.priority
+        if token:
+            self.token = token
+        elif self.request.token:
+            self.token = self.request.token
+        else:
+            self.token = api_agent(request, self.priority)[1]
         with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
             with conn.cursor() as cur:
-                data = cur.execute(
-                    """SELECT * FROM "systems" WHERE "symbol" = %s""", (symbol,)
-                ).fetchone()
+                query = "SELECT * FROM systems WHERE symbol = %s"
+                params = [symbol]
+                data = cur.execute(query, params).fetchone()
                 if data is None:
                     self._get_system(symbol, cur)
 
-                data = cur.execute(
-                    """
-                    SELECT * 
-                    FROM "waypoints" 
-                    WHERE "systemSymbol" = %s 
-                    ORDER BY "symbol"
-                    """,
-                    (symbol,),
-                ).fetchall()
+                query = (
+                    'SELECT * FROM waypoints WHERE "systemSymbol" = %s  ORDER BY symbol'
+                )
+                data = cur.execute(query, params).fetchall()
                 if None in [wp.get("traits") for wp in data]:
                     # system waypoints have not been added to the database yet
                     self._get_waypoints(symbol, cur)
-                    data = cur.execute(
-                        """
-                        SELECT * 
-                        FROM "waypoints" 
-                        WHERE "systemSymbol" = %s 
-                        ORDER BY "symbol"
-                        """,
-                        (symbol,),
-                    ).fetchall()
+                    data = cur.execute(query, params).fetchall()
                 for wp in data:
                     self.waypoints[wp["symbol"]] = wp
 
@@ -60,7 +59,11 @@ class System:
         """
         Add the system and all its waypoints to the database
         """
-        data = self.request.get(f"system/{system_symbol}")["data"]
+        data = self.request.get(
+            endpoint=f"system/{system_symbol}",
+            priority=self.priority,
+            token=self.token,
+        )["data"]
         cur.execute(
             """
             INSERT INTO systems 
@@ -101,7 +104,11 @@ class System:
         """
         Add the extended details of all waypoints to the database
         """
-        for ret in self.request.get_all(f"systems/{system_symbol}/waypoints"):
+        for ret in self.request.get_all(
+            endpoint=f"systems/{system_symbol}/waypoints",
+            priority=self.priority,
+            token=self.token,
+        ):
             for wp in ret["data"]:
                 symbol = wp["symbol"]
                 traits = [t["symbol"] for t in wp["traits"]]
@@ -154,7 +161,9 @@ class System:
 
     def _get_gate(self, symbol, system_symbol, cur):
         connections = self.request.get(
-            f"systems/{system_symbol}/waypoints/{symbol}/jump-gate"
+            endpoint=f"systems/{system_symbol}/waypoints/{symbol}/jump-gate",
+            priority=self.priority,
+            token=self.token,
         )["data"]["connections"]
         cur.execute(
             """
@@ -172,7 +181,9 @@ class System:
 
     def _get_market(self, symbol, system_symbol, cur):
         ret = self.request.get(
-            f"systems/{system_symbol}/waypoints/{symbol}/market",
+            endpoint=f"systems/{system_symbol}/waypoints/{symbol}/market",
+            priority=self.priority,
+            token=self.token,
         )["data"]
         cur.execute(
             """
@@ -192,7 +203,9 @@ class System:
 
     def _get_shipyard(self, symbol, system_symbol, cur):
         ret = self.request.get(
-            f"systems/{system_symbol}/waypoints/{symbol}/shipyard",
+            endpoint=f"systems/{system_symbol}/waypoints/{symbol}/shipyard",
+            priority=self.priority,
+            token=self.token,
         )["data"]
         cur.execute(
             """
@@ -208,6 +221,20 @@ class System:
                 ret["modificationsFee"],
             ),
         )
+
+    def _get_graph(self):
+        xy = np.array([itemgetter("x", "y")(wp) for wp in self.waypoints.values()])
+        # all coordinates must be unique, so that the distances are nonzero
+        while len(xy) != len(np.unique(xy, axis=0)):
+            xy = xy + np.random.normal(0, 0.0001, xy.shape)
+        g = nx.from_numpy_array(
+            A=cdist(xy, xy),
+            parallel_edges=False,
+            create_using=nx.Graph,
+            edge_attr="distance",
+            nodelist=self.waypoints,
+        )
+        return g
 
     # lazy attributes
     def __getattribute__(self, name):
@@ -225,6 +252,7 @@ class System:
                         FROM "waypoints"
                         WHERE "systemSymbol" = %s 
                         AND "type" = %s
+                        ORDER BY "symbol"
                         """,
                         (self.symbol, "JUMP_GATE"),
                     ).fetchone()
@@ -249,7 +277,7 @@ class System:
                         ).fetchone()
             setattr(self, name, val)
 
-        elif name == "shipyard":
+        elif name == "shipyards":
             with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
                 with conn.cursor() as cur:
                     ret = cur.execute(
@@ -257,6 +285,7 @@ class System:
                         SELECT * 
                         FROM "shipyards"
                         WHERE "systemSymbol" = %s 
+                        ORDER BY "symbol"
                         """,
                         (self.symbol,),
                     ).fetchall()
@@ -275,6 +304,7 @@ class System:
                         SELECT * 
                         FROM "markets"
                         WHERE "systemSymbol" = %s 
+                        ORDER BY "symbol"
                         """,
                         (self.symbol,),
                     ).fetchall()
@@ -294,6 +324,7 @@ class System:
                         FROM "waypoints"
                         WHERE "systemSymbol" = %s 
                         AND %s = ANY(traits)
+                        ORDER BY "symbol"
                         """,
                         (self.symbol, "UNCHARTED"),
                     ).fetchone()
@@ -303,7 +334,40 @@ class System:
                         val = {}
             setattr(self, name, val)
 
+        elif name == "graph":
+            val = self._get_graph()
+            setattr(self, name, val)
+
         return val
+
+    def waypoints_with(self, type: str = None, traits: list[str] = None):
+        query = """SELECT * FROM waypoints WHERE "systemSymbol" = %s """
+        params = [self.symbol]
+        if type:
+            query += "AND type = %s "
+            params.append(type)
+        if traits:
+            if isinstance(traits, list):
+                query += """
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM unnest(%s::text[]) AS elem
+                        WHERE elem NOT IN (SELECT unnest(traits))
+                    ) 
+                """
+            elif isinstance(traits, str):
+                query += "AND %s = ANY(traits) "
+            else:
+                raise TypeError(f"Argument traits must be list or str")
+            params.append(traits)
+        query += """ORDER BY "symbol" """
+
+        with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                wps = {wp["symbol"]: wp for wp in cur.fetchall()}
+
+        return wps
 
     @staticmethod
     def trade_goods(type: str = None):
@@ -354,8 +418,7 @@ class System:
                 cur.execute(query)
                 return sorted(row[0] for row in cur.fetchall())
 
-    @staticmethod
-    def markets_with(symbol: str, type: str = None):
+    def markets_with(self, symbol: str, type: str = None):
         """
         Return a dict with all waypoints trading the good in the requested type
 
@@ -363,44 +426,37 @@ class System:
         :param type: "IMPORTS", "EXPORTS", "EXCHANGE", "BUYS", "SELLS", None
         :return: dict with waypoints as key and their latest tradeGood as values
         """
-        query = "SELECT symbol FROM markets "
-        params = [symbol]
+        query = """SELECT * FROM markets WHERE "systemSymbol" = %s """
+        params = [self.symbol, symbol]
         if isinstance(type, str):
             type = type.lower()
         match type:
             case "imports":
-                query += "WHERE %s = ANY(imports)"
+                query += "AND %s = ANY(imports) "
             case "exports":
-                query += "WHERE %s = ANY(exports)"
+                query += "AND %s = ANY(exports) "
             case "exchange":
-                query += "WHERE %s = ANY(exchange)"
+                query += "AND %s = ANY(exchange) "
             case "buys":
-                query += """
-                WHERE %s = ANY(imports)
-                   OR %s = ANY(exchange)
-                """
+                query += "AND (%s = ANY(imports) OR %s = ANY(exchange)) "
                 params.append(symbol)
             case "sells":
-                query += """
-                    WHERE %s = ANY(exports)
-                       OR %s = ANY(exchange)
-                    """
+                query += "AND (%s = ANY(exports) OR %s = ANY(exchange)) "
                 params.append(symbol)
             case None:
-                query += """
-                        WHERE %s = ANY(imports)
-                           OR %s = ANY(exports)
-                           OR %s = ANY(exchange)
-                        """
+                query += "AND (%s = ANY(imports) OR %s = ANY(exports) OR %s = ANY(exchange)) "
                 params.extend([symbol, symbol])
             case "_":
                 raise ValueError(f"{type=} not recognized")
-        query += " ORDER BY symbol"
+        query += "ORDER BY symbol"
+
         with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
             with conn.cursor() as cur:
+                # this dict is complete
                 cur.execute(query, params)
-                wps = [wp["symbol"] for wp in cur.fetchall()]
+                wps = {wp["symbol"]: wp for wp in cur.fetchall()}
 
+                # this dict can be incomplete (if the market has never been visited)
                 cur.execute(
                     """
                     SELECT DISTINCT ON ("waypointSymbol") * 
@@ -413,20 +469,37 @@ class System:
                 )
                 ret = cur.fetchall()
 
-                # create a dictionary for each waypoint,
-                #   with the latest tradeGood info as value
-                #   (None if the market has never been visited)
-                md = {}
-                for wp in wps:
-                    md[wp] = None
-                    for n, tg in enumerate(ret):
-                        if tg["waypointSymbol"] == wp:
-                            md[wp] = ret.pop(n)
-                            break
+        # create a dictionary for each waypoint,
+        #   with the latest tradeGood info as values
+        md = {}
+        for wp in wps:
+            for n, tg in enumerate(ret):
+                if tg["waypointSymbol"] == wp:
+                    md[wp] = ret.pop(n)
+                    break
+            else:
+                # placeholder
+                if symbol in wps[wp]["imports"]:
+                    t = "IMPORTS"
+                elif symbol in wps[wp]["exports"]:
+                    t = "EXPORTS"
+                else:
+                    t = "EXCHANGE"
+                md[wp] = {
+                    "waypointSymbol": wps[wp]["symbol"],
+                    "systemSymbol": self.symbol,
+                    "symbol": symbol,
+                    "tradeVolume": None,
+                    "type": t,
+                    "supply": None,
+                    "activity": None,
+                    "purchasePrice": None,
+                    "sellPrice": None,
+                    "timestamp": None,
+                }
         return md
 
-    @staticmethod
-    def ship_types():
+    def ship_types(self):
         """
         List of shipTypes
 
@@ -439,8 +512,10 @@ class System:
                     SELECT DISTINCT value
                     FROM (
                         SELECT unnest("shipTypes") AS value FROM shipyards
-                    ) AS all_values
-                    """
+                        WHERE "systemSymbol" = %s
+                    )
+                    """,
+                    [self.symbol],
                 )
                 return sorted(row[0] for row in cur.fetchall())
 
@@ -453,17 +528,20 @@ class System:
         """
         with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
             with conn.cursor() as cur:
+                # this dict is complete
                 cur.execute(
                     """
                     SELECT "symbol"
                     FROM shipyards
                     WHERE %s = ANY("shipTypes")
+                      AND "systemSymbol" = %s
                     ORDER BY "symbol"
                     """,
-                    (type,),
+                    (type, self.symbol),
                 )
                 wps = [wp["symbol"] for wp in cur.fetchall()]
 
+                # this dict can be incomplete (if the shipyard has never been visited)
                 cur.execute(
                     """
                     SELECT DISTINCT ON ("waypointSymbol") * 
@@ -476,14 +554,23 @@ class System:
                 )
                 ret = cur.fetchall()
 
-                # create a dictionary for each waypoint,
-                #   with the latest tradeGood info as value
-                #   (None if the market has never been visited)
-                md = {}
-                for wp in wps:
-                    md[wp] = None
-                    for n, tg in enumerate(ret):
-                        if tg["waypointSymbol"] == wp:
-                            md[wp] = ret.pop(n)
-                            break
+        # create a dictionary for each waypoint,
+        #   with the latest shipType info as values
+        md = {}
+        for wp in wps:
+            for n, tg in enumerate(ret):
+                if tg["waypointSymbol"] == wp:
+                    md[wp] = ret.pop(n)
+                    break
+            else:
+                # placeholder
+                md[wp] = {
+                    "waypointSymbol": wp,
+                    "systemSymbol": self.symbol,
+                    "type": type,
+                    "supply": None,
+                    "activity": None,
+                    "purchasePrice": None,
+                    "timestamp": None,
+                }
         return md
