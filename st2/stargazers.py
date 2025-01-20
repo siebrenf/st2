@@ -113,6 +113,9 @@ def astronomer(request, priority=3):
 
 
 def cartographer(request, priority=3):
+    """
+    Can be used after all systems have been mapped by the astronomer.
+    """
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
