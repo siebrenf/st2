@@ -185,10 +185,11 @@ class TaskMaster:
                 if "ai_probe_waypoint" not in self._loaded:
                     self._loaded.add("ai_probe_waypoint")
                     from st2.ai.probe import ai_probe_waypoint
-                coro = ai_probe_waypoint(
-                    ship=ship_symbol,
-                    waypoint=task[1],
+                coro = ai_probe_waypoint(  # noqa: always loaded on time
+                    ship_symbol=ship_symbol,
+                    waypoint_symbol=task[1],
                     qa_pairs=self.qa_pairs,
+                    verbose=True,  # TODO: remove
                 )
             case _:
                 raise ValueError(f"task not recognized: {ship_symbol} {task}")
