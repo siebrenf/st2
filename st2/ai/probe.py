@@ -2,12 +2,12 @@ from asyncio import sleep
 
 from st2.logging import logger
 from st2.ship import Ship
-from st2.system import System
 
 
 async def ai_probe_waypoint(
     ship_symbol,
     waypoint_symbol,
+    is_shipyard,
     qa_pairs,
     priority=3,
     verbose=False,
@@ -20,11 +20,6 @@ async def ai_probe_waypoint(
     nav_sleep = ship.nav_remaining()
     if nav_sleep:
         await sleep(nav_sleep)
-
-    # store if the waypoint is also a shipyard
-    system = System(ship["nav"]["systemSymbol"], ship.request)
-    traits = system.waypoints[waypoint_symbol]["traits"]
-    is_shipyard = "SHIPYARD" in traits
 
     # start probing
     if verbose:

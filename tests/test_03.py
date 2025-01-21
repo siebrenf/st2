@@ -4,18 +4,19 @@ from uuid import uuid1
 from psycopg import connect
 
 from st2.ai import taskmaster
-from st2.startup import db_server, game_server
+from st2.startup import api_server, db_server, game_server
 
 
 def test_taskmaster():
     game_server()  # TODO: move to separate test
     db_server()
+    manager, api_handler, qa_pairs = api_server()
 
     pname = "test_process"
     pid = uuid1()
     test_process = mp.Process(
         target=taskmaster,
-        kwargs={"pname": pname, "pid": pid},
+        kwargs={"pname": pname, "pid": pid, "qa_pairs": qa_pairs},
     )
     test_process.start()
 

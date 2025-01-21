@@ -2,6 +2,7 @@ from psycopg import connect
 
 from st2.agent import register_random_agent
 from st2.logging import logger
+from st2.system import System
 
 DEBUG = True
 
@@ -106,6 +107,7 @@ def spymaster(request, priority=3):
 
     # (Re)start the probing of each system
     pname = "probes"  # TODO: where to start/host the probe/seed process(?)
+    system = None
     for faction in faction2start_system2agent:
         for system_symbol, (agent_symbol, token) in faction2start_system2agent[
             faction
@@ -147,7 +149,12 @@ def spymaster(request, priority=3):
                                     [ship_symbol],
                                 )
                                 waypoint_symbol = cur.fetchone()[0]["waypointSymbol"]
-                                task = f"probe {waypoint_symbol}"
+                                if system is None or system.symbol != system_symbol:
+                                    system = System(system_symbol, request)
+                                wp_type = "market"
+                                if waypoint_symbol in system.shipyards:
+                                    wp_type = "shipyard"
+                                task = f"probe {wp_type} {waypoint_symbol}"
                                 cur.execute(
                                     """
                                     UPDATE tasks

@@ -9,13 +9,8 @@ from st2.ship import Ship
 from st2.startup import api_server, db_server, game_server
 
 
-def test_integration():
-    game_server()
-    db_server()
-    manager, api_handler, qa_pairs = api_server()
-    request = RequestMp(qa_pairs)
-
-    # Get the latest agent in the database
+def get_test_agent(request):
+    # Get the latest test agent in the database
     faction = "COSMIC"
     prefix = "UNITTEST"
     n = 1
@@ -24,15 +19,17 @@ def test_integration():
             cur.execute(
                 """
                 SELECT symbol FROM agents
-                WHERE symbol LIKE %s
+                WHERE symbol ~ %s
+                ORDER BY CAST(SUBSTRING(symbol FROM %s) AS INTEGER) DESC
+                LIMIT 1
                 """,
-                (prefix + "%",),
+                [f"^{prefix}[0-9]+$", f"{prefix}([0-9]+)"],
             )
-            for row in cur.fetchall():
-                n = max(n, int(row[0][8:]))
+            ret = cur.fetchone()
+            n = max(n, int(ret[0][8:]))
 
-    # Retrieve a registered agent from the database
-    # Register one first if needed
+    # Retrieve the agent from the database
+    #   try to register it first if needed
     while True:
         with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
             with conn.cursor() as cur:
@@ -63,6 +60,16 @@ def test_integration():
                 break
     assert agent["symbol"] == agent_symbol, agent
     assert agent["faction"] == faction, agent
+    return agent_symbol
+
+
+def test_integration():
+    game_server()
+    db_server()
+    manager, api_handler, qa_pairs = api_server()
+    request = RequestMp(qa_pairs)
+
+    agent_symbol = get_test_agent(request)
 
     # Check agent related databases
     with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
