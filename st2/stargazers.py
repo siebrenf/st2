@@ -10,8 +10,9 @@ from st2.logging import logger
 DEBUG = False
 
 
-def astronomer(request, priority=3):
-    token = api_agent(request, priority)[1]
+def astronomer(request, priority=3, token=None):
+    if token is None:
+        token = api_agent(request, priority)[1]
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -112,10 +113,13 @@ def astronomer(request, priority=3):
     logger.info(f"The Astronomer has completed its chart!")
 
 
-def cartographer(request, priority=3):
+def cartographer(request, priority=3, token=None, chart="start systems"):
     """
     Can be used after all systems have been mapped by the astronomer.
     """
+    if token is None:
+        token = api_agent(request, priority)[1]
+    completed = False
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -131,34 +135,35 @@ def cartographer(request, priority=3):
 
     # start systems (fully charted by default)
     index = "start systems"
-    query = """
-    SELECT "systemSymbol" 
-    FROM "waypoints" 
-    WHERE "type" = 'ENGINEERED_ASTEROID' 
-    ORDER BY "systemSymbol"
-    """
-    _chart_systems(request, index, query, priority)
+    if chart == index:
+        query = """
+        SELECT "systemSymbol" 
+        FROM "waypoints" 
+        WHERE "type" = 'ENGINEERED_ASTEROID' 
+        ORDER BY "systemSymbol"
+        """
+        completed = _chart_systems(request, priority, token, index, query)
 
-    # gate systems (can be charted by other players)
     index = "gate systems"
-    query = """
-    SELECT "systemSymbol" 
-    FROM "waypoints" 
-    WHERE "type" = 'JUMP_GATE'
-    EXCEPT
-    SELECT "systemSymbol" 
-    FROM "waypoints" 
-    WHERE "type" = 'ENGINEERED_ASTEROID'
-    ORDER BY "systemSymbol"
-    """
-    _chart_systems(request, index, query, priority)
+    if chart == index:
+        # gate systems (can be charted by other players)
+        query = """
+        SELECT "systemSymbol" 
+        FROM "waypoints" 
+        WHERE "type" = 'JUMP_GATE'
+        EXCEPT
+        SELECT "systemSymbol" 
+        FROM "waypoints" 
+        WHERE "type" = 'ENGINEERED_ASTEROID'
+        ORDER BY "systemSymbol"
+        """
+        completed = _chart_systems(request, priority, token, index, query)
 
-    logger.info(f"The Cartographer has completed its chart!")
+    if completed:
+        logger.info(f"The Cartographer has completed its chart!")
 
-    # TODO: run the cartographer every n hours for (partially) on uncharted systems
 
-
-def _chart_systems(request, index, query, priority):
+def _chart_systems(request, priority, token, index, query):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT * FROM cartographer WHERE index = %s",
@@ -182,9 +187,8 @@ def _chart_systems(request, index, query, priority):
             total, current = ret[1:]
 
         if current == total:
-            return
+            return False
 
-        token = api_agent(request, priority)[1]
         logger.info(f"The Cartographer has found {total-current:_} {index} to chart")
         cur.execute(query)
         ret = cur.fetchall()
@@ -225,11 +229,15 @@ def _chart_systems(request, index, query, priority):
                         continue
 
                     if wp["type"] == "JUMP_GATE":
-                        _get_gate(symbol, system_symbol, request, token, cur)
+                        _get_gate(symbol, system_symbol, request, priority, token, cur)
                     if "MARKETPLACE" in traits:
-                        _get_market(symbol, system_symbol, request, token, cur)
+                        _get_market(
+                            symbol, system_symbol, request, priority, token, cur
+                        )
                     if "SHIPYARD" in traits:
-                        _get_shipyard(symbol, system_symbol, request, token, cur)
+                        _get_shipyard(
+                            symbol, system_symbol, request, priority, token, cur
+                        )
 
                     # store unknown traits
                     for trait in traits:
@@ -258,12 +266,13 @@ def _chart_systems(request, index, query, priority):
                 (current, index),
             )
             conn.commit()
+        return True
 
 
-def _get_gate(symbol, system_symbol, request, token, cur):
+def _get_gate(symbol, system_symbol, request, priority, token, cur):
     connections = request.get(
         endpoint=f"systems/{system_symbol}/waypoints/{symbol}/jump-gate",
-        priority=3,
+        priority=priority,
         token=token,
     )["data"]["connections"]
     cur.execute(
@@ -281,10 +290,10 @@ def _get_gate(symbol, system_symbol, request, token, cur):
     )
 
 
-def _get_market(symbol, system_symbol, request, token, cur):
+def _get_market(symbol, system_symbol, request, priority, token, cur):
     ret = request.get(
         endpoint=f"systems/{system_symbol}/waypoints/{symbol}/market",
-        priority=3,
+        priority=priority,
         token=token,
     )["data"]
     cur.execute(
@@ -304,10 +313,10 @@ def _get_market(symbol, system_symbol, request, token, cur):
     )
 
 
-def _get_shipyard(symbol, system_symbol, request, token, cur):
+def _get_shipyard(symbol, system_symbol, request, priority, token, cur):
     ret = request.get(
         endpoint=f"systems/{system_symbol}/waypoints/{symbol}/shipyard",
-        priority=3,
+        priority=priority,
         token=token,
     )["data"]
     cur.execute(

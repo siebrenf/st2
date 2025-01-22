@@ -13,6 +13,11 @@ from st2.caching import cache
 from st2.db.static.traits import TRAITS_FACTION
 
 
+def db_server_path():
+    db = os.path.join(cache["data_dir"], f"sql")
+    return db
+
+
 def db_server_init():
     db = os.path.join(cache["data_dir"], f"sql")
     log = os.path.join(cache["log_dir"], f"sql.txt")
@@ -382,6 +387,7 @@ def db_tables_init():
                     "shipSymbol" text,
                     "activity" text,
                     "component" text,
+                    "condition" float8,
                     "timestamp" timestamptz
                 )
                 """
@@ -434,46 +440,53 @@ def db_tables_init():
             )
 
 
-def db_update_factions(request):
+def db_update_factions(request, priority=0, token=None):
     factions = {}
-    for fs in request.get_all("factions", 3):
+    for fs in request.get_all("factions", priority, token):
         for f in fs["data"]:
             factions[f["symbol"]] = f
 
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        # insert factions & faction_traits
-        for symbol in sorted(factions):
-            f = factions[symbol]
-            description = f["description"].replace("'", "''")
-            hq = f["headquarters"]
-            if hq == "":
-                hq = None
-            traits = [t["symbol"] for t in f["traits"]]
-            cur.execute(
-                """
-                INSERT INTO factions 
-                ("symbol", "name", "description", "headquarters", "traits", "isRecruiting")
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT ("symbol") DO NOTHING
-                """,
-                (f["symbol"], f["name"], description, hq, traits, f["isRecruiting"]),
-            )
-
-        # traits_faction
-        for trait in traits:
-            if TRAITS_FACTION.get(trait) is None:
-                t = traits[symbol]
-                description = t["description"].replace("'", "''")
+    with connect("dbname=st2 user=postgres") as conn:
+        with conn.cursor() as cur:
+            # insert factions & faction_traits
+            for symbol in sorted(factions):
+                f = factions[symbol]
+                description = f["description"].replace("'", "''")
+                hq = f["headquarters"]
+                if hq == "":
+                    hq = None
+                traits = [t["symbol"] for t in f["traits"]]
                 cur.execute(
                     """
-                    INSERT INTO traits_faction
-                    (symbol, name, description)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (symbol) DO NOTHING
+                    INSERT INTO factions 
+                    ("symbol", "name", "description", "headquarters", "traits", "isRecruiting")
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT ("symbol") DO NOTHING
                     """,
-                    (t["symbol"], t["name"], description),
+                    (
+                        f["symbol"],
+                        f["name"],
+                        description,
+                        hq,
+                        traits,
+                        f["isRecruiting"],
+                    ),
                 )
-        conn.commit()
+
+                # traits_faction
+                for trait in f["traits"]:
+                    if TRAITS_FACTION.get(trait["symbol"]):
+                        continue
+                    description = trait["description"].replace("'", "''")
+                    cur.execute(
+                        """
+                        INSERT INTO traits_faction
+                        (symbol, name, description)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (symbol) DO NOTHING
+                        """,
+                        (trait["symbol"], trait["name"], description),
+                    )
 
 
 def print_tables():

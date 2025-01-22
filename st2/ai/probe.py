@@ -4,6 +4,7 @@ from st2.logging import logger
 from st2.ship import Ship
 
 
+@logger.catch  # catch errors in a separate thread
 async def ai_probe_waypoint(
     ship_symbol,
     waypoint_symbol,
@@ -13,13 +14,13 @@ async def ai_probe_waypoint(
     verbose=False,
 ):
     ship = Ship(ship_symbol, qa_pairs, priority)
+    ship.refresh()
 
     # navigate to the waypoint
     if ship["nav"]["waypointSymbol"] != waypoint_symbol:
         ship.navigate(waypoint_symbol, verbose=verbose)
-    nav_sleep = ship.nav_remaining()
-    if nav_sleep:
-        await sleep(nav_sleep)
+    if t := ship.nav_remaining():
+        await sleep(t)
 
     # start probing
     if verbose:

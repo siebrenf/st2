@@ -1,5 +1,4 @@
 import multiprocessing as mp
-from uuid import uuid1
 
 from psycopg import connect
 from psycopg.rows import dict_row
@@ -19,10 +18,9 @@ def test_ai_probe_waypoint():
     request = RequestMp(qa_pairs)
 
     pname = "test_process"
-    pid = uuid1()
     test_process = mp.Process(
         target=taskmaster,
-        kwargs={"pname": pname, "pid": pid, "qa_pairs": qa_pairs},
+        kwargs={"pname": pname, "qa_pairs": qa_pairs},
     )
     test_process.start()
 

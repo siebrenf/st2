@@ -1,7 +1,9 @@
+import math
 from operator import itemgetter
 
 import networkx as nx
 import numpy as np
+from networkx.algorithms.approximation import traveling_salesman_problem
 from psycopg import connect
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -256,25 +258,25 @@ class System:
                         """,
                         (self.symbol, "JUMP_GATE"),
                     ).fetchone()
-                    if ret is None:
-                        val = None
-                        logger.warning(f"System {self.symbol} has no JUMP-GATE!")
-                    elif ret["traits"] == ["UNCHARTED"]:
-                        val = {
-                            "symbol": ret["symbol"],
-                            "systemSymbol": ret["systemSymbol"],
-                            "connections": None,
-                        }
-                        logger.warning(f"System {self.symbol} JUMP-GATE is UNCHARTED!")
-                    else:
-                        val = cur.execute(
-                            """
-                            SELECT * 
-                            FROM "jump_gates"
-                            WHERE "systemSymbol" = %s 
-                            """,
-                            (self.symbol,),
-                        ).fetchone()
+            if ret is None:
+                val = None
+                logger.warning(f"System {self.symbol} has no JUMP-GATE!")
+            elif ret["traits"] == ["UNCHARTED"]:
+                val = {
+                    "symbol": ret["symbol"],
+                    "systemSymbol": ret["systemSymbol"],
+                    "connections": None,
+                }
+                logger.warning(f"System {self.symbol} JUMP-GATE is UNCHARTED!")
+            else:
+                val = cur.execute(
+                    """
+                    SELECT * 
+                    FROM "jump_gates"
+                    WHERE "systemSymbol" = %s 
+                    """,
+                    (self.symbol,),
+                ).fetchone()
             setattr(self, name, val)
 
         elif name == "shipyards":
@@ -289,11 +291,11 @@ class System:
                         """,
                         (self.symbol,),
                     ).fetchall()
-                    if ret:
-                        val = {wp["symbol"]: wp for wp in ret}
-                    else:
-                        val = {}
-                        logger.warning(f"System {self.symbol} has no SHIPYARD!")
+            if ret:
+                val = {wp["symbol"]: wp for wp in ret}
+            else:
+                val = {}
+                logger.warning(f"System {self.symbol} has no SHIPYARD!")
             setattr(self, name, val)
 
         elif name == "markets":
@@ -308,11 +310,11 @@ class System:
                         """,
                         (self.symbol,),
                     ).fetchall()
-                    if ret:
-                        val = {wp["symbol"]: wp for wp in ret}
-                    else:
-                        val = {}
-                        logger.warning(f"System {self.symbol} has no MARKET!")
+            if ret:
+                val = {wp["symbol"]: wp for wp in ret}
+            else:
+                val = {}
+                logger.warning(f"System {self.symbol} has no MARKET!")
             setattr(self, name, val)
 
         elif name == "uncharted":
@@ -328,10 +330,10 @@ class System:
                         """,
                         (self.symbol, "UNCHARTED"),
                     ).fetchone()
-                    if ret:
-                        val = {wp["symbol"]: wp for wp in ret}
-                    else:
-                        val = {}
+            if ret:
+                val = {wp["symbol"]: wp for wp in ret}
+            else:
+                val = {}
             setattr(self, name, val)
 
         elif name == "graph":
@@ -574,3 +576,50 @@ class System:
                     "timestamp": None,
                 }
         return md
+
+    def shortest_passing_path(self, wps: list, start: str = None, weight="distance"):
+        """Return the shortest route through all specified waypoints/systems."""
+        if start and start not in wps:
+            wps = wps + [start]  # prevents updating wps out of scope
+
+        if len(wps) >= 3:
+            path = traveling_salesman_problem(
+                self.graph, weight=weight, nodes=wps, cycle=False
+            )
+        elif len(wps) == 2:
+            path = wps
+        elif len(wps) == 1:
+            path = wps
+        else:
+            path = []
+
+        if start:
+            i = path.index(start)
+            path = path[i:] + path[:i]
+        return path
+
+    def waypoints_sort(self, source, waypoints=None, reverse=False):
+        """Sort waypoints in ascending proximity to the source."""
+        if isinstance(waypoints, str):
+            waypoints = list(waypoints)
+        if waypoints is None:
+            waypoints = list(self.waypoints)
+        else:
+            for wp in waypoints:
+                if wp not in self.waypoints:
+                    raise ValueError(f'Waypoint "{wp}" not in {self["symbol"]}')
+
+        nodes = waypoints + [source]
+        subgraph = nx.subgraph_view(self.graph, filter_node=lambda node: node in nodes)
+        waypoint_distances = sorted(
+            subgraph[source].items(),
+            key=lambda edge: edge[1]["distance"],
+            reverse=reverse,
+        )
+
+        if reverse is False and source in waypoints:
+            yield source, 0
+        for wp, md in waypoint_distances:
+            yield wp, math.ceil(md["distance"])
+        if reverse is True and source in waypoints:
+            yield source, 0

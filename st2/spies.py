@@ -4,7 +4,7 @@ from st2.agent import register_random_agent
 from st2.logging import logger
 from st2.system import System
 
-DEBUG = True
+DEBUG = False
 
 
 def spymaster(request, priority=3):
@@ -65,11 +65,8 @@ def spymaster(request, priority=3):
                     """,
                     (role, faction),
                 )
-                for agent_symbol, token, _, _, system_symbol in cur.fetchall():
-                    faction2start_system2agent[faction][system_symbol] = (
-                        agent_symbol,
-                        token,
-                    )
+                for agent_symbol, _, _, _, system_symbol in cur.fetchall():
+                    faction2start_system2agent[faction][system_symbol] = agent_symbol
                     if DEBUG:
                         if system_symbol == faction2hq[faction]:
                             logger.debug(f" - {system_symbol} (faction HQ)")
@@ -80,7 +77,6 @@ def spymaster(request, priority=3):
                 while None in faction2start_system2agent[faction].values():
                     data = register_random_agent(request, priority, faction)
                     agent_symbol = data["agent"]["symbol"]
-                    token = data["token"]
                     system_symbol = data["ship"]["nav"]["systemSymbol"]
                     if faction2start_system2agent[faction].get(system_symbol):
                         continue
@@ -95,25 +91,23 @@ def spymaster(request, priority=3):
                         (role, system_symbol, agent_symbol),
                     )
                     conn.commit()
-                    faction2start_system2agent[faction][system_symbol] = (
-                        agent_symbol,
-                        token,
-                    )
+                    faction2start_system2agent[faction][system_symbol] = agent_symbol
                     if DEBUG:
                         if system_symbol == faction2hq[faction]:
                             logger.debug(f" - {system_symbol} (faction HQ)")
                         else:
                             logger.debug(f" - {system_symbol}")
 
-    # (Re)start the probing of each system
+    # (Re)start the seeding & probing of each system
     pname = "probes"  # TODO: where to start/host the probe/seed process(?)
     system = None
-    for faction in faction2start_system2agent:
-        for system_symbol, (agent_symbol, token) in faction2start_system2agent[
-            faction
-        ].items():
-            with connect("dbname=st2 user=postgres") as conn:
-                with conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn:
+        with conn.cursor() as cur:
+            for faction in faction2start_system2agent:
+                for system_symbol, agent_symbol in faction2start_system2agent[
+                    faction
+                ].items():
+                    commit = False  # commit per system
                     cur.execute(
                         """
                         SELECT *
@@ -126,82 +120,56 @@ def spymaster(request, priority=3):
                     for ship_symbol, _, current, _, _, _, _ in cur.fetchall():
                         task = str(current).split(" ")
                         if task[0] in ["probe", "seed"]:
-                            continue  # TODO: ai_seed_system
-                        elif task[0] == "None":
-                            if ship_symbol == f"{agent_symbol}-1":
-                                task = f"seed {system_symbol}"
-                                cur.execute(
-                                    """
-                                    UPDATE tasks
-                                    SET current = %s,
-                                        pname = %s
-                                    WHERE "symbol" = %s
-                                    """,
-                                    [task, pname, ship_symbol],
-                                )
-                            elif ship_symbol == f"{agent_symbol}-2":
-                                cur.execute(
-                                    """
-                                    SELECT nav
-                                    FROM ships
-                                    WHERE "symbol" = %s
-                                    """,
-                                    [ship_symbol],
-                                )
-                                waypoint_symbol = cur.fetchone()[0]["waypointSymbol"]
-                                if system is None or system.symbol != system_symbol:
-                                    system = System(system_symbol, request)
-                                wp_type = "market"
-                                if waypoint_symbol in system.shipyards:
-                                    wp_type = "shipyard"
-                                task = f"probe {wp_type} {waypoint_symbol}"
-                                cur.execute(
-                                    """
-                                    UPDATE tasks
-                                    SET current = %s,
-                                        pname = %s
-                                    WHERE "symbol" = %s
-                                    """,
-                                    [task, pname, ship_symbol],
-                                )
-                            else:
-                                raise ValueError(f"{ship_symbol=} not recognized")
-
-                        else:
+                            continue
+                        elif task[0] != "None":
                             raise ValueError(
-                                f"Unrecognized ship task: {ship_symbol=} {current=}"
+                                f"Task not recognized: {ship_symbol=}, {current=}"
                             )
 
+                        commit = True
+                        if ship_symbol == f"{agent_symbol}-1":
+                            # TODO: count the number of probes & markets?
+                            task = f"seed {pname} {system_symbol}"
+                            cur.execute(
+                                """
+                                UPDATE tasks
+                                SET current = %s,
+                                    pname = %s
+                                WHERE "symbol" = %s
+                                """,
+                                [task, pname, ship_symbol],
+                            )
+                        elif ship_symbol == f"{agent_symbol}-2":
+                            cur.execute(
+                                """
+                                SELECT nav
+                                FROM ships
+                                WHERE "symbol" = %s
+                                """,
+                                [ship_symbol],
+                            )
+                            waypoint_symbol = cur.fetchone()[0]["waypointSymbol"]
+                            if system is None or system.symbol != system_symbol:
+                                system = System(system_symbol, request)
+                            wp_type = "market"
+                            if waypoint_symbol in system.shipyards:
+                                wp_type = "shipyard"
+                            task = f"probe {wp_type} {waypoint_symbol}"
+                            cur.execute(
+                                """
+                                UPDATE tasks
+                                SET current = %s,
+                                    pname = %s
+                                WHERE "symbol" = %s
+                                """,
+                                [task, pname, ship_symbol],
+                            )
+                        else:
+                            # this happens if a probe is bought, but not assigned a waypoint
+                            logger.error(
+                                f"Ship not recognized: {ship_symbol=}, {current=}"
+                            )
+                            continue
 
-# def insert_ship(ship, agent_symbol, cur):
-#     cur.execute(
-#         """
-#         INSERT INTO ships
-#         (symbol, agentSymbol, nav, crew, fuel, cooldown, frame,
-#          reactor, engine, modules, mounts, registration, cargo)
-#         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-#         """,
-#         (
-#             ship["symbol"],
-#             agent_symbol,
-#             Jsonb(ship["nav"]),
-#             Jsonb(ship["crew"]),
-#             Jsonb(ship["fuel"]),
-#             Jsonb(ship["cooldown"]),
-#             Jsonb(ship["frame"]),
-#             Jsonb(ship["reactor"]),
-#             Jsonb(ship["engine"]),
-#             Jsonb(ship["modules"]),
-#             Jsonb(ship["mounts"]),
-#             Jsonb(ship["registration"]),
-#             Jsonb(ship["cargo"]),
-#         ),
-#     )
-#
-#     cur.execute(
-#         """
-#         INSERT INTO tasks (symbol, agentSymbol, current, queued, cancel, pname, pid)
-#         VALUES (%s, %s, %s, %s, %s, %s, %s)
-#         """,
-#         (ship["symbol"], agent_symbol, None, None, False, None, None),
-#     )
+                    if commit:
+                        conn.commit()

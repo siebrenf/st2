@@ -1,5 +1,4 @@
 import multiprocessing as mp
-from uuid import uuid1
 
 from psycopg import connect
 
@@ -13,10 +12,9 @@ def test_taskmaster():
     manager, api_handler, qa_pairs = api_server()
 
     pname = "test_process"
-    pid = uuid1()
     test_process = mp.Process(
         target=taskmaster,
-        kwargs={"pname": pname, "pid": pid, "qa_pairs": qa_pairs},
+        kwargs={"pname": pname, "qa_pairs": qa_pairs},
     )
     test_process.start()
 

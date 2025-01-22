@@ -90,8 +90,3 @@ def api_server():
     atexit.register(stop_api_server)
 
     return manager, api_handler, qa_pairs
-
-
-# game_server()
-# sql_server()
-# manager, api_handler, qa_pairs = api_server()

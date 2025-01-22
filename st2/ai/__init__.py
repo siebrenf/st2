@@ -1,9 +1,12 @@
 import asyncio
 import threading
 from time import sleep
+from uuid import uuid1
 
 from psycopg import connect
 
+from st2.ai.probe import ai_probe_waypoint
+from st2.ai.system import ai_seed_system
 from st2.logging import logger
 
 
@@ -12,11 +15,14 @@ def taskmaster(*args, **kwargs):
     t.run()
 
 
+DEBUG = False
+
+
 class TaskMaster:
 
-    def __init__(self, pname, pid, qa_pairs):
+    def __init__(self, pname, qa_pairs):
         self.name = pname
-        self.pid = pid
+        self.pid = uuid1()
         self.qa_pairs = qa_pairs
         self._tasks = {}
         self._loop = asyncio.new_event_loop()
@@ -44,7 +50,11 @@ class TaskMaster:
                 break
 
     def done(self, ship):
-        if ship in self._tasks and self._tasks[ship].done():
+        if (
+            ship in self._tasks
+            and self._tasks[ship].done()
+            and self._tasks[ship].exception() is None
+        ):
             return True
         return False
 
@@ -112,9 +122,10 @@ class TaskMaster:
                                     ship_symbol, agent_symbol, current_task
                                 )
                                 self.put(ship_symbol, task)
-                                logger.warning(
-                                    f"Restarting {ship_symbol} task {current_task}"
-                                )
+                                if DEBUG:
+                                    logger.debug(
+                                        f"Restarting {ship_symbol} with task '{current_task}'"
+                                    )
                             pid = self.pid
                             cur.execute(
                                 """
@@ -184,20 +195,38 @@ class TaskMaster:
         match task[0]:
             case "test":
                 coro = _test_coroutine(*task[1:])
+
             case "probe":
-                if "ai_probe_waypoint" not in self._loaded:
-                    self._loaded.add("ai_probe_waypoint")
-                    from st2.ai.probe import ai_probe_waypoint
+                # if "ai_probe_waypoint" not in self._loaded:
+                #     self._loaded.add("ai_probe_waypoint")
+                #     from st2.ai.probe import ai_probe_waypoint
+                #     sleep(1)
                 is_shipyard = task[1] == "shipyard"
                 coro = ai_probe_waypoint(  # noqa: always loaded on time
                     ship_symbol=ship_symbol,
                     waypoint_symbol=task[2],
                     is_shipyard=is_shipyard,
                     qa_pairs=self.qa_pairs,
+                    verbose=False,
+                )
+
+            case "seed":
+                # if "ai_seed_system" not in self._loaded:
+                #     self._loaded.add("ai_seed_system")
+                #     from st2.ai.system import ai_seed_system
+                #     sleep(1)
+                pname = task[1]
+                priority = None
+                coro = ai_seed_system(  # noqa: always loaded on time
+                    ship_symbol=ship_symbol,
+                    pname=pname,
+                    qa_pairs=self.qa_pairs,
+                    priority=priority,
                     verbose=True,  # TODO: remove
                 )
+
             case _:
-                raise ValueError(f"task not recognized: {ship_symbol} {task}")
+                raise ValueError(f"Task not recognized: {ship_symbol=}, {task=}")
         return coro
 
 

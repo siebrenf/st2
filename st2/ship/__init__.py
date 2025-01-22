@@ -64,7 +64,8 @@ class Ship(dict):
     #             cur.execute(query, params)
 
     def _update(self, data):
-        keys = [k for k in data.keys() if k in self.keys()]
+        keys = set(data.keys()) & set(self.keys())
+        keys.discard("symbol")
         for key in keys:
             self[key] = data[key]
 
@@ -97,6 +98,7 @@ class Ship(dict):
                     )
 
                 if "transaction" in data:
+                    # TODO: fails with repair-/scrap-/modificationTransaction
                     transaction = data["transaction"]
                     cur.execute(
                         """
@@ -127,18 +129,20 @@ class Ship(dict):
                         activity = "extract"
                     elif "siphon" in data:
                         activity = "siphon"
+                    condition = self[event["component"].lower()]["condition"]
                     cur.execute(
                         """
                         INSERT INTO events
-                        (symbol, "shipSymbol", activity, component, timestamp)
-                        VALUES (%s, %s, %s, %s, %s)
+                        (symbol, "shipSymbol", activity, component, condition, timestamp)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                         """,
                         (
                             event["symbol"],
                             self["symbol"],
                             activity,
                             event["component"],
-                            time.read(transaction["timestamp"]),
+                            condition,
+                            time.now(),
                         ),
                     )
 
@@ -165,108 +169,30 @@ class Ship(dict):
     def refresh(self, online=True):
         if online:
             data = self.request.get(f'my/ships/{self["symbol"]}')["data"]
+            self._update(data)
         else:
             with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
                 with conn.cursor() as cur:
                     data = cur.execute(
                         "SELECT * FROM ships WHERE symbol = %s", (self["symbol"],)
                     ).fetchone()
-        self._update(data)
+                    for k, v in data.items():
+                        self[k] = v
 
     def buy_ship(self, ship_type, verbose=True):
         """
         Purchase the specified ship_type at the current waypoint's shipyard.
         Returns the new ship instance.
         """
-        agent_symbol = self["agentSymbol"]
-        waypoint_symbol = self["nav"]["waypointSymbol"]
-        system_symbol = self["nav"]["systemSymbol"]
-        data = self.request.post(
-            f"my/ships",
-            data={"shipType": ship_type, "waypointSymbol": waypoint_symbol},
-        )["data"]
-        data["cooldown"]["expiration"] = time.write()
-
-        with connect("dbname=st2 user=postgres") as conn:
-            with conn.cursor() as cur:
-                ship = data["ship"]
-                cur.execute(
-                    """
-                    INSERT INTO ships
-                    ("symbol", "agentSymbol", "nav", "crew", "fuel", "cooldown", "frame",
-                     "reactor", "engine", "modules", "mounts", "registration", "cargo")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        ship["symbol"],
-                        agent_symbol,
-                        Jsonb(ship["nav"]),
-                        Jsonb(ship["crew"]),
-                        Jsonb(ship["fuel"]),
-                        Jsonb(ship["cooldown"]),
-                        Jsonb(ship["frame"]),
-                        Jsonb(ship["reactor"]),
-                        Jsonb(ship["engine"]),
-                        Jsonb(ship["modules"]),
-                        Jsonb(ship["mounts"]),
-                        Jsonb(ship["registration"]),
-                        Jsonb(ship["cargo"]),
-                    ),
-                )
-                cur.execute(
-                    """
-                    INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (ship["symbol"], agent_symbol, None, None, False, None, None),
-                )
-
-                agent = data["agent"]
-                cur.execute(
-                    """
-                    INSERT INTO agents_public
-                    ("accountId", "symbol", "headquarters", "credits",
-                     "startingFaction", "shipCount", "timestamp")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        agent["accountId"],
-                        agent["symbol"],
-                        agent["headquarters"],
-                        agent["credits"],
-                        agent["startingFaction"],
-                        agent["shipCount"],
-                        time.now(),
-                    ),
-                )
-
-                transaction = data["transaction"]
-                cur.execute(
-                    """
-                    INSERT INTO shipyard_transactions
-                    ("waypointSymbol", "systemSymbol", "shipSymbol",
-                     "agentSymbol", "shipType", "price", "timestamp")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT ("waypointSymbol", "timestamp") DO NOTHING
-                    """,
-                    (
-                        transaction["waypoint_symbol"],
-                        system_symbol,
-                        transaction["shipSymbol"],
-                        transaction["agentSymbol"],
-                        transaction["shipType"],
-                        transaction["price"],
-                        time.read(transaction["timestamp"]),
-                    ),
-                )
-
-        if verbose:
-            logger.info(
-                f"{ship_type} bought at {waypoint_symbol} "
-                f'for {data["transaction"]["price"]} credits'
-            )
-
-        return ship["symbol"]
+        ship_symbol = buy_ship(
+            ship_type,
+            self["nav"]["waypointSymbol"],
+            self["agentSymbol"],
+            self.request,
+            verbose,
+        )
+        self.shipyard()
+        return ship_symbol
 
     # import methods
     from ._cargo import buy, cargo_yield, jettison, sell, supply, transfer
@@ -277,3 +203,100 @@ class Ship(dict):
     from ._mounts import extract, siphon, survey
     from ._nav import jump, nav_patch, navigate
     from ._shipyard import shipyard
+
+
+def buy_ship(ship_type, waypoint_symbol, agent_symbol, request, verbose=True):
+    """
+    Purchase the specified ship_type at the current waypoint's shipyard.
+    Returns the new ship instance.
+    """
+    system_symbol = waypoint_symbol.rsplit("-", 1)[0]
+    data = request.post(
+        f"my/ships",
+        data={
+            "shipType": ship_type,
+            "waypointSymbol": waypoint_symbol,
+        },
+    )["data"]
+
+    with connect("dbname=st2 user=postgres") as conn:
+        with conn.cursor() as cur:
+            ship = data["ship"]
+            ship["cooldown"]["expiration"] = time.write()
+            cur.execute(
+                """
+                INSERT INTO ships
+                ("symbol", "agentSymbol", "nav", "crew", "fuel", "cooldown", "frame",
+                 "reactor", "engine", "modules", "mounts", "registration", "cargo")
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    ship["symbol"],
+                    agent_symbol,
+                    Jsonb(ship["nav"]),
+                    Jsonb(ship["crew"]),
+                    Jsonb(ship["fuel"]),
+                    Jsonb(ship["cooldown"]),
+                    Jsonb(ship["frame"]),
+                    Jsonb(ship["reactor"]),
+                    Jsonb(ship["engine"]),
+                    Jsonb(ship["modules"]),
+                    Jsonb(ship["mounts"]),
+                    Jsonb(ship["registration"]),
+                    Jsonb(ship["cargo"]),
+                ),
+            )
+            cur.execute(
+                """
+                INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (ship["symbol"], agent_symbol, None, None, False, None, None),
+            )
+
+            agent = data["agent"]
+            cur.execute(
+                """
+                INSERT INTO agents_public
+                ("accountId", "symbol", "headquarters", "credits",
+                 "startingFaction", "shipCount", "timestamp")
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    agent["accountId"],
+                    agent["symbol"],
+                    agent["headquarters"],
+                    agent["credits"],
+                    agent["startingFaction"],
+                    agent["shipCount"],
+                    time.now(),
+                ),
+            )
+
+            transaction = data["transaction"]
+            cur.execute(
+                """
+                INSERT INTO shipyard_transactions
+                ("waypointSymbol", "systemSymbol", "shipSymbol",
+                 "agentSymbol", "shipType", "price", "timestamp")
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT ("waypointSymbol", "timestamp") DO NOTHING
+                """,
+                (
+                    transaction["waypointSymbol"],
+                    system_symbol,
+                    transaction["shipSymbol"],
+                    transaction["agentSymbol"],
+                    transaction["shipType"],
+                    transaction["price"],
+                    time.read(transaction["timestamp"]),
+                ),
+            )
+
+    if verbose:
+        logger.info(
+            f'{ship["registration"]["role"].capitalize()} {ship["frame"]["name"].lower()} {ship["symbol"]} '
+            f'bought at {waypoint_symbol} for {data["transaction"]["price"]} credits'
+        )
+
+    return ship["symbol"]
