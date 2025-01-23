@@ -13,11 +13,14 @@ from st2.agent import api_agent
 from st2.db.static.traits import TRAITS_WAYPOINT
 from st2.logging import logger
 
+DEBUG = False
+
 
 class System:
 
     # lazy attributes (loaded when called)
     # listed here for code autocompletion
+    waypoints: dict = None
     gate: dict = None
     markets: dict = None
     shipyards: dict = None
@@ -26,7 +29,6 @@ class System:
 
     def __init__(self, symbol, request, token=None, priority=None):
         self.symbol = symbol
-        self.waypoints = {}
         self.request = request
         if priority:
             self.priority = priority
@@ -38,31 +40,13 @@ class System:
             self.token = self.request.token
         else:
             self.token = api_agent(request, self.priority)[1]
-        with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-            with conn.cursor() as cur:
-                query = "SELECT * FROM systems WHERE symbol = %s"
-                params = [symbol]
-                data = cur.execute(query, params).fetchone()
-                if data is None:
-                    self._get_system(symbol, cur)
 
-                query = (
-                    'SELECT * FROM waypoints WHERE "systemSymbol" = %s  ORDER BY symbol'
-                )
-                data = cur.execute(query, params).fetchall()
-                if None in [wp.get("traits") for wp in data]:
-                    # system waypoints have not been added to the database yet
-                    self._get_waypoints(symbol, cur)
-                    data = cur.execute(query, params).fetchall()
-                for wp in data:
-                    self.waypoints[wp["symbol"]] = wp
-
-    def _get_system(self, system_symbol, cur):
+    def _get_system(self, cur):
         """
         Add the system and all its waypoints to the database
         """
         data = self.request.get(
-            endpoint=f"system/{system_symbol}",
+            endpoint=f"system/{self.symbol}",
             priority=self.priority,
             token=self.token,
         )["data"]
@@ -73,7 +57,7 @@ class System:
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (symbol) DO NOTHING
             """,
-            (system_symbol, data["type"], data["x"], data["y"]),
+            (self.symbol, data["type"], data["x"], data["y"]),
         )
 
         # update waypoints (with very limited fields)
@@ -93,7 +77,7 @@ class System:
                 """,
                 (
                     waypoints_symbol,
-                    system_symbol,
+                    self.symbol,
                     wp["type"],
                     wp["x"],
                     wp["y"],
@@ -102,12 +86,12 @@ class System:
                 ),
             )
 
-    def _get_waypoints(self, system_symbol, cur):
+    def _get_waypoints(self, cur):
         """
         Add the extended details of all waypoints to the database
         """
         for ret in self.request.get_all(
-            endpoint=f"systems/{system_symbol}/waypoints",
+            endpoint=f"systems/{self.symbol}/waypoints",
             priority=self.priority,
             token=self.token,
         ):
@@ -138,11 +122,11 @@ class System:
                     continue
 
                 if wp["type"] == "JUMP_GATE":
-                    self._get_gate(symbol, system_symbol, cur)
+                    self._get_gate(symbol, cur)
                 if "MARKETPLACE" in traits:
-                    self._get_market(symbol, system_symbol, cur)
+                    self._get_market(symbol, cur)
                 if "SHIPYARD" in traits:
-                    self._get_shipyard(symbol, system_symbol, cur)
+                    self._get_shipyard(symbol, cur)
 
                 # store unknown traits
                 for trait in traits:
@@ -161,9 +145,9 @@ class System:
                             f"The Cartographer has discovered a new trait: {t['symbol']}!"
                         )
 
-    def _get_gate(self, symbol, system_symbol, cur):
+    def _get_gate(self, waypoint_symbol, cur):
         connections = self.request.get(
-            endpoint=f"systems/{system_symbol}/waypoints/{symbol}/jump-gate",
+            endpoint=f"systems/{self.symbol}/waypoints/{waypoint_symbol}/jump-gate",
             priority=self.priority,
             token=self.token,
         )["data"]["connections"]
@@ -175,15 +159,15 @@ class System:
             ON CONFLICT ("symbol") DO NOTHING
             """,
             (
-                symbol,
-                system_symbol,
+                waypoint_symbol,
+                self.symbol,
                 connections,
             ),
         )
 
-    def _get_market(self, symbol, system_symbol, cur):
+    def _get_market(self, waypoint_symbol, cur):
         ret = self.request.get(
-            endpoint=f"systems/{system_symbol}/waypoints/{symbol}/market",
+            endpoint=f"systems/{self.symbol}/waypoints/{waypoint_symbol}/market",
             priority=self.priority,
             token=self.token,
         )["data"]
@@ -195,17 +179,17 @@ class System:
             ON CONFLICT ("symbol") DO NOTHING
             """,
             (
-                symbol,
-                system_symbol,
+                waypoint_symbol,
+                self.symbol,
                 [good["symbol"] for good in ret["imports"]],
                 [good["symbol"] for good in ret["exports"]],
                 [good["symbol"] for good in ret["exchange"]],
             ),
         )
 
-    def _get_shipyard(self, symbol, system_symbol, cur):
+    def _get_shipyard(self, waypoint_symbol, cur):
         ret = self.request.get(
-            endpoint=f"systems/{system_symbol}/waypoints/{symbol}/shipyard",
+            endpoint=f"systems/{self.symbol}/waypoints/{waypoint_symbol}/shipyard",
             priority=self.priority,
             token=self.token,
         )["data"]
@@ -217,8 +201,8 @@ class System:
             ON CONFLICT ("symbol") DO NOTHING
             """,
             (
-                symbol,
-                system_symbol,
+                waypoint_symbol,
+                self.symbol,
                 [ship["type"] for ship in ret["shipTypes"]],
                 ret["modificationsFee"],
             ),
@@ -245,100 +229,136 @@ class System:
             return val
 
         # if the attribute is None/empty, check if it is a lazy attribute
-        if name == "gate":
-            with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-                with conn.cursor() as cur:
-                    ret = cur.execute(
-                        """
-                        SELECT * 
-                        FROM "waypoints"
-                        WHERE "systemSymbol" = %s 
-                        AND "type" = %s
-                        ORDER BY "symbol"
-                        """,
-                        (self.symbol, "JUMP_GATE"),
-                    ).fetchone()
-            if ret is None:
-                val = None
-                logger.warning(f"System {self.symbol} has no JUMP-GATE!")
-            elif ret["traits"] == ["UNCHARTED"]:
-                val = {
-                    "symbol": ret["symbol"],
-                    "systemSymbol": ret["systemSymbol"],
-                    "connections": None,
-                }
-                logger.warning(f"System {self.symbol} JUMP-GATE is UNCHARTED!")
-            else:
-                val = cur.execute(
-                    """
-                    SELECT * 
-                    FROM "jump_gates"
-                    WHERE "systemSymbol" = %s 
-                    """,
-                    (self.symbol,),
-                ).fetchone()
-            setattr(self, name, val)
+        match name:
+            case "waypoints":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+                    with conn.cursor() as cur:
+                        # ensure waypoints are in the database
+                        query = "SELECT * FROM systems WHERE symbol = %s"
+                        params = [self.symbol]
+                        data = cur.execute(query, params).fetchone()
+                        if data is None:
+                            self._get_system(cur)
 
-        elif name == "shipyards":
-            with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-                with conn.cursor() as cur:
-                    ret = cur.execute(
-                        """
-                        SELECT * 
-                        FROM "shipyards"
-                        WHERE "systemSymbol" = %s 
-                        ORDER BY "symbol"
-                        """,
-                        (self.symbol,),
-                    ).fetchall()
-            if ret:
-                val = {wp["symbol"]: wp for wp in ret}
-            else:
+                        # ensure waypoint details are in the database
+                        query = 'SELECT * FROM waypoints WHERE "systemSymbol" = %s  ORDER BY symbol'
+                        data = cur.execute(query, params).fetchall()
+                        if None in [wp.get("traits") for wp in data]:
+                            self._get_waypoints(cur)
+                            data = cur.execute(query, params).fetchall()
                 val = {}
-                logger.warning(f"System {self.symbol} has no SHIPYARD!")
-            setattr(self, name, val)
+                for wp in data:
+                    val[wp["symbol"]] = wp
+                setattr(self, name, val)
 
-        elif name == "markets":
-            with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-                with conn.cursor() as cur:
-                    ret = cur.execute(
-                        """
-                        SELECT * 
-                        FROM "markets"
-                        WHERE "systemSymbol" = %s 
-                        ORDER BY "symbol"
-                        """,
-                        (self.symbol,),
-                    ).fetchall()
-            if ret:
-                val = {wp["symbol"]: wp for wp in ret}
-            else:
-                val = {}
-                logger.warning(f"System {self.symbol} has no MARKET!")
-            setattr(self, name, val)
+            case "gate":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+                    with conn.cursor() as cur:
+                        ret = cur.execute(
+                            """
+                            SELECT * 
+                            FROM "waypoints"
+                            WHERE "systemSymbol" = %s 
+                            AND "type" = %s
+                            ORDER BY "symbol"
+                            """,
+                            (self.symbol, "JUMP_GATE"),
+                        ).fetchone()
+                        if ret is None:
+                            val = None
+                            logger.warning(f"System {self.symbol} has no JUMP-GATE!")
+                        elif ret["traits"] == ["UNCHARTED"]:
+                            val = {
+                                "symbol": ret["symbol"],
+                                "systemSymbol": ret["systemSymbol"],
+                                "connections": None,
+                            }
+                            logger.warning(
+                                f"System {self.symbol} JUMP-GATE is UNCHARTED!"
+                            )
+                        else:
+                            val = cur.execute(
+                                """
+                                SELECT * 
+                                FROM "jump_gates"
+                                WHERE "systemSymbol" = %s 
+                                """,
+                                (self.symbol,),
+                            ).fetchone()
+                setattr(self, name, val)
 
-        elif name == "uncharted":
-            with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-                with conn.cursor() as cur:
-                    ret = cur.execute(
-                        """
-                        SELECT * 
-                        FROM "waypoints"
-                        WHERE "systemSymbol" = %s 
-                        AND %s = ANY(traits)
-                        ORDER BY "symbol"
-                        """,
-                        (self.symbol, "UNCHARTED"),
-                    ).fetchone()
-            if ret:
-                val = {wp["symbol"]: wp for wp in ret}
-            else:
-                val = {}
-            setattr(self, name, val)
+            case "shipyards":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+                    with conn.cursor() as cur:
+                        ret = cur.execute(
+                            """
+                            SELECT * 
+                            FROM "shipyards"
+                            WHERE "systemSymbol" = %s 
+                            ORDER BY "symbol"
+                            """,
+                            (self.symbol,),
+                        ).fetchall()
+                if ret:
+                    val = {wp["symbol"]: wp for wp in ret}
+                else:
+                    val = {}
+                    logger.warning(f"System {self.symbol} has no SHIPYARD!")
+                setattr(self, name, val)
 
-        elif name == "graph":
-            val = self._get_graph()
-            setattr(self, name, val)
+            case "markets":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+                    with conn.cursor() as cur:
+                        ret = cur.execute(
+                            """
+                            SELECT * 
+                            FROM "markets"
+                            WHERE "systemSymbol" = %s 
+                            ORDER BY "symbol"
+                            """,
+                            (self.symbol,),
+                        ).fetchall()
+                if ret:
+                    val = {wp["symbol"]: wp for wp in ret}
+                else:
+                    val = {}
+                    logger.warning(f"System {self.symbol} has no MARKET!")
+                setattr(self, name, val)
+
+            case "uncharted":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+                    with conn.cursor() as cur:
+                        ret = cur.execute(
+                            """
+                            SELECT * 
+                            FROM "waypoints"
+                            WHERE "systemSymbol" = %s 
+                            AND %s = ANY(traits)
+                            ORDER BY "symbol"
+                            """,
+                            (self.symbol, "UNCHARTED"),
+                        ).fetchone()
+                if ret:
+                    val = {wp["symbol"]: wp for wp in ret}
+                else:
+                    val = {}
+                setattr(self, name, val)
+
+            case "graph":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                val = self._get_graph()
+                setattr(self, name, val)
 
         return val
 
