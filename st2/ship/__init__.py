@@ -122,6 +122,7 @@ class Ship(dict):
                     )
 
                 for event in data.get("events", []):
+                    # TODO: use self.refresh() to get the condition after?
                     activity = None
                     if "fuel" in data:
                         activity = "navigate"

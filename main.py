@@ -33,7 +33,7 @@ if __name__ == "__main__":
     astronomer(request, priority=0, token=token)
     cartographer(request, priority=0, token=token, chart="start systems")
 
-    # # (Re)start start systen probing
+    # # (Re)start the start system probing
     # from st2.spies import spymaster
     #
     # spymaster(request, priority=3)

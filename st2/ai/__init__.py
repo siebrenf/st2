@@ -207,7 +207,7 @@ class TaskMaster:
                     waypoint_symbol=task[2],
                     is_shipyard=is_shipyard,
                     qa_pairs=self.qa_pairs,
-                    verbose=False,
+                    verbose=True,  # TODO: remove
                 )
 
             case "seed":
