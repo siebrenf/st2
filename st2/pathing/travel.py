@@ -37,11 +37,11 @@ async def travel(
         path, edges = get_path(ship, destination, fuel_stops, system)
         for i, waypoint_symbol in enumerate(path):
             if waypoint_symbol != ship["nav"]["waypointSymbol"]:
+                ship.nav_patch(edges["modes"][i - 1])
                 ship.navigate(waypoint_symbol, verbose)
             await sleep(ship.nav_remaining())
             if waypoint_symbol in fuel_stops:
                 ship.refuel()
-            ship.nav_patch(edges["modes"][i])
             if explore:
                 if waypoint_symbol in system.shipyards:
                     ship.shipyard()
