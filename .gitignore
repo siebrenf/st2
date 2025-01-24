@@ -1,6 +1,7 @@
 # dev files
 dependency_graph.png
 log*.txt
+st2/ui/*.html
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
