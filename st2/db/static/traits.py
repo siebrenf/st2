@@ -400,9 +400,17 @@ TRAITS_FACTION = {
     },
     "DOMINANT": None,
     "DOMINION": None,
-    "ENTREPRENEURIAL": None,
+    "ENTREPRENEURIAL": {
+        "symbol": "ENTREPRENEURIAL",
+        "name": "Entrepreneurial",
+        "description": "Innovative and forward-thinking, with a focus on identifying and pursuing new opportunities. Sometimes willing to take risks in order to create new businesses or ventures, but may also be vulnerable to failure or exploitation.",
+    },
     "ESTABLISHED": None,
-    "EXILES": None,
+    "EXILES": {
+        "symbol": "EXILES",
+        "name": "Exiles",
+        "description": "Forced or compelled to leave their home or native land. Sometimes outcasts or refugees, and may have limited support or resources. Sometimes able to leverage their isolation and independence to achieve their goals.",
+    },
     "EXPLORATORY": {
         "symbol": "EXPLORATORY",
         "name": "Exploratory",
@@ -419,8 +427,16 @@ TRAITS_FACTION = {
         "description": "Able to adapt to changing circumstances and environments. Sometimes able to quickly switch between different strategies and tactics in order to respond to new challenges or opportunities. Sometimes able to improvise and think on their feet, making them difficult to predict or outmaneuver.",
     },
     "FORSAKEN": None,
-    "FRAGMENTED": None,
-    "FREE_MARKETS": None,
+    "FRAGMENTED": {
+        "symbol": "FRAGMENTED",
+        "name": "Fragmented",
+        "description": "Divided into many smaller groups or factions, with little central organization or coordination. Sometimes difficult to negotiate with or deal with as a single entity, but may also provide opportunities for individual factions to forge their own alliances or partnerships.",
+    },
+    "FREE_MARKETS": {
+        "symbol": "FREE_MARKETS",
+        "name": "Free Markets",
+        "description": "Advocates of free market principles, with a strong emphasis on competition and the ability of individuals and businesses to succeed or fail based on their own efforts. Sometimes willing to engage in risky or unregulated activities in pursuit of profit.",
+    },
     "FRINGE": None,
     "GUILD": None,
     "IMPERIALISTIC": {
@@ -428,7 +444,11 @@ TRAITS_FACTION = {
         "name": "Imperialistic",
         "description": "Dedicated to expanding their territory and influence. Often seek to conquer or subjugate other factions, and may have a hierarchical and authoritarian structure. Often prioritize the interests of their own faction over the needs of others.",
     },
-    "INDEPENDENT": None,
+    "INDEPENDENT": {
+        "symbol": "INDEPENDENT",
+        "name": "Independent",
+        "description": "Self-reliant and self-sufficient, with a strong desire for autonomy and independence. Sometimes resistant to external control or interference, but may also be isolated or vulnerable to external threats.",
+    },
     "INDUSTRIOUS": {
         "symbol": "INDUSTRIOUS",
         "name": "Industrious",
@@ -445,7 +465,11 @@ TRAITS_FACTION = {
         "name": "Intelligent",
         "description": "Possessing a high level of intelligence and analytical ability. Sometimes skilled in a wide range of fields, including science, technology, and engineering. Often have a strong curiosity and a desire to understand the mysteries of the universe.",
     },
-    "ISOLATED": None,
+    "ISOLATED": {
+        "symbol": "ISOLATED",
+        "name": "Isolated",
+        "description": "Separated or cut off from others. Sometimes located in a remote or inaccessible location, and may have limited contact with the outside world. Sometimes self-sufficient and self-reliant, and may be able to survive and thrive in challenging or hostile environments. Sometimes able to leverage their isolation and independence to achieve their goals.",
+    },
     "LOCALIZED": None,
     "MILITARISTIC": {
         "symbol": "MILITARISTIC",
@@ -470,7 +494,11 @@ TRAITS_FACTION = {
         "description": "Proud of their heritage, culture, or achievements, with a strong sense of identity and self-respect. Sometimes resistant to change or outside influence, and may be willing to defend their beliefs or values against challenges or threats.",
     },
     "RAIDERS": None,
-    "REBELLIOUS": None,
+    "REBELLIOUS": {
+        "symbol": "REBELLIOUS",
+        "name": "Rebellious",
+        "description": "Resistant to authority or control. Sometimes willing to challenge or defy established rules or norms, and may be seen as rebels or outsiders by others. Sometimes able to leverage their independence and defiance to achieve their goals.",
+    },
     "RESEARCH_FOCUSED": {
         "symbol": "RESEARCH_FOCUSED",
         "name": "Research-Focused",
@@ -491,7 +519,11 @@ TRAITS_FACTION = {
         "name": "Secretive",
         "description": "Guarded and secretive, with a tendency to keep their plans and activities hidden from others. Sometimes difficult to negotiate with or trust, but often have valuable information or resources that they are willing to share with the right partners.",
     },
-    "SELF_INTERESTED": None,
+    "SELF_INTERESTED": {
+        "symbol": "SELF_INTERESTED",
+        "name": "Self-Interested",
+        "description": "Focused on their own interests, with a tendency to prioritize their own goals and needs over those of others. Sometimes willing to engage in selfish or unethical behavior in pursuit of their goals, but may also be vulnerable to manipulation or betrayal by others.",
+    },
     "SELF_SUFFICIENT": {
         "symbol": "SELF_SUFFICIENT",
         "name": "Self-Sufficient",
@@ -507,7 +539,11 @@ TRAITS_FACTION = {
         "name": "Strategic",
         "description": "Skilled in the art of strategy and planning. Sometimes able to think ahead and anticipate the actions of others, and may be able to develop effective plans to achieve their goals. Sometimes able to make calculated risks and sacrifices in order to gain a strategic advantage.",
     },
-    "TECHNOLOGICALLY_ADVANCED": None,
+    "TECHNOLOGICALLY_ADVANCED": {
+        "symbol": "TECHNOLOGICALLY_ADVANCED",
+        "name": "Technologically Advanced",
+        "description": "Possessing advanced technology and knowledge, often far beyond the level of other factions. Often have access to powerful weapons, ships, and other technology that gives them a significant advantage in battles and other conflicts.",
+    },
     "TREASURE_HUNTERS": {
         "symbol": "TREASURE_HUNTERS",
         "name": "Treasure Hunters",

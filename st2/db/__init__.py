@@ -211,6 +211,11 @@ def db_tables_init():
                 """
             )
             # modifiers JSONB, always empty
+            cur.execute(
+                """
+                CREATE INDEX idx_system_symbol_waypoints ON waypoints("systemSymbol")
+                """
+            )
 
         if "traits_waypoint" not in tables:
             cur.execute(
@@ -262,6 +267,11 @@ def db_tables_init():
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE INDEX idx_system_symbol_jump_gates ON jump_gates("systemSymbol")
+                """
+            )
 
         if "markets" not in tables:
             cur.execute(
@@ -274,6 +284,11 @@ def db_tables_init():
                     "exports" text[],
                     "exchange" text[]
                 )
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX idx_system_symbol_markets ON markets("systemSymbol")
                 """
             )
 
@@ -295,6 +310,11 @@ def db_tables_init():
                     "timestamp" timestamptz,
                     PRIMARY KEY ("waypointSymbol", "timestamp")
                 )
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX idx_system_symbol_market_transactions ON market_transactions("systemSymbol")
                 """
             )
             #  PARTITION BY LIST ("waypointSymbol")
@@ -321,6 +341,11 @@ def db_tables_init():
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE INDEX idx_system_symbol_market_tradegoods ON market_tradegoods("systemSymbol")
+                """
+            )
             #  PARTITION BY LIST ("waypointSymbol")
 
         if "shipyards" not in tables:
@@ -333,6 +358,11 @@ def db_tables_init():
                     "shipTypes" text[],
                     "modificationsFee" integer
                 )
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX idx_system_symbol_shipyards ON shipyards("systemSymbol")
                 """
             )
 
@@ -355,6 +385,11 @@ def db_tables_init():
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE INDEX idx_system_symbol_shipyard_transactions ON shipyard_transactions("systemSymbol")
+                """
+            )
             #  PARTITION BY LIST ("waypointSymbol")
 
         if "shipyard_ships" not in tables:
@@ -374,6 +409,11 @@ def db_tables_init():
                     "timestamp" timestamptz,
                     PRIMARY KEY ("waypointSymbol", "type", "timestamp")
                 )
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX idx_system_symbol_shipyard_ships ON shipyard_ships("systemSymbol")
                 """
             )
             # PARTITION BY LIST ("waypointSymbol")
