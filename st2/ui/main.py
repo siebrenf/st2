@@ -1,3 +1,8 @@
+"""
+https://docs.bokeh.org/en/latest/docs/gallery.html
+https://docs.bokeh.org/en/latest/docs/user_guide/server/app.html#building-applications
+"""
+
 import os
 import sys
 
