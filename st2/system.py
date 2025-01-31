@@ -27,18 +27,18 @@ class System:
     uncharted: dict = None
     graph: nx.Graph = None
 
-    def __init__(self, symbol, request, token=None, priority=None):
+    def __init__(self, symbol, request=None, token=None, priority=None):
         self.symbol = symbol
         self.request = request
         if priority:
             self.priority = priority
-        else:
+        elif hasattr(self.request, "priority"):
             self.priority = self.request.priority
         if token:
             self.token = token
-        elif self.request.token:
+        elif hasattr(self.request, "token") and self.request.token:
             self.token = self.request.token
-        else:
+        elif self.request:
             self.token = api_agent(request, self.priority)[1]
 
     def _get_system(self, cur):
@@ -90,6 +90,11 @@ class System:
         """
         Add the extended details of all waypoints to the database
         """
+        if self.request is None:
+            raise ValueError(
+                f"System {self.symbol} is uncatalogued and "
+                "requires a Request instance to proceed!"
+            )
         for ret in self.request.get_all(
             endpoint=f"systems/{self.symbol}/waypoints",
             priority=self.priority,
