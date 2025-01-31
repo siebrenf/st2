@@ -1,6 +1,7 @@
 from asyncio import sleep
 
 from st2.logging import logger
+from st2.pathing.travel import travel
 from st2.ship import Ship
 
 
@@ -17,10 +18,7 @@ async def ai_probe_waypoint(
     ship.refresh()
 
     # navigate to the waypoint
-    if ship["nav"]["waypointSymbol"] != waypoint_symbol:
-        ship.navigate(waypoint_symbol, verbose=verbose)
-    if t := ship.nav_remaining():
-        await sleep(t)
+    await travel(ship, waypoint_symbol, verbose=verbose)
 
     # start probing
     if verbose:

@@ -15,7 +15,7 @@ def taskmaster(*args, **kwargs):
     t.run()
 
 
-DEBUG = False
+DEBUG = True
 
 
 class TaskMaster:
@@ -138,9 +138,14 @@ class TaskMaster:
                             commit = True
 
                         if self.done(ship_symbol):
+                            if DEBUG:
+                                logger.debug(
+                                    f"{ship_symbol} stopped task '{current_task}'"
+                                )
                             ret = self.get(ship_symbol)
                             if ret:
-                                print(ret)  # TODO: do we need the coroutine result?
+                                # TODO: do we need the coroutine result?
+                                logger.debug(ret)
                             current_task = None
                             cur.execute(
                                 """

@@ -9,6 +9,8 @@ from st2.pathing.utils import nav_score
 from st2.ship import Ship, buy_ship
 from st2.system import System
 
+DEBUG = True
+
 
 @logger.catch  # catch errors in a separate thread
 async def ai_seed_system(
@@ -31,7 +33,7 @@ async def ai_seed_system(
     if len(shipyards) == 0:
         raise NotImplementedError(f"System {system_symbol} does not sell probes!")
     if None not in list(markets.values()) + list(shipyards.values()):
-        return stop_task(ship_symbol)
+        return  # stop_task(ship_symbol)
 
     if verbose:
         logger.info(f"{ship.name()} begun seeding system {system_symbol}")
@@ -55,6 +57,7 @@ async def ai_seed_system(
                     shipyards[waypoint_symbol] = probe_symbol
                 else:
                     markets[waypoint_symbol] = probe_symbol
+    shipyards, markets = assign_unused_probes(ship, shipyards, markets, pname)
 
     # seed each shipyard
     wp_type = "shipyard"
@@ -90,7 +93,7 @@ async def ai_seed_system(
     # seed each market
     wp_type = "market"
     waypoints = [wp for (wp, probe) in markets.items() if probe is None]
-    for waypoint_symbol in waypoints:
+    for waypoint_symbol in waypoints[:-1]:
         # select the shipyard to purchase a probe from
         shipyard_symbol = select_shipyard(waypoint_symbol, system)
 
@@ -105,7 +108,13 @@ async def ai_seed_system(
             )
         except GameError as e:
             if "Agent has insufficient funds." in str(e):
-                return stop_task(ship_symbol)
+                if DEBUG:
+                    i = len(markets) + len(shipyards)
+                    j = len(waypoints) - waypoints.index(waypoint_symbol) - 1
+                    logger.debug(
+                        f"System {system_symbol} (agent {ship['agentSymbol']}) is missing {j}/{i} probes"
+                    )
+                return  # stop_task(ship_symbol)
             raise e
         ship.shipyard()
         task = f"probe {wp_type} {waypoint_symbol}"
@@ -122,10 +131,30 @@ async def ai_seed_system(
                 )
         markets[waypoint_symbol] = probe_symbol
 
+    # seed the last market with the frigate
+    #  this prevents this task from being restarted
+    waypoint_symbol = waypoints[-1]
+    task = f"probe {wp_type} {waypoint_symbol}"
+    with connect("dbname=st2 user=postgres") as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE tasks
+                SET queued = %s,
+                    pname = %s
+                WHERE "symbol" = %s
+                """,
+                [task, pname, ship_symbol],
+            )
+    markets[waypoint_symbol] = ship_symbol
+
     # done
     if verbose:
-        logger.info(f"{ship.name()} completed seeding system {system_symbol}!")
-    stop_task(ship_symbol)
+        i = len(markets) + len(shipyards)
+        logger.info(
+            f"{ship.name()} completed seeding {i} waypoints in system {system_symbol}!"
+        )
+    # stop_task(ship_symbol)
 
 
 def select_shipyard(waypoint_symbol, system):
@@ -145,17 +174,70 @@ def select_shipyard(waypoint_symbol, system):
     return shipyard_symbol
 
 
-def stop_task(ship_symbol):
-    """
-    Remove this current task from the task table.
-    """
+# def stop_task(ship_symbol):
+#     """
+#     Remove this current task from the task table.
+#     """
+#     with connect("dbname=st2 user=postgres") as conn:
+#         with conn.cursor() as cur:
+#             cur.execute(
+#                 """
+#                 UPDATE tasks
+#                 SET current = %s
+#                 WHERE "symbol" = %s
+#                 """,
+#                 [None, ship_symbol],
+#             )
+
+
+def assign_unused_probes(ship, shipyards, markets, pname):
+    ships = (
+        [ship["symbol"]]
+        + [p for p in shipyards.values()]
+        + [p for p in markets.values()]
+    )
+    waypoints = [wp for (wp, probe) in shipyards.items() if probe is None]
+    waypoints += [wp for (wp, probe) in markets.items() if probe is None]
     with connect("dbname=st2 user=postgres") as conn:
         with conn.cursor() as cur:
+            # load probe overview
             cur.execute(
                 """
-                UPDATE tasks
-                SET current = %s
-                WHERE "symbol" = %s
+                SELECT symbol
+                FROM ships
+                WHERE "agentSymbol" = %s
                 """,
-                [None, ship_symbol],
+                [ship["agentSymbol"]],
             )
+            for row in cur.fetchall():
+                probe_symbol = row[0]
+                if probe_symbol in ships:
+                    continue
+                waypoint_symbol = waypoints.pop(0)
+                wp_type = "shipyard" if waypoint_symbol in shipyards else "market"
+                task = f"probe {wp_type} {waypoint_symbol}"
+                logger.debug(
+                    f"unused probe {probe_symbol} assigned to {wp_type} {waypoint_symbol}"
+                )
+                cur.execute(
+                    """
+                    INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT ("symbol") DO NOTHING
+                    """,
+                    (probe_symbol, ship["agentSymbol"], None, None, False, None, None),
+                )
+                cur.execute(
+                    """
+                    UPDATE tasks
+                    SET "current" = %s,
+                        "pname" = %s
+                    WHERE "symbol" = %s
+                    """,
+                    [task, pname, probe_symbol],
+                )
+                if wp_type == "shipyard":
+                    shipyards[waypoint_symbol] = probe_symbol
+                else:
+                    markets[waypoint_symbol] = probe_symbol
+    return shipyards, markets
