@@ -18,44 +18,86 @@ def db_server_path():
     return db
 
 
-def db_server_init():
-    db = os.path.join(cache["data_dir"], f"sql")
+def db_server_logfile():
     log = os.path.join(cache["log_dir"], f"sql.txt")
+    return log
+
+
+def db_server_create(db=None, log=None):
+    """make the database"""
+    if db is None:
+        db = db_server_path()
+    if log is None:
+        log = db_server_logfile()
+    if not os.path.exists(cache["data_dir"]):
+        os.makedirs(cache["data_dir"])
+    if not os.path.exists(cache["log_dir"]):
+        os.makedirs(cache["log_dir"])
+    sp.run(
+        f"initdb -D {db} --username=postgres",
+        shell=True,
+        check=True,
+        capture_output=True,
+    )
+    # start the server in order to create the database
+    sp.run(
+        f"pg_ctl -D {db} -l {log} start", shell=True, check=True, capture_output=True
+    )
+    sp.run(
+        f"createdb --no-password --owner=postgres --user=postgres st2",
+        shell=True,
+        check=True,
+        capture_output=True,
+    )
+    sp.run(f"pg_ctl -D {db} stop", shell=True, check=True, capture_output=True)
+
+
+def db_server_status(db=None):
+    """check if the SQL server is running"""
+    if db is None:
+        db = db_server_path()
+    # check=False because an offline server returns exit code 3
+    ret = sp.run(f"pg_ctl -D {db} status", shell=True, check=False, capture_output=True)
+    if ret.returncode == 0:
+        running = True
+    elif ret.returncode == 3:
+        running = False
+    else:
+        code = ret.returncode
+        out = ret.stdout.decode().strip()
+        err = ret.stderr.decode().strip()
+        raise NotImplementedError(f"Error code: {code}, stdout: {out}, stderr: {err}")
+    return running
+
+
+def db_server_start(db=None, log=None):
+    if db is None:
+        db = db_server_path()
+    if log is None:
+        log = db_server_logfile()
+    sp.run(
+        f"pg_ctl -D {db} -l {log} start", shell=True, check=True, capture_output=True
+    )
+
+
+def db_server_stop(db=None):
+    if db is None:
+        db = db_server_path()
+    sp.run(f"pg_ctl -D {db} stop", shell=True, check=True, capture_output=True)
+
+
+def db_server_init():
+    db = db_server_path()
     if not os.path.exists(db):
-        # make the database
-        if not os.path.exists(cache["data_dir"]):
-            os.makedirs(cache["data_dir"], exist_ok=True)
-        sp.check_output(
-            f"initdb -D {db} --username=postgres", shell=True, stderr=sp.STDOUT
-        )
-        if not os.path.exists(cache["log_dir"]):
-            os.makedirs(cache["log_dir"], exist_ok=True)
-        sp.check_output(f"pg_ctl -D {db} -l {log} start", shell=True, stderr=sp.STDOUT)
-        sp.check_output(
-            f"createdb --no-password --owner=postgres --user=postgres st2",
-            shell=True,
-            stderr=sp.STDOUT,
-        )
-        sp.check_output(f"pg_ctl -D {db} stop", shell=True)
+        db_server_create(db)
 
     # check if the SQL server is running
-    try:
-        running = bool(sp.check_output(f"pg_ctl -D {db} status", shell=True))
-    except sp.CalledProcessError as e:
-        if str(e).endswith("exit status 3."):
-            running = False
-        else:
-            raise e
-
+    running = db_server_status(db)
     if not running:
-        # start the database
-        sp.check_output(f"pg_ctl -D {db} -l {log} start", shell=True)
+        db_server_start(db)
 
-        def stop_sql_server():
-            sp.check_output(f"pg_ctl -D {db} stop", shell=True)
-
-        # stop the sql_server when we stop
-        atexit.register(stop_sql_server)
+        # stop the SQL server when this session ends
+        atexit.register(db_server_stop, db)
 
 
 def db_tables_init():
