@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pandas as pd
 from bokeh.layouts import column
@@ -36,12 +38,23 @@ def sector_df():
     query = f"""
             SELECT 
                 s.*, 
+                n.*,
                 w.*
             FROM systems AS s
             LEFT JOIN (
                 SELECT 
                     "systemSymbol",
                     STRING_AGG(DISTINCT faction, ', ') AS faction,
+                    COUNT(*) AS total_waypoints
+                FROM 
+                    waypoints
+                GROUP BY 
+                    "systemSymbol"
+            ) AS n
+            ON s.symbol = n."systemSymbol"
+            LEFT JOIN (
+                SELECT 
+                    "systemSymbol",
                     COUNT(CASE WHEN trait = 'MARKETPLACE' THEN 1 END) AS marketplaces,
                     COUNT(CASE WHEN trait = 'SHIPYARD' THEN 1 END) AS shipyards,
                     COUNT(CASE WHEN trait = 'UNCHARTED' THEN 1 END) AS uncharted,
@@ -55,8 +68,7 @@ def sector_df():
                     "systemSymbol"
             ) AS w
             ON s.symbol = w."systemSymbol"
-            ORDER BY 
-                "systemSymbol"
+            ORDER BY s.symbol
             """
     with connect("dbname=st2 user=postgres") as conn:
         with conn.cursor() as cur:
@@ -70,8 +82,10 @@ def sector_df():
             "type",
             "x",
             "y",
-            "_",
+            "_1",
             "faction",
+            "total_waypoints",
+            "_2",
             "marketplaces",
             "shipyards",
             "uncharted",
@@ -84,7 +98,8 @@ def sector_df():
         ],
     )
     df.set_index("symbol", inplace=True)
-    df.drop(columns="_", inplace=True)
+    df.drop(columns=["_1", "_2"], inplace=True)
+    df["total_waypoints"] = df["total_waypoints"].fillna(0)
     for col in [
         "type",
         "faction",
@@ -451,13 +466,11 @@ def plot_markets(goods: str or list, systems: str or list):
     tradegoods, transactions = trade_dfs(goods, systems)
     if len(tradegoods) == 0:
         return column(Div(text=f"{goods} not observed in {systems}."))
-    if isinstance(goods, str):
-        goods = [goods]
 
     # main figure
     end = tradegoods["timestamp"][len(tradegoods) - 1]
     start = end - np.timedelta64(1, "D")
-    width = 1400
+    width = 1700
     p = figure(
         height=300,
         width=width,
@@ -577,8 +590,17 @@ def plot_markets(goods: str or list, systems: str or list):
                 key = f'{wp: <10} {good} {tg["type"].head(1).to_list()[0]}'
                 legend_text[key] = []
 
+    # legend title
+    if isinstance(goods, str):
+        goods = [goods]
+    if isinstance(systems, str):
+        systems = [systems]
+    title = f"{', '.join(goods)} @ {', '.join(systems)}"
+    # legend width
+    n_wps = len(legend_plots["purchasePrice"])
+    n_cols = 1 + math.ceil((n_wps - 5) / 10)
     legend = Legend(
-        title=f"{', '.join(goods)} @ {', '.join(systems)}",
+        title=title,
         items=[i for i in legend_plots.items()]
         + [i for i in hover_plots.items()]
         + [i for i in legend_text.items()],
@@ -587,6 +609,7 @@ def plot_markets(goods: str or list, systems: str or list):
         label_text_font="Courier New",
         title_text_font_size="8pt",
         label_text_font_size="8pt",
+        ncols=n_cols,
     )
     p.add_layout(legend, "right")
 
@@ -626,3 +649,27 @@ def plot_markets(goods: str or list, systems: str or list):
         ),
     )
     return column(p, select)
+
+
+def system_tradegoods(system_symbol):
+    query = """
+        WITH
+        system_markets AS (
+            SELECT *
+            FROM markets
+            WHERE "systemSymbol" = %s
+        )
+        SELECT DISTINCT value
+        FROM (
+            SELECT unnest("imports") AS value FROM system_markets
+            UNION ALL
+            SELECT unnest("exports") AS value FROM system_markets
+            UNION ALL
+            SELECT unnest("exchange") AS value FROM system_markets
+        )
+    """
+    params = [system_symbol]
+    with connect("dbname=st2 user=postgres") as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return sorted(row[0] for row in cur.fetchall())

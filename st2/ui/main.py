@@ -14,6 +14,7 @@ from bokeh.models import (
     ColumnDataSource,
     Div,
     Legend,
+    MultiSelect,
     RangeSlider,
     Select,
     TapTool,
@@ -23,7 +24,14 @@ from bokeh.plotting import curdoc, figure
 pkg = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.extend([pkg])
 from st2.startup import db_server
-from st2.ui.utils import connection_graph, hq_df, sector_df, system_df
+from st2.ui.utils import (
+    connection_graph,
+    hq_df,
+    plot_markets,
+    sector_df,
+    system_df,
+    system_tradegoods,
+)
 
 db_server()
 
@@ -31,6 +39,7 @@ df = sector_df()
 hqs = hq_df()
 graph = connection_graph()
 sources = []
+SYSTEM_SYMBOL = None
 
 
 def sector_figure():
@@ -164,9 +173,26 @@ def tapfunc():
         return symbol
 
     system_symbol = selected_system_symbol()
-    plot = system_figure(system_symbol)
-    if plot:
+    if system_symbol:
+        global SYSTEM_SYMBOL
+        SYSTEM_SYMBOL = system_symbol
+
+        plot = system_figure(system_symbol)
         layout.children[0].children[1].children[0] = plot
+
+        tradegoods = system_tradegoods(system_symbol)
+        tradegoods_select = MultiSelect(
+            options=tradegoods,
+        )
+        layout.children[0].children[1].children[1].children[1].children[
+            1
+        ] = tradegoods_select
+        tradegoods_select.on_change("value", update_market_figure)
+
+
+def update_market_figure(attr, old, new):
+    """plot the market trends for the new tradeGood"""
+    layout.children[1] = plot_markets(new, SYSTEM_SYMBOL)
 
 
 def update_sector_figure(attr, old, new):
@@ -313,6 +339,7 @@ SECTOR_TOOLTIPS = [
     ("symbol", "@symbol"),
     ("type", "@type"),
     ("faction", "@faction"),
+    ("total waypoints", "@total_waypoints"),
     ("marketplaces", "@marketplaces"),
     ("shipyards", "@shipyards"),
     ("uncharted", "@uncharted"),
@@ -404,15 +431,30 @@ controls_sector_figure = column(
 )
 controls_system_figure = column(
     Div(text="System controls"),
+    # placeholder
+    MultiSelect(options=[]),
     width=220,
 )
 controls = row(
-    controls_sector_figure, controls_system_figure, align="center"
-)  # width=400,
-top_right = column(figure(width=700, height=500), controls)
+    controls_sector_figure,
+    controls_system_figure,
+    align="center",
+    # width=400,
+)
+top_right = column(
+    # placeholder
+    figure(width=700, height=500),
+    controls,
+)
 
 top = row(top_left, top_right)
-bottom = row()
+bottom = row(
+    # placeholder
+    column(
+        Div(text="System markets"),
+        Div(text="Datetime range selection"),
+    )
+)
 
 layout = column(top, bottom)
 
