@@ -142,7 +142,7 @@ def db_tables_init():
                     "accountId" text,
                     "symbol" text,
                     "headquarters" text,
-                    "credits" integer,
+                    "credits" bigint,
                     "startingFaction" text,
                     "shipCount" integer,
                     "timestamp" timestamptz
