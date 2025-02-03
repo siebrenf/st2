@@ -396,8 +396,7 @@ class System:
 
         return wps
 
-    @staticmethod
-    def trade_goods(type: str = None):
+    def trade_goods(self, type: str = None):
         """
         List of tradeGoods from the specified type of trade
 
@@ -405,44 +404,47 @@ class System:
         :return: List of tradeGoods
         """
         query = """
-            SELECT DISTINCT value
-            FROM (
-            """
+        WITH
+        system_markets AS (
+            SELECT *
+            FROM markets
+            WHERE "systemSymbol" = %s
+        )
+        """
+        params = [self.symbol]
         if isinstance(type, str):
             type = type.lower()
         match type:
-            case "imports":
-                query += """SELECT unnest("imports") AS value FROM markets"""
-            case "exports":
-                query += """SELECT unnest("exports") AS value FROM markets"""
-            case "exchange":
-                query += """SELECT unnest("exchange") AS value FROM markets"""
-            case "buys":
-                query += """
-                SELECT unnest("imports") AS value FROM markets
-                UNION
-                SELECT unnest("exchange") AS value FROM markets
+            case "imports" | "exports" | "exchange":
+                query += f"""
+                SELECT DISTINCT unnest("{type}") FROM system_markets
                 """
-            case "sells":
-                query += """
-                    SELECT unnest("exports") AS value FROM markets
-                    UNION
-                    SELECT unnest("exchange") AS value FROM markets
+            case "buys" | "sells":
+                port = "imports" if type == "buys" else "exports"
+                query += f"""
+                    SELECT DISTINCT value
+                    FROM (
+                        SELECT unnest("{port}") AS value FROM system_markets
+                        UNION ALL
+                        SELECT unnest("exchange") AS value FROM system_markets
+                    )
                     """
             case None:
                 query += """
-                SELECT unnest("imports") AS value FROM markets
-                UNION
-                SELECT unnest("exports") AS value FROM markets
-                UNION
-                SELECT unnest("exchange") AS value FROM markets
-                """
+                    SELECT DISTINCT value
+                    FROM (
+                        SELECT unnest("imports") AS value FROM system_markets
+                        UNION ALL
+                        SELECT unnest("exports") AS value FROM system_markets
+                        UNION ALL
+                        SELECT unnest("exchange") AS value FROM system_markets
+                    )
+                    """
             case "_":
                 raise ValueError(f"{type=} not recognized")
-        query += """\n) AS all_values"""
         with connect("dbname=st2 user=postgres") as conn:
             with conn.cursor() as cur:
-                cur.execute(query)
+                cur.execute(query, params)
                 return sorted(row[0] for row in cur.fetchall())
 
     def markets_with(self, symbol: str, type: str = None):
