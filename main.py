@@ -32,11 +32,13 @@ if __name__ == "__main__":
     db_update_factions(request, priority=0, token=token)
     astronomer(request, priority=0, token=token)
     cartographer(request, priority=0, token=token, chart="start systems")
+    cartographer(request, priority=0, token=token, chart="gate systems")
 
-    # # (Re)start the start system probing
-    # from st2.spies import spymaster
-    #
-    # spymaster(request, priority=3)
+    # (Re)start the start system probing
+    from st2.spies import spymaster, detective
+
+    detective(request, priority=3)
+    spymaster(request, priority=3)
 
     # start the probing process
     import multiprocessing as mp
