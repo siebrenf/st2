@@ -20,9 +20,36 @@ pd.set_option("future.no_silent_downcasting", True)
 
 
 def sector_df():
-    # count the extraction-related traits in each system
     params = []
-    asteroids = ""
+
+    # count the number of asteroids
+    asteroids = """COUNT(CASE WHEN type = ANY(%s) THEN 1 END) AS asteroids,"""
+    params.append(["ASTEROID", "ASTEROID_FIELD", "ENGINEERED_ASTEROID"])
+
+    # count the number of potential markets in each system
+    points_of_interest = (
+        "COUNT(CASE WHEN type = ANY(%s) THEN 1 END) AS points_of_interest,"
+    )
+    params.append(
+        [
+            "ARTIFICIAL_GRAVITY_WELL",
+            "ASTEROID_BASE",
+            "ENGINEERED_ASTEROID",
+            "FUEL_STATION",
+            "GRAVITY_WELL",
+            # "JUMP_GATE",
+            "MOON",
+            "ORBITAL_STATION",
+            "PLANET",
+        ]
+    )
+
+    # count the number of charted waypoints in each system
+    charted = "COUNT(CASE WHEN traits != %s THEN 1 END) AS charted, "
+    params.append(["UNCHARTED"])
+
+    # count the number of extractable deposits in each system
+    deposits = ""
     for deposit in [
         "MINERAL_DEPOSITS",
         "COMMON_METAL_DEPOSITS",
@@ -30,22 +57,55 @@ def sector_df():
         "RARE_METAL_DEPOSITS",
     ]:
         name = deposit.rsplit("_", 1)[0].lower()
-        cmd = f"COUNT(CASE WHEN type = ANY(%s) AND trait = '{deposit}' THEN 1 END) AS {name}s, "
-        asteroids += cmd
+        deposits += f"COUNT(CASE WHEN type = ANY(%s) AND trait = '{deposit}' THEN 1 END) AS {name}s, "
         params.append(["ASTEROID", "ASTEROID_FIELD", "ENGINEERED_ASTEROID"])
 
     # list faction & traits per system
     query = f"""
             SELECT 
-                s.*, 
-                n.*,
-                w.*
+                s.symbol,
+                s.type,
+                s.x,
+                s.y,
+                CASE 
+                    WHEN mg."systemSymbol" IS NOT NULL THEN TRUE
+                    ELSE FALSE
+                END AS observed,
+                n.faction,
+                n.total_waypoints,
+                n.incomplete,
+                n.asteroids,
+                n.points_of_interest,
+                n.charted,
+                n.jump_gates,
+                n.gas_giants,
+                w.minerals,
+                w.common_metals,
+                w.rare_metals,
+                w.precious_metals,
+                w.uncharted,
+                w.marketplaces,
+                w.shipyards
             FROM systems AS s
+            LEFT JOIN (
+                SELECT
+                    DISTINCT "systemSymbol" 
+                FROM 
+                    market_tradegoods
+            ) AS mg
+            ON 
+                s.symbol = mg."systemSymbol"
             LEFT JOIN (
                 SELECT 
                     "systemSymbol",
                     STRING_AGG(DISTINCT faction, ', ') AS faction,
-                    COUNT(*) AS total_waypoints
+                    COUNT(symbol) AS total_waypoints,
+                    COUNT(CASE WHEN traits IS NULL THEN 1 END) AS incomplete,
+                    {asteroids}
+                    {points_of_interest}
+                    {charted}
+                    COUNT(CASE WHEN type = 'JUMP_GATE' THEN 1 END) AS jump_gates,
+                    COUNT(CASE WHEN type = 'GAS_GIANT' THEN 1 END) AS gas_giants
                 FROM 
                     waypoints
                 GROUP BY 
@@ -55,12 +115,10 @@ def sector_df():
             LEFT JOIN (
                 SELECT 
                     "systemSymbol",
-                    COUNT(CASE WHEN trait = 'MARKETPLACE' THEN 1 END) AS marketplaces,
-                    COUNT(CASE WHEN trait = 'SHIPYARD' THEN 1 END) AS shipyards,
+                    {deposits}
                     COUNT(CASE WHEN trait = 'UNCHARTED' THEN 1 END) AS uncharted,
-                    COUNT(CASE WHEN type = 'JUMP_GATE' THEN 1 END) AS jump_gates,
-                    {asteroids}
-                    COUNT(CASE WHEN type = 'GAS_GIANT' THEN 1 END) AS gas_giants
+                    COUNT(CASE WHEN trait = 'MARKETPLACE' THEN 1 END) AS marketplaces,
+                    COUNT(CASE WHEN trait = 'SHIPYARD' THEN 1 END) AS shipyards
                 FROM 
                     waypoints,
                     UNNEST(traits) AS trait
@@ -78,28 +136,51 @@ def sector_df():
     df = pd.DataFrame(
         ret,
         columns=[
-            "symbol",
+            "index",  # for graph plotting
             "type",
             "x",
             "y",
-            "_1",
+            "observed",
             "faction",
             "total_waypoints",
-            "_2",
-            "marketplaces",
-            "shipyards",
-            "uncharted",
+            "incomplete",
+            "asteroids",
+            "points_of_interest",
+            "charted",
             "jump_gates",
+            "gas_giants",
             "minerals",
             "common_metals",
             "rare_metals",
             "precious_metals",
-            "gas_giants",
+            "uncharted",
+            "marketplaces",
+            "shipyards",
         ],
     )
-    df.set_index("symbol", inplace=True)
-    df.drop(columns=["_1", "_2"], inplace=True)
-    df["total_waypoints"] = df["total_waypoints"].fillna(0)
+    df.set_index("index", inplace=True)
+    # fix values for systems with zero waypoints
+    df.loc[
+        df["total_waypoints"].isna(),
+        [
+            "total_waypoints",
+            "incomplete",
+            "asteroids",
+            "points_of_interest",
+            "charted",
+            "jump_gates",
+            "gas_giants",
+            "minerals",
+            "common_metals",
+            "rare_metals",
+            "precious_metals",
+            "uncharted",
+            "marketplaces",
+            "shipyards",
+        ],
+    ] = 0
+    # df.drop(columns=["_1", "_2"], inplace=True)
+    # df["total_waypoints"] = df["total_waypoints"].fillna(0)
     for col in [
         "type",
         "faction",
@@ -110,6 +191,7 @@ def sector_df():
             categories.remove("None")
             categories.append("None")
         df[col] = pd.Categorical(col_str, categories=categories, ordered=True)
+    # df["color"] = df["color_type"]
 
     # add additional columns with plotting data
     type2size = {
@@ -139,6 +221,7 @@ def sector_df():
         "YOUNG_STAR": "gold",
     }
     df["color_type"] = df["type"].cat.rename_categories(type2color)
+    df["alpha_type"] = 1.0
 
     # https://matplotlib.org/stable/gallery/color/named_colors.html#css-colors
     faction2color = {
@@ -164,6 +247,7 @@ def sector_df():
         "None": "dimgrey",
     }
     df["color_faction"] = df["faction"].cat.rename_categories(faction2color)
+    df["alpha_faction"] = df["faction"].apply(lambda v: 1.0 if v != "None" else 0.3)
 
     return df
 
@@ -178,7 +262,7 @@ def hq_df():
                 """,
             )
             ret = cur.fetchall()
-    df = pd.DataFrame(ret, columns=["symbol", "headquarters"])
+    df = pd.DataFrame(ret, columns=["index", "headquarters"])
     # df = df.dropna().set_index("symbol")
     return df
 
@@ -210,7 +294,7 @@ def system_df(system_symbol):
             "isUnderConstruction",
         ],
     )
-    df.set_index("symbol", inplace=True)
+    # df.set_index("symbol", inplace=True)
 
     type2marker = {
         "ARTIFICIAL_GRAVITY_WELL": "triangle_pin",
@@ -286,6 +370,55 @@ def system_df(system_symbol):
     df["color"] = df["type"].replace(type2color)
 
     return df
+
+
+def connection_df():
+    with connect("dbname=st2 user=postgres") as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    j."systemSymbol" AS jump_gate_system,
+                    w."systemSymbol" AS connected_system
+                FROM
+                    jump_gates j
+                LEFT JOIN
+                    waypoints w ON w.symbol = ANY(j.connections)
+                """
+            )
+            ret = cur.fetchall()
+    connections = pd.DataFrame(ret, columns=["start", "end"])
+    return connections
+
+
+def sector_graph(df, connections):
+    # TODO: plot nodes (including colors)
+    graph = GraphRenderer(name="sector")
+    graph.node_renderer.glyph = Circle()  # dont plot nodes
+    graph.edge_renderer.glyph = MultiLine(
+        line_color="goldenrod",
+        line_alpha=0.3,
+        line_width=1,
+        line_dash="dotted",
+        line_dash_offset=1,
+    )
+
+    # nodes
+    graph.node_renderer.data_source.data = dict(index=df.index.to_list())
+    graph.layout_provider = StaticLayoutProvider(
+        graph_layout=df[["x", "y"]].apply(list, axis=1).to_dict(),
+    )
+
+    # edges
+    edges = connections[
+        (connections["start"].isin(df.index)) & (connections["end"].isin(df.index))
+    ]
+    graph.edge_renderer.data_source.data = dict(
+        start=edges["start"],
+        end=edges["end"],
+    )
+
+    return graph
 
 
 def connection_graph():
@@ -465,20 +598,23 @@ def trade_dfs(goods: str or list = None, systems: str or list = None):
 def plot_markets(goods: str or list, systems: str or list):
     tradegoods, transactions = trade_dfs(goods, systems)
     if len(tradegoods) == 0:
-        return column(Div(text=f"{goods} not observed in {systems}."))
+        return column(
+            Div(text=f"{goods} not observed in {systems}."), sizing_mode="scale_both"
+        )
 
     # main figure
     end = tradegoods["timestamp"][len(tradegoods) - 1]
     start = end - np.timedelta64(1, "D")
-    width = 1700
+    # width = 1700
     p = figure(
-        height=300,
-        width=width,
+        # height=300,
+        # width=width,
         x_range=(start, end),
         x_axis_type="datetime",
         x_axis_location="above",
         tools="pan,wheel_zoom,reset",
         active_scroll="wheel_zoom",
+        sizing_mode="scale_both",
     )
     p.title.text_font = "Courier New"
     p.axis.axis_label_text_font = "Courier New"
@@ -488,13 +624,14 @@ def plot_markets(goods: str or list, systems: str or list):
     # complete time range for overview
     select = figure(
         title="Drag the middle and edges of the selection box to change the range above",
-        height=130,
-        width=width,
+        height=100,
+        # width=width,
         y_range=p.y_range,
         x_axis_type="datetime",
         y_axis_type=None,
         tools="",
         toolbar_location=None,
+        sizing_mode="scale_width",
     )
     select.title.text_font = "Courier New"
     select.axis.axis_label_text_font = "Courier New"
@@ -648,7 +785,7 @@ def plot_markets(goods: str or list, systems: str or list):
             formatters={"@timestamp": "datetime"},
         ),
     )
-    return column(p, select)
+    return column(p, select, sizing_mode="scale_both")
 
 
 def system_tradegoods(system_symbol):

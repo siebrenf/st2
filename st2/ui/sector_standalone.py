@@ -6,9 +6,6 @@
 # https://docs.bokeh.org/en/latest/docs/gallery.html
 # https://docs.bokeh.org/en/latest/docs/user_guide/server/app.html#building-applications
 
-import os
-import sys
-
 from bokeh.layouts import column, row
 from bokeh.models import (
     AutocompleteInput,
@@ -20,8 +17,6 @@ from bokeh.models import (
     Div,
     GraphRenderer,
     HoverTool,
-    Jitter,
-    MultiChoice,
     MultiLine,
     NodesAndLinkedEdges,
     NodesOnly,
@@ -31,11 +26,9 @@ from bokeh.models import (
     StaticLayoutProvider,
     TapTool,
 )
-from bokeh.plotting import curdoc, figure
+from bokeh.plotting import curdoc, figure, show
 
-pkg = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-sys.path.extend([pkg])
-from st2.ui.utils import connection_df, hq_df, sector_df, system_df, system_tradegoods
+from st2.ui.utils import connection_df, hq_df, sector_df
 
 """
 Variables
@@ -45,27 +38,6 @@ source_sector = ColumnDataSource(sector)
 hqs = hq_df()
 connections = connection_df()
 source_connections = ColumnDataSource(connections)
-source_system = ColumnDataSource(
-    {
-        c: []
-        for c in [
-            "symbol",
-            "systemSymbol",
-            "type",
-            "x",
-            "y",
-            "orbits",
-            "orbitals",
-            "traits",
-            "chart",
-            "faction",
-            "isUnderConstruction",
-            "marker",
-            "size",
-            "color",
-        ]
-    }
-)
 
 # Filters for views
 filter_sector = BooleanFilter(~sector.index.isna())
@@ -83,7 +55,6 @@ filter_observed = BooleanFilter(sector["observed"])
 view_sector = CDSView(filter=filter_sector)
 view_hqs = CDSView(filter=filter_hqs)
 view_connections = CDSView(filter=filter_connections)
-
 
 """
 Controls
@@ -146,26 +117,15 @@ slider_interesting = RangeSlider(
     # sizing_mode="scale_both",
 )
 
-select_tradegoods = MultiChoice(
-    title="Select system tradeGood(s) to visualize",
-    value=[],
-    options=[],
-    # sizing_mode="scale_both",
-)
-
 """
 Other
 """
 # Can print stuff here from CustomJS callbacks
 debug = Div(
-    height=300,
-    width=200,
     stylesheets=[":host { white-space: pre; }"],
     text="Debug window",
-    # sizing_mode="scale_both",
-    background="lightblue",
+    sizing_mode="scale_both",
 )
-
 
 """
 Plot sector
@@ -239,60 +199,6 @@ graph.selection_policy = NodesOnly()
 
 # add the graph to the plot
 plot_sector.renderers.append(graph)
-
-
-"""
-Plot system
-"""
-plot_system = figure(
-    title="Select a system to plot",
-    x_range=(-1000, 1000),
-    y_range=(-1000, 1000),
-    x_axis_label="x",
-    y_axis_label="y",
-    tools="pan,wheel_zoom,reset",
-    active_scroll="wheel_zoom",
-    # sizing_mode="scale_both",
-)
-
-plot_system.scatter(
-    source=source_system,
-    x={"field": "x", "transform": Jitter(width=25)},
-    y={"field": "y", "transform": Jitter(width=25)},
-    marker="marker",
-    size="size",
-    alpha=0.75,
-    fill_color="color",
-    line_color="dimgrey",
-    line_width=0.5,
-)
-
-
-plot_tradegoods = figure(
-    x_range=(0, 1),
-    y_axis_label="Prices",
-    x_axis_type="datetime",
-    x_axis_location="above",
-    tools="pan,wheel_zoom,reset",
-    active_scroll="wheel_zoom",
-    sizing_mode="scale_both",
-)
-plot_tradegoods.axis.axis_label_text_font = "Courier New"
-plot_tradegoods.axis.major_label_text_font = "Courier New"
-
-plot_select_tradegoods = figure(
-    title="Drag the middle and edges of the selection box to change the range above",
-    height=100,
-    y_range=plot_tradegoods.y_range,
-    x_axis_type="datetime",
-    y_axis_type=None,
-    tools="",
-    toolbar_location=None,
-    sizing_mode="scale_width",
-)
-plot_select_tradegoods.title.text_font = "Courier New"
-plot_select_tradegoods.axis.major_label_text_font = "Courier New"
-plot_select_tradegoods.ygrid.grid_line_color = None
 
 
 """
@@ -370,7 +276,7 @@ update_view_sector = CustomJS(
     code="""
     // List active filters based on checkboxes_system.active
     let activeFilters = [f1, f2, f3, f4, f5].filter((_, idx) => checkboxes_system.active.includes(idx));
-    
+
     // Build the new filter
     const booleans = [];
     for (let i = 0; i < filter.booleans.length; i++) {
@@ -416,7 +322,7 @@ update_view_sector = CustomJS(
         }
         booleans.push(allTrue ? true : false);
     }
-        
+
     // Update the old filter
     filter.booleans = booleans;
     filter.change.emit();
@@ -426,7 +332,6 @@ checkboxes_system.js_on_change("active", update_view_sector)
 slider_marketplaces.js_on_change("value", update_view_sector)
 slider_shipyards.js_on_change("value", update_view_sector)
 slider_interesting.js_on_change("value", update_view_sector)
-
 
 update_view_connections = CustomJS(
     args=dict(
@@ -460,47 +365,14 @@ update_view_connections = CustomJS(
 )
 filter_sector.js_on_change("booleans", update_view_connections)
 
-plot_system.add_tools(
-    HoverTool(
-        tooltips=[
-            ("symbol", "@symbol"),
-            ("type", "@type"),
-            ("traits", "@traits"),
-            ("", ""),  # white line
-        ]
-    )
-)
-
-
-def update_plot_system(attr, old, new):
-    system = system_df(new)
-    source_system.data = system.to_dict(orient="list")
-
-    plot_system.x_range.start = int(system["x"].min() * 1.02)
-    plot_system.x_range.end = int(system["x"].max() * 1.02)
-    plot_system.y_range.start = int(system["y"].min() * 1.02)
-    plot_system.y_range.end = int(system["y"].max() * 1.02)
-    plot_system.title.text = f"System {new}"
-
-
-select_system.on_change("value", update_plot_system)
-
-
-def update_select_tradegoods(attr, old, new):
-    tradegoods = system_tradegoods(new)
-    select_tradegoods.value = []
-    select_tradegoods.options = tradegoods
-
-
-select_system.on_change("value", update_select_tradegoods)
 
 """
 Layout
 """
-# JavaScript colors:
-#   http://www.spacetoday.org/BoilerRoom/Colors.html
-layout = column(
-    row(
+if __name__ == "__main__":
+    # JavaScript colors:
+    #   http://www.spacetoday.org/BoilerRoom/Colors.html
+    layout = row(
         column(
             plot_sector,
             select_system,
@@ -508,37 +380,21 @@ layout = column(
             background="grey",
         ),
         column(
-            plot_system,
             select_color,
             checkboxes_system,
             slider_marketplaces,
             slider_shipyards,
             slider_interesting,
-            select_tradegoods,
             # sizing_mode="scale_both",
             background="silver",
         ),
-    ),
-    row(
-        column(
-            plot_tradegoods,
-            plot_select_tradegoods,
-            sizing_mode="scale_both",
-        ),
-        column(
-            debug,
-            # background="grey",
-            # sizing_mode="scale_both",
-        ),
-        background="grey",
+        # debug,
         sizing_mode="scale_both",
-    ),
-    sizing_mode="scale_both",
-    background="dimgrey",
-)
+        background="dimgrey",
+    )
 
-curdoc().title = "SpaceTraders API"
-curdoc().theme = "dark_minimal"
-curdoc().add_root(layout)
+    curdoc().title = "SpaceTraders API"
+    curdoc().theme = "dark_minimal"
+    curdoc().add_root(layout)
 
-# show(layout)
+    show(layout)
