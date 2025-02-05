@@ -10,7 +10,7 @@ from psycopg.types.json import Jsonb
 from scipy.spatial.distance import cdist
 
 from st2.agent import api_agent
-from st2.db.static.traits import TRAITS_WAYPOINT
+from st2.db.static import TRAITS_WAYPOINT
 from st2.logging import logger
 
 DEBUG = False

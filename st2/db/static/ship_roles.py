@@ -1,0 +1,16 @@
+SHIP_ROLES = [
+    "CARRIER",
+    "COMMAND",
+    "EXCAVATOR",
+    "EXPLORER",
+    "FABRICATOR",
+    "HARVESTER",
+    "HAULER",
+    "INTERCEPTOR",
+    "PATROL",
+    "REFINERY",
+    "REPAIR",
+    "SATELLITE",
+    "SURVEYOR",
+    "TRANSPORT",
+]

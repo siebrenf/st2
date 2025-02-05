@@ -10,7 +10,7 @@ import subprocess as sp
 from psycopg import connect
 
 from st2.caching import cache
-from st2.db.static.traits import TRAITS_FACTION
+from st2.db.static import TRAITS_FACTION
 
 
 def db_server_path():

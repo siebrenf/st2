@@ -1,0 +1,33 @@
+ENGINES = {
+    "ENGINE_HYPER_DRIVE_I": None,
+    "ENGINE_IMPULSE_DRIVE_I": {
+        "symbol": "ENGINE_IMPULSE_DRIVE_I",
+        "name": "Impulse Drive I",
+        "description": "A basic low-energy propulsion system that generates thrust for interplanetary travel.",
+        "speed": 3,
+        "quality": 1,
+        "requirements": {"power": 1, "crew": 0},
+        "condition": 1,
+        "integrity": 1,
+    },
+    "ENGINE_ION_DRIVE_I": {
+        "symbol": "ENGINE_ION_DRIVE_I",
+        "name": "Ion Drive I",
+        "description": "An advanced propulsion system that uses ionized particles to generate high-speed, low-thrust acceleration.",
+        "speed": 10,
+        "quality": 3,
+        "requirements": {"power": 3, "crew": 3},
+        "condition": 1,
+        "integrity": 1,
+    },
+    "ENGINE_ION_DRIVE_II": {
+        "symbol": "ENGINE_ION_DRIVE_II",
+        "name": "Ion Drive II",
+        "description": "An advanced propulsion system that uses ionized particles to generate high-speed, low-thrust acceleration, with improved efficiency and performance.",
+        "speed": 30,
+        "quality": 4,
+        "requirements": {"power": 6, "crew": 8},
+        "condition": 1,
+        "integrity": 1,
+    },
+}
