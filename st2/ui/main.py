@@ -1,7 +1,3 @@
-"""
-Run with:
-    bokeh serve st2/ui
-"""
 # https://stackoverflow.com/questions/78732362/how-to-upload-pandas-data-frames-fast-with-psycopg3
 # https://gist.github.com/jakebrinkmann/de7fd185efe9a1f459946cf72def057e
 # https://stackoverflow.com/questions/51144743/make-the-colour-and-marker-of-bokeh-plot-scatter-points-dependent-on-dataframe-v
@@ -696,6 +692,7 @@ def update_select_tradegoods(attr, old, new):
 
 
 select_system.on_change("value", update_select_tradegoods)
+
 
 def update_plot_tradegoods(attr, old, new):
     # https://docs.bokeh.org/en/latest/docs/reference/models/glyphs/multi_line.html#multiline

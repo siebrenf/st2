@@ -1,3 +1,4 @@
-```
-bokeh serve --show st2/ui
+Runs with:
+```[bash]
+bokeh serve st2/ui
 ```

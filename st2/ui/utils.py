@@ -1,22 +1,21 @@
-import math
-
-import numpy as np
+# import math
+#
+# import numpy as np
 import pandas as pd
-from bokeh.layouts import column
-from bokeh.models import (
-    Circle,
-    Div,
-    GraphRenderer,
-    HoverTool,
-    Legend,
-    MultiLine,
-    RangeTool,
-    StaticLayoutProvider,
-)
-from bokeh.plotting import figure
-from psycopg import connect
 
-pd.set_option("future.no_silent_downcasting", True)
+# from bokeh.layouts import column
+# from bokeh.models import (
+#     Circle,
+#     Div,
+#     GraphRenderer,
+#     HoverTool,
+#     Legend,
+#     MultiLine,
+#     RangeTool,
+#     StaticLayoutProvider,
+# )
+# from bokeh.plotting import figure
+from psycopg import connect
 
 
 def sector_df():
@@ -314,24 +313,23 @@ def system_df(system_symbol):
     }
     df["marker"] = df["type"].replace(type2marker)
 
-    n = 1.3
     type2size = {
-        "ARTIFICIAL_GRAVITY_WELL": 5 * n,
-        "ASTEROID": 3 * n,
-        "ASTEROID_BASE": 6 * n,
-        "ASTEROID_FIELD": 9 * n,
-        "DEBRIS_FIELD": 9 * n,
-        "ENGINEERED_ASTEROID": 4 * n,
-        "FUEL_STATION": 6 * n,
-        "GAS_GIANT": 12 * n,
-        "GRAVITY_WELL": 6 * n,
-        "JUMP_GATE": 6 * n,
-        "MOON": 5 * n,
-        "NEBULA": 12 * n,
-        "ORBITAL_STATION": 6 * n,
-        "PLANET": 7 * n,
+        "ARTIFICIAL_GRAVITY_WELL": 6,
+        "ASTEROID": 4,
+        "ASTEROID_BASE": 8,
+        "ASTEROID_FIELD": 12,
+        "DEBRIS_FIELD": 12,
+        "ENGINEERED_ASTEROID": 5,
+        "FUEL_STATION": 8,
+        "GAS_GIANT": 16,
+        "GRAVITY_WELL": 8,
+        "JUMP_GATE": 8,
+        "MOON": 6,
+        "NEBULA": 16,
+        "ORBITAL_STATION": 8,
+        "PLANET": 9,
     }
-    df["size"] = df["type"].replace(type2size).infer_objects(copy=False)
+    df["size"] = df["type"].apply(lambda t: type2size[t])
 
     # type2alpha = {
     #     "ARTIFICIAL_GRAVITY_WELL": 1.0,
@@ -391,117 +389,116 @@ def connection_df():
     return connections
 
 
-def sector_graph(df, connections):
-    # TODO: plot nodes (including colors)
-    graph = GraphRenderer(name="sector")
-    graph.node_renderer.glyph = Circle()  # dont plot nodes
-    graph.edge_renderer.glyph = MultiLine(
-        line_color="goldenrod",
-        line_alpha=0.3,
-        line_width=1,
-        line_dash="dotted",
-        line_dash_offset=1,
-    )
+# def sector_graph(df, connections):
+#     graph = GraphRenderer(name="sector")
+#     graph.node_renderer.glyph = Circle()  # dont plot nodes
+#     graph.edge_renderer.glyph = MultiLine(
+#         line_color="goldenrod",
+#         line_alpha=0.3,
+#         line_width=1,
+#         line_dash="dotted",
+#         line_dash_offset=1,
+#     )
+#
+#     # nodes
+#     graph.node_renderer.data_source.data = dict(index=df.index.to_list())
+#     graph.layout_provider = StaticLayoutProvider(
+#         graph_layout=df[["x", "y"]].apply(list, axis=1).to_dict(),
+#     )
+#
+#     # edges
+#     edges = connections[
+#         (connections["start"].isin(df.index)) & (connections["end"].isin(df.index))
+#     ]
+#     graph.edge_renderer.data_source.data = dict(
+#         start=edges["start"],
+#         end=edges["end"],
+#     )
+#
+#     return graph
 
-    # nodes
-    graph.node_renderer.data_source.data = dict(index=df.index.to_list())
-    graph.layout_provider = StaticLayoutProvider(
-        graph_layout=df[["x", "y"]].apply(list, axis=1).to_dict(),
-    )
 
-    # edges
-    edges = connections[
-        (connections["start"].isin(df.index)) & (connections["end"].isin(df.index))
-    ]
-    graph.edge_renderer.data_source.data = dict(
-        start=edges["start"],
-        end=edges["end"],
-    )
-
-    return graph
-
-
-def connection_graph():
-    query = """
-            SELECT
-                j."systemSymbol" AS jump_gate_system,
-                w."systemSymbol" AS connected_system
-            FROM
-                jump_gates j
-            LEFT JOIN
-                waypoints w ON w.symbol = ANY(j.connections)
-            """
-    with connect("dbname=st2 user=postgres") as conn:
-        with conn.cursor() as cur:
-            cur.execute(query)
-            ret = cur.fetchall()
-    edges = pd.DataFrame(ret, columns=["n1", "n2"])
-
-    query = """
-            WITH 
-            edges AS (
-                SELECT 
-                    j."systemSymbol" AS jump_gate_system,
-                    w."systemSymbol" AS connected_system
-                FROM 
-                    jump_gates j
-                LEFT JOIN 
-                    waypoints w ON w.symbol = ANY(j.connections)
-            ),
-            gate_system AS (
-                SELECT jump_gate_system
-                FROM edges
-                UNION
-                SELECT connected_system
-                FROM edges
-            ),
-            system_coordinates AS (
-                SELECT 
-                    s.symbol,
-                    s.x,
-                    s.y
-                FROM 
-                    systems s
-            )
-            SELECT 
-                gs.jump_gate_system,
-                sc.x,
-                sc.y
-            FROM 
-                gate_system gs
-            JOIN 
-                system_coordinates sc ON sc.symbol = gs.jump_gate_system
-            """
-    nodes = {}
-    with connect("dbname=st2 user=postgres") as conn:
-        with conn.cursor() as cur:
-            cur.execute(query)
-            for symbol, x, y in cur.fetchall():
-                nodes[symbol] = (x, y)
-
-    graph = GraphRenderer(name="connections")
-
-    # nodes
-    graph.node_renderer.glyph = Circle()  # dont plot nodes
-    graph.node_renderer.data_source.data = dict(index=list(nodes))
-
-    # node coordinates
-    graph.layout_provider = StaticLayoutProvider(graph_layout=nodes)
-
-    # edges
-    graph.edge_renderer.glyph = MultiLine(
-        line_color="goldenrod",
-        line_alpha=0.3,
-        line_width=1,
-        line_dash="dotted",
-        line_dash_offset=1,
-    )
-    graph.edge_renderer.data_source.data = dict(
-        start=edges["n1"],
-        end=edges["n2"],
-    )
-
-    return graph
+# def connection_graph():
+#     query = """
+#             SELECT
+#                 j."systemSymbol" AS jump_gate_system,
+#                 w."systemSymbol" AS connected_system
+#             FROM
+#                 jump_gates j
+#             LEFT JOIN
+#                 waypoints w ON w.symbol = ANY(j.connections)
+#             """
+#     with connect("dbname=st2 user=postgres") as conn:
+#         with conn.cursor() as cur:
+#             cur.execute(query)
+#             ret = cur.fetchall()
+#     edges = pd.DataFrame(ret, columns=["n1", "n2"])
+#
+#     query = """
+#             WITH
+#             edges AS (
+#                 SELECT
+#                     j."systemSymbol" AS jump_gate_system,
+#                     w."systemSymbol" AS connected_system
+#                 FROM
+#                     jump_gates j
+#                 LEFT JOIN
+#                     waypoints w ON w.symbol = ANY(j.connections)
+#             ),
+#             gate_system AS (
+#                 SELECT jump_gate_system
+#                 FROM edges
+#                 UNION
+#                 SELECT connected_system
+#                 FROM edges
+#             ),
+#             system_coordinates AS (
+#                 SELECT
+#                     s.symbol,
+#                     s.x,
+#                     s.y
+#                 FROM
+#                     systems s
+#             )
+#             SELECT
+#                 gs.jump_gate_system,
+#                 sc.x,
+#                 sc.y
+#             FROM
+#                 gate_system gs
+#             JOIN
+#                 system_coordinates sc ON sc.symbol = gs.jump_gate_system
+#             """
+#     nodes = {}
+#     with connect("dbname=st2 user=postgres") as conn:
+#         with conn.cursor() as cur:
+#             cur.execute(query)
+#             for symbol, x, y in cur.fetchall():
+#                 nodes[symbol] = (x, y)
+#
+#     graph = GraphRenderer(name="connections")
+#
+#     # nodes
+#     graph.node_renderer.glyph = Circle()  # dont plot nodes
+#     graph.node_renderer.data_source.data = dict(index=list(nodes))
+#
+#     # node coordinates
+#     graph.layout_provider = StaticLayoutProvider(graph_layout=nodes)
+#
+#     # edges
+#     graph.edge_renderer.glyph = MultiLine(
+#         line_color="goldenrod",
+#         line_alpha=0.3,
+#         line_width=1,
+#         line_dash="dotted",
+#         line_dash_offset=1,
+#     )
+#     graph.edge_renderer.data_source.data = dict(
+#         start=edges["n1"],
+#         end=edges["n2"],
+#     )
+#
+#     return graph
 
 
 def trade_dfs(goods: str or list = None, systems: str or list = None):
@@ -597,197 +594,197 @@ def trade_dfs(goods: str or list = None, systems: str or list = None):
     return tradegoods, transactions
 
 
-def plot_markets(goods: str or list, systems: str or list):
-    tradegoods, transactions = trade_dfs(goods, systems)
-    if len(tradegoods) == 0:
-        return column(
-            Div(text=f"{goods} not observed in {systems}."), sizing_mode="scale_both"
-        )
-
-    # main figure
-    end = tradegoods["timestamp"][len(tradegoods) - 1]
-    start = end - np.timedelta64(1, "D")
-    # width = 1700
-    p = figure(
-        # height=300,
-        # width=width,
-        x_range=(start, end),
-        x_axis_type="datetime",
-        x_axis_location="above",
-        tools="pan,wheel_zoom,reset",
-        active_scroll="wheel_zoom",
-        sizing_mode="scale_both",
-    )
-    p.title.text_font = "Courier New"
-    p.axis.axis_label_text_font = "Courier New"
-    p.axis.major_label_text_font = "Courier New"
-    p.yaxis.axis_label = "Prices"
-
-    # complete time range for overview
-    select = figure(
-        title="Drag the middle and edges of the selection box to change the range above",
-        height=100,
-        # width=width,
-        y_range=p.y_range,
-        x_axis_type="datetime",
-        y_axis_type=None,
-        tools="",
-        toolbar_location=None,
-        sizing_mode="scale_width",
-    )
-    select.title.text_font = "Courier New"
-    select.axis.axis_label_text_font = "Courier New"
-    select.axis.major_label_text_font = "Courier New"
-    select.ygrid.grid_line_color = None
-
-    # range selection tool
-    range_tool = RangeTool(x_range=p.x_range, start_gesture="pan")
-    range_tool.overlay.fill_color = "navy"
-    range_tool.overlay.fill_alpha = 0.2
-    select.add_tools(range_tool)
-
-    # main figure content
-    hover_plots = {"transactions": [], "tradeGoods": []}
-    legend_plots = {
-        "sellPrice": [],
-        "purchasePrice": [],
-    }
-    legend_text = {"\nWaypoints:": []}
-    for good in sorted(tradegoods["symbol"].unique()):
-        for wp in sorted(tradegoods["waypointSymbol"].unique()):
-            ta = transactions[
-                (transactions["waypointSymbol"] == wp)
-                & (transactions["tradeSymbol"] == good)
-            ]
-            tg = tradegoods[
-                (tradegoods["waypointSymbol"] == wp) & (tradegoods["symbol"] == good)
-            ]
-
-            # merge the transactions & tradeGoods so the line plot contains all observed events
-            df = pd.concat(
-                [
-                    ta[ta["type"] == "PURCHASE"][["timestamp", "pricePerUnit"]].rename(
-                        columns={"pricePerUnit": "purchasePrice"}
-                    ),
-                    tg[["timestamp", "purchasePrice"]],
-                ],
-                ignore_index=True,
-            ).sort_values("timestamp")
-            plot = p.line("timestamp", "purchasePrice", color="green", source=df)
-            select.line("timestamp", "purchasePrice", color="green", source=df)
-            legend_plots["purchasePrice"].append(plot)
-
-            # merge the transactions & tradeGoods so the line plot contains all observed events
-            df = pd.concat(
-                [
-                    ta[ta["type"] == "SELL"][["timestamp", "pricePerUnit"]].rename(
-                        columns={"pricePerUnit": "sellPrice"}
-                    ),
-                    tg[["timestamp", "sellPrice"]],
-                ],
-                ignore_index=True,
-            ).sort_values("timestamp")
-            plot = p.line("timestamp", "sellPrice", color="red", source=df)
-            select.line("timestamp", "sellPrice", color="red", source=df)
-            legend_plots["sellPrice"].append(plot)
-
-            # plot tradeGoods updates
-            plot = p.scatter(
-                "timestamp",
-                "sellPrice",
-                alpha=0.5,
-                size=10,
-                marker="marker",
-                color="color",
-                source=tg,
-            )
-            hover_plots["tradeGoods"].append(plot)
-            plot = p.scatter(
-                "timestamp",
-                "purchasePrice",
-                alpha=0.5,
-                size=10,
-                marker="marker",
-                color="color",
-                source=tg,
-            )
-            hover_plots["tradeGoods"].append(plot)
-
-            # plot transactions TODO: scale/max sizes
-            plot = p.scatter(
-                "timestamp",
-                "pricePerUnit",
-                alpha=0.5,
-                size="units",
-                color="color",
-                source=ta,
-            )
-            hover_plots["transactions"].append(plot)
-
-            # legend: mark the waypoint and its type (IMPORT/EXPORT/EXCHANGE)
-            if len(tg):
-                key = f'{wp: <10} {good} {tg["type"].head(1).to_list()[0]}'
-                legend_text[key] = []
-
-    # legend title
-    if isinstance(goods, str):
-        goods = [goods]
-    if isinstance(systems, str):
-        systems = [systems]
-    title = f"{', '.join(goods)} @ {', '.join(systems)}"
-    # legend width
-    n_wps = len(legend_plots["purchasePrice"])
-    n_cols = 1 + math.ceil((n_wps - 5) / 10)
-    legend = Legend(
-        title=title,
-        items=[i for i in legend_plots.items()]
-        + [i for i in hover_plots.items()]
-        + [i for i in legend_text.items()],
-        location="top",
-        title_text_font="Courier New",
-        label_text_font="Courier New",
-        title_text_font_size="8pt",
-        label_text_font_size="8pt",
-        ncols=n_cols,
-    )
-    p.add_layout(legend, "right")
-
-    p.add_tools(
-        HoverTool(
-            renderers=hover_plots["transactions"],
-            tooltips=[
-                ("Transaction", ""),
-                ("waypointSymbol", "@waypointSymbol"),
-                ("shipSymbol", "@shipSymbol"),
-                ("tradeSymbol", "@tradeSymbol"),
-                ("type", "@type"),
-                ("units", "@units"),
-                ("pricePerUnit", "@pricePerUnit"),
-                ("totalPrice", "@totalPrice"),
-                ("timestamp", "@timestamp{%F %T}"),
-                ("", ""),  # white line
-            ],
-            formatters={"@timestamp": "datetime"},
-        ),
-        HoverTool(
-            renderers=hover_plots["tradeGoods"],
-            tooltips=[
-                ("Tradegood", ""),
-                ("waypointSymbol", "@waypointSymbol"),
-                ("symbol", "@symbol"),
-                ("tradeVolume", "@tradeVolume"),
-                ("type", "@type"),
-                ("supply", "@supply"),
-                ("activity", "@activity"),
-                ("purchasePrice", "@purchasePrice"),
-                ("sellPrice", "@sellPrice"),
-                ("timestamp", "@timestamp{%F %T}"),
-                ("", ""),  # white line
-            ],
-            formatters={"@timestamp": "datetime"},
-        ),
-    )
-    return column(p, select, sizing_mode="scale_both")
+# def plot_markets(goods: str or list, systems: str or list):
+#     tradegoods, transactions = trade_dfs(goods, systems)
+#     if len(tradegoods) == 0:
+#         return column(
+#             Div(text=f"{goods} not observed in {systems}."), sizing_mode="scale_both"
+#         )
+#
+#     # main figure
+#     end = tradegoods["timestamp"][len(tradegoods) - 1]
+#     start = end - np.timedelta64(1, "D")
+#     # width = 1700
+#     p = figure(
+#         # height=300,
+#         # width=width,
+#         x_range=(start, end),
+#         x_axis_type="datetime",
+#         x_axis_location="above",
+#         tools="pan,wheel_zoom,reset",
+#         active_scroll="wheel_zoom",
+#         sizing_mode="scale_both",
+#     )
+#     p.title.text_font = "Courier New"
+#     p.axis.axis_label_text_font = "Courier New"
+#     p.axis.major_label_text_font = "Courier New"
+#     p.yaxis.axis_label = "Prices"
+#
+#     # complete time range for overview
+#     select = figure(
+#         title="Drag the middle and edges of the selection box to change the range above",
+#         height=100,
+#         # width=width,
+#         y_range=p.y_range,
+#         x_axis_type="datetime",
+#         y_axis_type=None,
+#         tools="",
+#         toolbar_location=None,
+#         sizing_mode="scale_width",
+#     )
+#     select.title.text_font = "Courier New"
+#     select.axis.axis_label_text_font = "Courier New"
+#     select.axis.major_label_text_font = "Courier New"
+#     select.ygrid.grid_line_color = None
+#
+#     # range selection tool
+#     range_tool = RangeTool(x_range=p.x_range, start_gesture="pan")
+#     range_tool.overlay.fill_color = "navy"
+#     range_tool.overlay.fill_alpha = 0.2
+#     select.add_tools(range_tool)
+#
+#     # main figure content
+#     hover_plots = {"transactions": [], "tradeGoods": []}
+#     legend_plots = {
+#         "sellPrice": [],
+#         "purchasePrice": [],
+#     }
+#     legend_text = {"\nWaypoints:": []}
+#     for good in sorted(tradegoods["symbol"].unique()):
+#         for wp in sorted(tradegoods["waypointSymbol"].unique()):
+#             ta = transactions[
+#                 (transactions["waypointSymbol"] == wp)
+#                 & (transactions["tradeSymbol"] == good)
+#             ]
+#             tg = tradegoods[
+#                 (tradegoods["waypointSymbol"] == wp) & (tradegoods["symbol"] == good)
+#             ]
+#
+#             # merge the transactions & tradeGoods so the line plot contains all observed events
+#             df = pd.concat(
+#                 [
+#                     ta[ta["type"] == "PURCHASE"][["timestamp", "pricePerUnit"]].rename(
+#                         columns={"pricePerUnit": "purchasePrice"}
+#                     ),
+#                     tg[["timestamp", "purchasePrice"]],
+#                 ],
+#                 ignore_index=True,
+#             ).sort_values("timestamp")
+#             plot = p.line("timestamp", "purchasePrice", color="green", source=df)
+#             select.line("timestamp", "purchasePrice", color="green", source=df)
+#             legend_plots["purchasePrice"].append(plot)
+#
+#             # merge the transactions & tradeGoods so the line plot contains all observed events
+#             df = pd.concat(
+#                 [
+#                     ta[ta["type"] == "SELL"][["timestamp", "pricePerUnit"]].rename(
+#                         columns={"pricePerUnit": "sellPrice"}
+#                     ),
+#                     tg[["timestamp", "sellPrice"]],
+#                 ],
+#                 ignore_index=True,
+#             ).sort_values("timestamp")
+#             plot = p.line("timestamp", "sellPrice", color="red", source=df)
+#             select.line("timestamp", "sellPrice", color="red", source=df)
+#             legend_plots["sellPrice"].append(plot)
+#
+#             # plot tradeGoods updates
+#             plot = p.scatter(
+#                 "timestamp",
+#                 "sellPrice",
+#                 alpha=0.5,
+#                 size=10,
+#                 marker="marker",
+#                 color="color",
+#                 source=tg,
+#             )
+#             hover_plots["tradeGoods"].append(plot)
+#             plot = p.scatter(
+#                 "timestamp",
+#                 "purchasePrice",
+#                 alpha=0.5,
+#                 size=10,
+#                 marker="marker",
+#                 color="color",
+#                 source=tg,
+#             )
+#             hover_plots["tradeGoods"].append(plot)
+#
+#             # plot transactions
+#             plot = p.scatter(
+#                 "timestamp",
+#                 "pricePerUnit",
+#                 alpha=0.5,
+#                 size="units",
+#                 color="color",
+#                 source=ta,
+#             )
+#             hover_plots["transactions"].append(plot)
+#
+#             # legend: mark the waypoint and its type (IMPORT/EXPORT/EXCHANGE)
+#             if len(tg):
+#                 key = f'{wp: <10} {good} {tg["type"].head(1).to_list()[0]}'
+#                 legend_text[key] = []
+#
+#     # legend title
+#     if isinstance(goods, str):
+#         goods = [goods]
+#     if isinstance(systems, str):
+#         systems = [systems]
+#     title = f"{', '.join(goods)} @ {', '.join(systems)}"
+#     # legend width
+#     n_wps = len(legend_plots["purchasePrice"])
+#     n_cols = 1 + math.ceil((n_wps - 5) / 10)
+#     legend = Legend(
+#         title=title,
+#         items=[i for i in legend_plots.items()]
+#         + [i for i in hover_plots.items()]
+#         + [i for i in legend_text.items()],
+#         location="top",
+#         title_text_font="Courier New",
+#         label_text_font="Courier New",
+#         title_text_font_size="8pt",
+#         label_text_font_size="8pt",
+#         ncols=n_cols,
+#     )
+#     p.add_layout(legend, "right")
+#
+#     p.add_tools(
+#         HoverTool(
+#             renderers=hover_plots["transactions"],
+#             tooltips=[
+#                 ("Transaction", ""),
+#                 ("waypointSymbol", "@waypointSymbol"),
+#                 ("shipSymbol", "@shipSymbol"),
+#                 ("tradeSymbol", "@tradeSymbol"),
+#                 ("type", "@type"),
+#                 ("units", "@units"),
+#                 ("pricePerUnit", "@pricePerUnit"),
+#                 ("totalPrice", "@totalPrice"),
+#                 ("timestamp", "@timestamp{%F %T}"),
+#                 ("", ""),  # white line
+#             ],
+#             formatters={"@timestamp": "datetime"},
+#         ),
+#         HoverTool(
+#             renderers=hover_plots["tradeGoods"],
+#             tooltips=[
+#                 ("Tradegood", ""),
+#                 ("waypointSymbol", "@waypointSymbol"),
+#                 ("symbol", "@symbol"),
+#                 ("tradeVolume", "@tradeVolume"),
+#                 ("type", "@type"),
+#                 ("supply", "@supply"),
+#                 ("activity", "@activity"),
+#                 ("purchasePrice", "@purchasePrice"),
+#                 ("sellPrice", "@sellPrice"),
+#                 ("timestamp", "@timestamp{%F %T}"),
+#                 ("", ""),  # white line
+#             ],
+#             formatters={"@timestamp": "datetime"},
+#         ),
+#     )
+#     return column(p, select, sizing_mode="scale_both")
 
 
 def system_tradegoods(system_symbol):
