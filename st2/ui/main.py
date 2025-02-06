@@ -1,3 +1,7 @@
+"""
+Run with:
+    bokeh serve st2/ui
+"""
 # https://stackoverflow.com/questions/78732362/how-to-upload-pandas-data-frames-fast-with-psycopg3
 # https://gist.github.com/jakebrinkmann/de7fd185efe9a1f459946cf72def057e
 # https://stackoverflow.com/questions/51144743/make-the-colour-and-marker-of-bokeh-plot-scatter-points-dependent-on-dataframe-v
@@ -9,10 +13,13 @@
 import os
 import sys
 
+import numpy as np
+import pandas as pd
 from bokeh.layouts import column, row
 from bokeh.models import (
     AutocompleteInput,
     BooleanFilter,
+    Button,
     CDSView,
     CheckboxGroup,
     ColumnDataSource,
@@ -26,6 +33,7 @@ from bokeh.models import (
     NodesAndLinkedEdges,
     NodesOnly,
     RangeSlider,
+    RangeTool,
     Scatter,
     Select,
     StaticLayoutProvider,
@@ -35,7 +43,19 @@ from bokeh.plotting import curdoc, figure
 
 pkg = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.extend([pkg])
-from st2.ui.utils import connection_df, hq_df, sector_df, system_df, system_tradegoods
+from st2.startup import db_server
+
+from .utils import (
+    connection_df,
+    hq_df,
+    sector_df,
+    system_df,
+    system_tradegoods,
+    trade_dfs,
+)
+
+db_server()
+
 
 """
 Variables
@@ -90,11 +110,16 @@ Controls
 """
 # selected system to plot
 select_system = AutocompleteInput(
-    title="Select a system in the Sector plot, or Search a system and press Enter:",
+    title="Select a system in the Sector plot, or Search a system and press Enter",
     search_strategy="includes",
     value="X1-",
     completions=sector.index.to_list(),
     # sizing_mode="scale_both",
+)
+
+button_center = Button(
+    label="Center",
+    button_type="primary",  # "'default',
 )
 
 select_color = Select(
@@ -153,6 +178,16 @@ select_tradegoods = MultiChoice(
     # sizing_mode="scale_both",
 )
 
+checkboxes_tradegoods = CheckboxGroup(
+    labels=[
+        "IMPORT",
+        "EXPORT",
+        "EXCHANGE",
+    ],
+    active=[0, 1, 2],
+    # sizing_mode="scale_both",
+)
+
 """
 Other
 """
@@ -163,7 +198,7 @@ debug = Div(
     stylesheets=[":host { white-space: pre; }"],
     text="Debug window",
     # sizing_mode="scale_both",
-    background="lightblue",
+    background="navy",
 )
 
 
@@ -172,8 +207,8 @@ Plot sector
 """
 plot_sector = figure(
     title="Sector X1",
-    # height=800,
-    # width=1600,
+    height=700,
+    width=750,
     x_range=(int(sector["x"].min() * 1.02), int(sector["x"].max() * 1.02)),
     y_range=(int(sector["y"].min() * 1.02), int(sector["y"].max() * 1.02)),
     x_axis_label="x",
@@ -268,20 +303,87 @@ plot_system.scatter(
 )
 
 
+"""
+Plot market
+"""
+end = np.datetime64("now")
+start = end - np.timedelta64(1, "D")
 plot_tradegoods = figure(
-    x_range=(0, 1),
+    title="Select a tradeGood to plot",
+    height=400,
+    y_range=(0, 1),
+    x_range=(start, end),
     y_axis_label="Prices",
     x_axis_type="datetime",
     x_axis_location="above",
-    tools="pan,wheel_zoom,reset",
+    tools="pan,wheel_zoom",  # above ranges used as reset defaults
     active_scroll="wheel_zoom",
-    sizing_mode="scale_both",
+    sizing_mode="scale_width",
 )
-plot_tradegoods.axis.axis_label_text_font = "Courier New"
-plot_tradegoods.axis.major_label_text_font = "Courier New"
+plot_tradegoods_price = plot_tradegoods.multi_line(
+    source=ColumnDataSource(
+        {key: [] for key in ["goods", "waypoint_symbols", "xs", "ys", "colors"]}
+    ),
+    xs="xs",
+    ys="ys",
+    line_color="colors",
+)
+tg_keys = [
+    "waypointSymbol",
+    "systemSymbol",
+    "symbol",
+    "tradeVolume",
+    "type",
+    "supply",
+    "activity",
+    "purchasePrice",
+    "sellPrice",
+    "timestamp",
+    "marker",
+    "color",
+]
+plot_tradegoods_tg_s = plot_tradegoods.scatter(
+    source=ColumnDataSource({key: [] for key in tg_keys}),
+    x="timestamp",
+    y="sellPrice",
+    color="color",
+    marker="marker",
+    alpha=0.5,
+    size=15,
+)
+plot_tradegoods_tg_p = plot_tradegoods.scatter(
+    source=ColumnDataSource({key: [] for key in tg_keys}),
+    x="timestamp",
+    y="purchasePrice",
+    color="color",
+    marker="marker",
+    alpha=0.5,
+    size=15,
+)
+ta_keys = [
+    "waypointSymbol",
+    "systemSymbol",
+    "shipSymbol",
+    "tradeSymbol",
+    "type",
+    "units",
+    "pricePerUnit",
+    "totalPrice",
+    "timestamp",
+    "color",
+]
+plot_tradegoods_ta = plot_tradegoods.scatter(
+    source=ColumnDataSource({key: [] for key in ta_keys}),
+    x="timestamp",
+    y="pricePerUnit",
+    color="color",
+    size="units",
+    alpha=0.5,
+)
 
+# range selection plot
 plot_select_tradegoods = figure(
-    title="Drag the middle and edges of the selection box to change the range above",
+    # title="Drag the middle and edges of the selection box to change the range above",
     height=100,
     y_range=plot_tradegoods.y_range,
     x_axis_type="datetime",
@@ -290,9 +392,28 @@ plot_select_tradegoods = figure(
     toolbar_location=None,
     sizing_mode="scale_width",
 )
-plot_select_tradegoods.title.text_font = "Courier New"
-plot_select_tradegoods.axis.major_label_text_font = "Courier New"
 plot_select_tradegoods.ygrid.grid_line_color = None
+plot_select_tradegoods_price = plot_select_tradegoods.multi_line(
+    source=ColumnDataSource(
+        dict(
+            goods=[],
+            waypoint_symbols=[],
+            xs=[],
+            ys=[],
+            colors=[],
+        )
+    ),
+    xs="xs",
+    ys="ys",
+    line_color="colors",
+    line_width=2,
+)
+
+# range selection tool
+range_tool = RangeTool(x_range=plot_tradegoods.x_range, start_gesture="pan")
+range_tool.overlay.fill_color = "#7ce07c"  # "navy"
+range_tool.overlay.fill_alpha = 0.2
+plot_select_tradegoods.add_tools(range_tool)
 
 
 """
@@ -303,6 +424,7 @@ Reactivity
 div.text = `${div.text}\nthis.value: ${this.value}`;
 console.log(gn.glyph.fill_color);
 """
+
 plot_sector.add_tools(
     HoverTool(
         tooltips=[
@@ -330,6 +452,42 @@ plot_sector.add_tools(
             select_system.value = cb_data.source.data.index[cb_data.source.inspected.indices]
             """,
         ),
+    ),
+)
+
+plot_tradegoods.add_tools(
+    HoverTool(
+        renderers=[plot_tradegoods_tg_s, plot_tradegoods_tg_p],
+        tooltips=[
+            ("TradeGood", ""),
+            ("waypointSymbol", "@waypointSymbol"),
+            ("symbol", "@symbol"),
+            ("tradeVolume", "@tradeVolume"),
+            ("type", "@type"),
+            ("supply", "@supply"),
+            ("activity", "@activity"),
+            ("purchasePrice", "@purchasePrice"),
+            ("sellPrice", "@sellPrice"),
+            ("timestamp", "@timestamp{%F %T}"),
+            ("", ""),  # white line
+        ],
+        formatters={"@timestamp": "datetime"},
+    ),
+    HoverTool(
+        renderers=[plot_tradegoods_ta],
+        tooltips=[
+            ("Transaction", ""),
+            ("waypointSymbol", "@waypointSymbol"),
+            ("shipSymbol", "@shipSymbol"),
+            ("tradeSymbol", "@tradeSymbol"),
+            ("type", "@type"),
+            ("units", "@units"),
+            ("pricePerUnit", "@pricePerUnit"),
+            ("totalPrice", "@totalPrice"),
+            ("timestamp", "@timestamp{%F %T}"),
+            ("", ""),  # white line
+        ],
+        formatters={"@timestamp": "datetime"},
     ),
 )
 
@@ -475,15 +633,60 @@ plot_system.add_tools(
 def update_plot_system(attr, old, new):
     system = system_df(new)
     source_system.data = system.to_dict(orient="list")
-
-    plot_system.x_range.start = int(system["x"].min() * 1.02)
-    plot_system.x_range.end = int(system["x"].max() * 1.02)
-    plot_system.y_range.start = int(system["y"].min() * 1.02)
-    plot_system.y_range.end = int(system["y"].max() * 1.02)
     plot_system.title.text = f"System {new}"
+    if len(system) == 0:
+        return  # system has zero waypoints
+
+    x0 = system["x"].min()
+    x1 = system["x"].max()
+    xpad = (x1 - x0) * 0.1
+    plot_system.x_range.start = x0 - xpad
+    plot_system.x_range.end = x1 + xpad
+
+    y0 = system["y"].min()
+    y1 = system["y"].max()
+    ypad = (y1 - y0) * 0.1
+    plot_system.y_range.start = y0 - ypad
+    plot_system.y_range.end = y1 + ypad
 
 
 select_system.on_change("value", update_plot_system)
+
+
+button_center.js_on_event(
+    "button_click",
+    CustomJS(
+        args=dict(
+            source_sector=source_sector,
+            select_system=select_system,
+            plot_sector=plot_sector,
+            # source_connections=source_connections,
+            # filter_sector=filter_sector,
+            # filter_connections=filter_connections,
+        ),
+        code="""
+        let systemSymbol = select_system.value;
+        let idx = source_sector.data["index"].indexOf(systemSymbol);
+        if (idx == -1) {
+          return;
+        }
+        
+        // get system coordinates
+        let x = source_sector.data["x"][idx];
+        let y = source_sector.data["y"][idx];
+        
+        // get current zoom level
+        let dx = (plot_sector.x_range.end - plot_sector.x_range.start) / 2;
+        let dy = (plot_sector.y_range.end - plot_sector.y_range.start) / 2;
+        
+        // center the plot on the system
+        plot_sector.x_range.start = x - dx;
+        plot_sector.x_range.end = x + dx;
+        plot_sector.y_range.start = y - dy;
+        plot_sector.y_range.end = y + dy;
+        """,
+    ),
+)
 
 
 def update_select_tradegoods(attr, old, new):
@@ -494,6 +697,131 @@ def update_select_tradegoods(attr, old, new):
 
 select_system.on_change("value", update_select_tradegoods)
 
+def update_plot_tradegoods(attr, old, new):
+    # https://docs.bokeh.org/en/latest/docs/reference/models/glyphs/multi_line.html#multiline
+    # https://docs.bokeh.org/en/latest/docs/user_guide/basic/lines.html#multiple-lines
+    # https://stackoverflow.com/questions/55592101/plot-a-groupby-object-with-bokeh/55594762#55594762
+    if len(new) == 0:
+        return
+
+    title = []
+    data_prices = {
+        key: [] for key in ["goods", "waypoint_symbols", "xs", "ys", "colors"]
+    }
+    data_tg_s = {key: [] for key in tg_keys}
+    data_tg_p = {key: [] for key in tg_keys}
+    system_symbol = select_system.value
+
+    type_sell = []
+    type_purchase = []
+    if 0 in checkboxes_tradegoods.active:
+        type_sell.append("IMPORT")
+    if 1 in checkboxes_tradegoods.active:
+        type_purchase.append("EXPORT")
+    if 2 in checkboxes_tradegoods.active:
+        type_sell.append("EXCHANGE")
+        type_purchase.append("EXCHANGE")
+    tradegoods, transactions = trade_dfs(new, system_symbol)
+    for tradegood, df_tg in tradegoods.groupby("symbol"):
+        if len(df_tg) == 0:
+            continue
+        ta1 = transactions[transactions["tradeSymbol"] == tradegood]
+
+        title.append(tradegood)
+        for waypoint_symbol, df_tg_wp in df_tg.groupby("waypointSymbol"):
+            if len(df_tg_wp) == 0:
+                continue
+            ta2 = ta1[ta1["waypointSymbol"] == waypoint_symbol]
+
+            type_tg = df_tg_wp["type"].to_list()[0]
+            if type_tg in type_purchase:
+                # line plots
+                data_prices["goods"].append(tradegood)
+                data_prices["waypoint_symbols"].append(waypoint_symbol)
+                ta3 = ta2[ta2["type"] == "PURCHASE"]
+                if len(ta3):
+                    df = pd.concat(
+                        [
+                            df_tg_wp[["timestamp", "purchasePrice"]],
+                            ta3[["timestamp", "pricePerUnit"]].rename(
+                                columns={"pricePerUnit": "purchasePrice"}
+                            ),
+                        ],
+                        axis=0,
+                        ignore_index=True,
+                    ).sort_values("timestamp")
+                    data_prices["xs"].append(df["timestamp"].to_list())
+                    data_prices["ys"].append(df["purchasePrice"].to_list())
+                else:
+                    data_prices["xs"].append(df_tg_wp["timestamp"].to_list())
+                    data_prices["ys"].append(df_tg_wp["purchasePrice"].to_list())
+                data_prices["colors"].append("green")
+                # scatter plots
+                for k, v in df_tg_wp.to_dict(orient="list").items():
+                    data_tg_p[k].extend(v)
+
+            if type_tg in type_sell:
+                # line plots
+                data_prices["goods"].append(tradegood)
+                data_prices["waypoint_symbols"].append(waypoint_symbol)
+                ta3 = ta2[ta2["type"] == "SELL"]
+                if len(ta3):
+                    df = pd.concat(
+                        [
+                            df_tg_wp[["timestamp", "sellPrice"]],
+                            ta3[["timestamp", "pricePerUnit"]].rename(
+                                columns={"pricePerUnit": "sellPrice"}
+                            ),
+                        ],
+                        axis=0,
+                        ignore_index=True,
+                    ).sort_values("timestamp")
+                    data_prices["xs"].append(df["timestamp"].to_list())
+                    data_prices["ys"].append(df["sellPrice"].to_list())
+                else:
+                    data_prices["xs"].append(df_tg_wp["timestamp"].to_list())
+                    data_prices["ys"].append(df_tg_wp["sellPrice"].to_list())
+                data_prices["colors"].append("red")
+                # scatter plots
+                for k, v in df_tg_wp.to_dict(orient="list").items():
+                    data_tg_s[k].extend(v)
+
+    # line plots
+    plot_tradegoods_price.data_source.data = data_prices
+    plot_select_tradegoods_price.data_source.data = data_prices
+    # scatter plots
+    plot_tradegoods_tg_s.data_source.data = data_tg_s
+    plot_tradegoods_tg_p.data_source.data = data_tg_p
+    plot_tradegoods_ta.data_source.data = transactions.to_dict(orient="list")
+
+    # selection plot updates
+    plot_select_tradegoods.x_range.start = tradegoods["timestamp"].min()
+    plot_select_tradegoods.x_range.end = tradegoods["timestamp"].max()
+
+    # main plot updates
+    x1 = tradegoods["timestamp"].max()
+    x0 = x1 - np.timedelta64(1, "D")
+    plot_tradegoods.x_range.start = x0
+    plot_tradegoods.x_range.end = x1
+    y0 = min(tradegoods["sellPrice"].min(), tradegoods["purchasePrice"].min())
+    y1 = max(tradegoods["sellPrice"].max(), tradegoods["purchasePrice"].max())
+    ypad = (y1 - y0) * 0.1
+    plot_tradegoods.y_range.start = y0 - ypad
+    plot_tradegoods.y_range.end = y1 + ypad
+    plot_tradegoods.title.text = ", ".join(title) + f" in {system_symbol}"
+
+
+select_tradegoods.on_change("value", update_plot_tradegoods)
+
+
+def update_plot_tradegoods2(attr, old, new):
+    # TODO: plot all and filter with CustomJS instead?
+    update_plot_tradegoods("value", select_tradegoods.value, select_tradegoods.value)
+
+
+checkboxes_tradegoods.on_change("active", update_plot_tradegoods2)
+
+
 """
 Layout
 """
@@ -503,42 +831,56 @@ layout = column(
     row(
         column(
             plot_sector,
-            select_system,
+            row(
+                # Div(text="Sector controls"),
+                column(
+                    select_color,
+                    checkboxes_system,
+                    # sizing_mode="scale_width",
+                ),
+                column(
+                    slider_marketplaces,
+                    slider_shipyards,
+                    slider_interesting,
+                    # sizing_mode="scale_width",
+                ),
+                sizing_mode="scale_width",
+            ),
             # sizing_mode="scale_both",
-            background="grey",
+            # background="grey",
         ),
         column(
             plot_system,
-            select_color,
-            checkboxes_system,
-            slider_marketplaces,
-            slider_shipyards,
-            slider_interesting,
-            select_tradegoods,
+            # Div(text="System controls"),
+            row(
+                column(select_system, align="end"),
+                column(button_center, align="end"),
+            ),
+            row(
+                select_tradegoods,
+                checkboxes_tradegoods,
+            ),
             # sizing_mode="scale_both",
-            background="silver",
+            # background="dimgrey",
         ),
     ),
     row(
         column(
             plot_tradegoods,
             plot_select_tradegoods,
-            sizing_mode="scale_both",
+            sizing_mode="scale_width",
         ),
         column(
             debug,
             # background="grey",
-            # sizing_mode="scale_both",
+            # sizing_mode="scale_height",
         ),
-        background="grey",
         sizing_mode="scale_both",
+        # background="grey",
     ),
     sizing_mode="scale_both",
-    background="dimgrey",
+    # background="silver",
 )
 
 curdoc().title = "SpaceTraders API"
-curdoc().theme = "dark_minimal"
 curdoc().add_root(layout)
-
-# show(layout)

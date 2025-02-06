@@ -536,6 +536,8 @@ def trade_dfs(goods: str or list = None, systems: str or list = None):
         n += 1
     elif systems is not None:
         raise TypeError(f"systems must be a string or list")
+    query1 += "ORDER BY timestamp"
+    query2 += "ORDER BY timestamp"
     with connect("dbname=st2 user=postgres") as conn:
         tradegoods = pd.DataFrame(
             conn.execute(query1, params).fetchall(),
@@ -565,9 +567,9 @@ def trade_dfs(goods: str or list = None, systems: str or list = None):
     supply2color = {
         "SCARCE": "red",
         "LIMITED": "pink",
-        "MODERATE": "grey",
+        "MODERATE": "white",
         "HIGH": "lightblue",
-        "ABUNDANT": "blue",
+        "ABUNDANT": "cyan",
     }
     tradegoods["color"] = tradegoods["supply"].replace(supply2color)
 
