@@ -6,7 +6,7 @@ from st2.agent import register_agent
 from st2.exceptions import GameError
 from st2.request import RequestMp
 from st2.ship import Ship
-from st2.startup import api_server, db_server, game_server
+from st2.startup import api_server, game_server
 
 
 def get_test_agent(request):
@@ -65,7 +65,6 @@ def get_test_agent(request):
 
 def test_integration():
     game_server()
-    db_server()
     manager, api_handler, qa_pairs = api_server()
     request = RequestMp(qa_pairs)
 

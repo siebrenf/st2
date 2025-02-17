@@ -1,3 +1,4 @@
+import os
 import random
 import string
 
@@ -94,7 +95,8 @@ def register_agent(
     if email:
         payload["email"] = email
     # data keys: ['token', 'agent', 'contract', 'faction', 'ship']
-    data = request.post("register", priority, None, payload)["data"]
+    token = os.environ["ST_ACCOUNT_TOKEN"]
+    data = request.post("register", priority, token, payload)["data"]
     with connect("dbname=st2 user=postgres") as conn:
         with conn.cursor() as cur:
             cur.execute(

@@ -115,7 +115,7 @@ class TaskMaster:
                     ) in cur.fetchall():
                         commit = False
                         if pid != self.pid:
-                            # uuid changed: a script restart occurred
+                            # uuid changed: a script (re)start occurred
                             if current_task is not None:
                                 # continue the previous task
                                 task = self.get_task(
@@ -124,7 +124,7 @@ class TaskMaster:
                                 self.put(ship_symbol, task)
                                 if DEBUG:
                                     logger.debug(
-                                        f"Restarting {ship_symbol} with task '{current_task}'"
+                                        f"Starting {ship_symbol} with task '{current_task}'"
                                     )
                             pid = self.pid
                             cur.execute(
@@ -212,7 +212,6 @@ class TaskMaster:
                     waypoint_symbol=task[2],
                     is_shipyard=is_shipyard,
                     qa_pairs=self.qa_pairs,
-                    verbose=True,  # TODO: remove
                 )
 
             case "seed":

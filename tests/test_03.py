@@ -3,12 +3,11 @@ import multiprocessing as mp
 from psycopg import connect
 
 from st2.ai import taskmaster
-from st2.startup import api_server, db_server, game_server
+from st2.startup import api_server, game_server
 
 
 def test_taskmaster():
     game_server()  # TODO: move to separate test
-    db_server()
     manager, api_handler, qa_pairs = api_server()
 
     pname = "test_process"

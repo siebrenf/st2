@@ -2,64 +2,46 @@ import atexit
 import multiprocessing as mp
 import os
 
+from dotenv import load_dotenv
 from xdg import XDG_DATA_HOME
 
-from st2 import time
-from st2.caching import cache
 from st2.db import db_server_init, db_tables_init
+from st2.logging import logger
 from st2.request import Request, messenger
 
 
 def game_server():
-    """check if and when the game server resets"""
-    if cache.get("next_reset"):
-        return
+    # load environmental variables from st2/.env
+    load_dotenv()
+    # check that all required keys are present in the environmental variables
+    for key in [
+        "ST_ACCOUNT_TOKEN",
+        "ST_AGENT_SYMBOL",
+        "ST_RESET_WINDOW",
+    ]:
+        if not os.getenv(key):
+            raise EnvironmentError(
+                f"Missing environmental variable '{key}'. " "Did you populate st2/.env?"
+            )
 
-    # server reset status unknown/uncertain
-    status = Request().get("status")
-    last_reset = status["resetDate"]
-    next_reset = status["serverResets"]["next"]
-    next_reset = next_reset.replace("2024", "2025")  # TODO: remove
-    if last_reset == cache.get("last_reset"):
-        return
+    # update the server reset window
+    # previous windows can be set to access the historic database
+    if os.environ["ST_RESET_WINDOW"] == "None":
+        status = Request().get("status")
+        last_reset = status["resetDate"]
+        next_reset = status["serverResets"]["next"]
+        session = f"{last_reset}_{next_reset[:10]}"
+        os.environ["ST_RESET_WINDOW"] = session
+        logger.info(
+            f"SpaceTraders {status['version']} ({session}) {status['status'][13:]}!"
+        )
+    else:
+        session = os.environ["ST_RESET_WINDOW"]
+        logger.info(f"SpaceTraders ({session}) offline database loaded!")
+    data_dir = os.path.join(XDG_DATA_HOME, "st2", session)
+    os.environ["ST_DATA_DIR"] = data_dir
 
-    # server reset occurred
-    cache.clear()
-    cache.set("last_reset", last_reset)
-    cache.set("next_reset", next_reset, expire=time.remaining(next_reset))
-
-    # server reset specific variables
-    data_dir = os.path.join(XDG_DATA_HOME, "st2", f"{last_reset}_{next_reset[:10]}")
-    log_dir = os.path.join(data_dir, "logs")
-    cache.set("data_dir", data_dir)
-    cache.set("log_dir", log_dir)
-
-
-# class Singleton(type):
-#     _instances = {}
-#
-#     def __call__(cls, *args, **kwargs):
-#         if cls not in cls._instances:
-#             cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-#         # else:
-#         #     cls._instances[cls].__init__(*args, **kwargs)
-#         return cls._instances[cls]
-#
-#
-# class GlobalVariables(metaclass=Singleton):
-#     def __int__(self):
-#         self.data_dir = os.path.join(
-#             XDG_DATA_HOME,
-#             "st2",
-#             f'{cache.get("last_reset")}_{cache.get("next_reset").split("T")[0]}',
-#         )
-#         self.log_dir = os.path.join(self.data_dir, "logs")
-#         os.makedirs(self.log_dir, exist_ok=True)
-#         cache.set("data_dir", self.data_dir)
-#         cache.set("log_dir", self.log_dir)
-
-
-def db_server():
+    # start the database (if needed)
     db_server_init()
     db_tables_init()
 

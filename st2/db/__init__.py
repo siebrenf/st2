@@ -9,17 +9,16 @@ import subprocess as sp
 
 from psycopg import connect
 
-from st2.caching import cache
 from st2.db.static import TRAITS_FACTION
 
 
 def db_server_path():
-    db = os.path.join(cache["data_dir"], f"sql")
+    db = os.path.join(os.environ["ST_DATA_DIR"], "sql")
     return db
 
 
 def db_server_logfile():
-    log = os.path.join(cache["log_dir"], f"sql.txt")
+    log = os.path.join(os.environ["ST_DATA_DIR"], "logs", "sql.txt")
     return log
 
 
@@ -27,12 +26,16 @@ def db_server_create(db=None, log=None):
     """make the database"""
     if db is None:
         db = db_server_path()
+    db_dir = os.path.dirname(db)
+    if not os.path.exists(db_dir):
+        os.makedirs(db_dir)
+
     if log is None:
         log = db_server_logfile()
-    if not os.path.exists(cache["data_dir"]):
-        os.makedirs(cache["data_dir"])
-    if not os.path.exists(cache["log_dir"]):
-        os.makedirs(cache["log_dir"])
+    log_dir = os.path.dirname(log)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
     sp.run(
         f"initdb -D {db} --username=postgres",
         shell=True,
@@ -112,12 +115,6 @@ def db_tables_init():
             """
         )
         tables = [row[0] for row in cur.fetchall()]
-
-        # # delete all tables
-        # for table in tables:
-        #     cur.execute(f"DROP TABLE {table}")
-        #     conn.commit()
-        # tables = []
 
         # Create missing tables
         if "agents" not in tables:

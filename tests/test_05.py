@@ -7,13 +7,12 @@ from st2 import time
 from st2.ai import taskmaster
 from st2.request import RequestMp
 from st2.ship import Ship
-from st2.startup import api_server, db_server, game_server
+from st2.startup import api_server, game_server
 from tests.test_04 import get_test_agent
 
 
 def test_ai_probe_waypoint():
     game_server()
-    db_server()
     manager, api_handler, qa_pairs = api_server()
     request = RequestMp(qa_pairs)
 

@@ -6,7 +6,6 @@ dependencies:
   - python  >=3.10
 
   - bokeh
-  - diskcache
   - graphviz
   - loguru
   - matplotlib-base
@@ -15,6 +14,7 @@ dependencies:
   - pandas
   - postgresql
   - psycopg
+  - python-dotenv
   - requests-ratelimiter
   - seaborn
   - scipy

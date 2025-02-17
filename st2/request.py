@@ -5,7 +5,7 @@ from uuid import uuid1
 from requests.exceptions import ConnectionError, JSONDecodeError  # noqa
 from requests_ratelimiter import LimiterSession
 
-from st2.exceptions import GameError, ServerResetError
+from st2.exceptions import GameError
 from st2.logging import logger
 
 DEBUG = False
@@ -80,11 +80,11 @@ class Request:
             logger.debug(f"Endpoint '{endpoint}' returned no content (204)")
         elif error_code in [4221, 4224]:  # survey expired/exhausted
             pass
-        elif status_code == 401:  # server reset, token outdated
-            message = resp_json.get("error", {}).get("message", "")
-            raise ServerResetError(
-                f"request_{endpoint=} error_{message=} {self.headers=}"
-            )
+        # elif status_code == 401:  # server reset, token outdated
+        #     message = resp_json.get("error", {}).get("message", "")
+        #     raise ServerResetError(
+        #         f"request_{endpoint=} error_{message=} {self.headers=}"
+        #     )
         elif "error" in resp_json:
             self._raise_formatted_error(resp_json["error"], url, data, status_code)
         else:

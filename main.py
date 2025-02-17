@@ -12,17 +12,13 @@ Example:
 """
 
 if __name__ == "__main__":
-    from st2.startup import game_server, db_server, api_server
+    from st2.startup import game_server, api_server
     from st2.request import RequestMp
     from st2.agent import api_agent
 
     game_server()
-    db_server()
     manager, api_handler, qa_pairs = api_server()
-
     request = RequestMp(qa_pairs, priority=0, token=None)
-    status = request.get(endpoint="")
-    print(status['status'])
 
     # update databases
     from st2.db import db_update_factions
@@ -32,12 +28,11 @@ if __name__ == "__main__":
     db_update_factions(request, priority=0, token=token)
     astronomer(request, priority=0, token=token)
     cartographer(request, priority=0, token=token, chart="start systems")
-    cartographer(request, priority=0, token=token, chart="gate systems")
+    cartographer(request, priority=3, token=token, chart="gate systems")
 
     # (Re)start the start system probing
     from st2.spies import spymaster, detective
 
-    detective(request, priority=3)
     spymaster(request, priority=3)
 
     # start the probing process
@@ -55,4 +50,5 @@ if __name__ == "__main__":
 
     from time import sleep
     while True:
-        sleep(1)
+        detective(request, priority=3)
+        sleep(3600)

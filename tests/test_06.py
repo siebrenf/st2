@@ -1,14 +1,13 @@
 from st2.pathing.travel import get_path
 from st2.request import RequestMp
 from st2.ship import Ship
-from st2.startup import api_server, db_server, game_server
+from st2.startup import api_server, game_server
 from st2.system import System
 from tests.test_04 import get_test_agent
 
 
 def test_get_path():
     game_server()
-    db_server()
     manager, api_handler, qa_pairs = api_server()
     request = RequestMp(qa_pairs)
 
