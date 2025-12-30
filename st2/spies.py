@@ -34,7 +34,7 @@ def spymaster(request, priority=3):
 
     remaining = sum([len(markets) for markets in system2market.values()])
     if DEBUG:
-        logger.debug(f"{remaining:_}/{total:_} markets probed by the Spymaster")
+        logger.debug(f"{total-remaining:_}/{total:_} markets probed by the Spymaster")
     if remaining == 0:
         return
 
@@ -51,7 +51,7 @@ def spymaster(request, priority=3):
                 )
             data = register_random_agent(request, priority, faction)
             agent_symbol = data["agent"]["symbol"]
-            system_symbol = data["ship"]["nav"]["systemSymbol"]
+            system_symbol = data["ships"][0]["nav"]["systemSymbol"]
             if len(system2market[system_symbol]) == 0:
                 continue
 
