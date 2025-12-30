@@ -20,13 +20,13 @@ class Request:
     """
 
     base_url = "https://api.spacetraders.io/v2/"
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
     rate_limit_codes = [
         429,  # too many requests
     ]
+    ddos_protection_codes = [
+        502,  # way too many requests
+    ]
+    ddos_protection_sleep = 210
     server_down_codes = [
         500,  # unexpected server error
         503,  # service unavailable
@@ -57,11 +57,14 @@ class Request:
         else:
             raise NotImplementedError
         url = self.base_url + endpoint
-        headers = self.headers.copy()
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        headers = {
+            "Accept": "application/json",
+        }
         if data:
             data = dumps(data)
+            headers["Content-Type"] = "application/json"
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
 
         # debug spurious API calls
         if DEBUG:
@@ -112,9 +115,9 @@ class Request:
             if status_code in self.rate_limit_codes:
                 logger.debug(resp_json.get("error", {}).get("message", resp_json))
                 sleep(resp_json.get("error", {}).get("data", {}).get("retryAfter", 1))
-            elif status_code == 502:  # DDoS protection
+            elif status_code in self.ddos_protection_codes:
                 logger.warning(f"Error code 502: {resp_json}")
-                sleep(210)
+                sleep(self.ddos_protection_sleep)
             elif status_code in self.server_down_codes:
                 logger.warning(
                     f"Server down (error code {status_code}). "
@@ -151,12 +154,11 @@ class Request:
 
     def get_all(self, endpoint, priority=None, token=None):
         """yield all results from the get request, not just the first 20 results."""
-        del priority
         total = 0
         page = 0
         while True:
             page += 1
-            resp_json = self.get(endpoint, token, {"page": page, "limit": 20})
+            resp_json = self.get(endpoint, priority, token, {"page": page, "limit": 20})
             yield resp_json
             total += len(resp_json["data"])
             if total == resp_json["meta"]["total"]:
