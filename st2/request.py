@@ -245,9 +245,17 @@ def messenger(qa_pairs):
     session = Request()
     while True:
         for queue, answer_dict in qa_pairs:
-            if queue.empty():
-                continue  # next queue
-            uuid, method, endpoint, token, data, params = queue.get()
+            try:
+                if queue.empty():
+                    continue  # next queue
+                uuid, method, endpoint, token, data, params = queue.get()
+            except (ConnectionResetError, EOFError) as e:
+                if DEBUG:
+                    logger.debug(f"{str(type(e)).split("'")[1]} from messenger(): {e}")
+                return  # script killed
+            except Exception as e:
+                raise e
+
             try:
                 ret = session._request(method, endpoint, token, data, params)  # noqa
             except Exception as exc:
