@@ -27,7 +27,34 @@ FACTIONS = {
         ],
         "isRecruiting": True,
     },
-    "ANCIENTS": None,
+    "ANCIENTS": {
+        "symbol": "ANCIENTS",
+        "name": "Ancient Guardians",
+        "description": "The Ancient Guardians are a mysterious group of protectors who guard ancient artifacts and sites of power, often using their advanced technology and knowledge to protect against external threats.",
+        "traits": [
+            {
+                "symbol": "DEFENSIVE",
+                "name": "Defensive",
+                "description": "Prepared and able to defend themselves against potential threats. Often have strong military forces or defensive capabilities, but may also be vulnerable to surprise attacks or other forms of aggression.",
+            },
+            {
+                "symbol": "SECRETIVE",
+                "name": "Secretive",
+                "description": "Guarded and secretive, with a tendency to keep their plans and activities hidden from others. Sometimes difficult to negotiate with or trust, but often have valuable information or resources that they are willing to share with the right partners.",
+            },
+            {
+                "symbol": "SCAVENGERS",
+                "name": "Scavengers",
+                "description": "Skilled at finding and salvaging valuable resources and materials from abandoned or derelict ships, space stations, and other structures. Resourceful and able to make the most out of what others have left behind.",
+            },
+            {
+                "symbol": "CLAN",
+                "name": "Clan",
+                "description": "A group of people united by a common ancestry or history. Sometimes able to trace their lineage back to a specific ancestor or founding member, and may be bound together by a set of traditions or customs. Sometimes able to rely on the support and loyalty of their fellow clan members, and may be able to leverage their connections and shared history to achieve their goals.",
+            },
+        ],
+        "isRecruiting": True,
+    },
     "ASTRO": {
         "symbol": "ASTRO",
         "name": "Astro-Salvage Alliance",
@@ -82,7 +109,7 @@ FACTIONS = {
                 "description": "Able to adapt to changing circumstances and environments. Sometimes able to quickly switch between different strategies and tactics in order to respond to new challenges or opportunities. Sometimes able to improvise and think on their feet, making them difficult to predict or outmaneuver.",
             },
         ],
-        "isRecruiting": False,
+        "isRecruiting": True,
     },
     "CORSAIRS": {
         "symbol": "CORSAIRS",
@@ -140,7 +167,34 @@ FACTIONS = {
         ],
         "isRecruiting": True,
     },
-    "CULT": None,
+    "CULT": {
+        "symbol": "CULT",
+        "name": "Cult of the Machine",
+        "description": "The Cult of the Machine is a fanatical group of religious zealots who worship technology and seek to use it to further their own aims, often disregarding the lives of others in pursuit of their own power.",
+        "traits": [
+            {
+                "symbol": "TECHNOLOGICALLY_ADVANCED",
+                "name": "Technologically Advanced",
+                "description": "Possessing advanced technology and knowledge, often far beyond the level of other factions. Often have access to powerful weapons, ships, and other technology that gives them a significant advantage in battles and other conflicts.",
+            },
+            {
+                "symbol": "AGGRESSIVE",
+                "name": "Aggressive",
+                "description": "Quick to engage in conflict or aggression, often without provocation. Sometimes unpredictable and difficult to negotiate with, and may prioritize their own interests over the needs of others.",
+            },
+            {
+                "symbol": "PROUD",
+                "name": "Proud",
+                "description": "Proud of their heritage, culture, or achievements, with a strong sense of identity and self-respect. Sometimes resistant to change or outside influence, and may be willing to defend their beliefs or values against challenges or threats.",
+            },
+            {
+                "symbol": "FRINGE",
+                "name": "Fringe",
+                "description": "Located on the outskirts or periphery of civilization. Sometimes isolated or remote, and may have limited access to resources or support. Sometimes considered strange or unusual by others, and may be seen as outsiders or rebels. Sometimes able to leverage their isolation and independence to achieve their goals.",
+            },
+        ],
+        "isRecruiting": True,
+    },
     "DOMINION": {
         "symbol": "DOMINION",
         "name": "Stellar Dominion",
@@ -195,9 +249,36 @@ FACTIONS = {
                 "description": "Possessing advanced technology and knowledge, often far beyond the level of other factions. Often have access to powerful weapons, ships, and other technology that gives them a significant advantage in battles and other conflicts.",
             },
         ],
-        "isRecruiting": False,
+        "isRecruiting": True,
     },
-    "ETHEREAL": None,
+    "ETHEREAL": {
+        "symbol": "ETHEREAL",
+        "name": "Ethereal Enclave",
+        "description": "The Ethereal Enclave is a faction that is said to have transcended physical existence. They are believed to possess great wisdom and mysterious abilities. The actual nature of the Enclave is subject to much speculation, and sightings of their representatives are rare and often dismissed as legends.",
+        "traits": [
+            {
+                "symbol": "SECRETIVE",
+                "name": "Secretive",
+                "description": "Guarded and secretive, with a tendency to keep their plans and activities hidden from others. Sometimes difficult to negotiate with or trust, but often have valuable information or resources that they are willing to share with the right partners.",
+            },
+            {
+                "symbol": "RESOURCEFUL",
+                "name": "Resourceful",
+                "description": "Known for their ingenuity and ability to make the most out of limited resources. Able to improvise and adapt to changing circumstances, using whatever is available to them in order to overcome challenges and achieve their goals.",
+            },
+            {
+                "symbol": "INNOVATIVE",
+                "name": "Innovative",
+                "description": "Willing to try new and untested ideas. Sometimes able to come up with creative and original solutions to problems, and may be able to think outside the box. Sometimes at the forefront of technological or social change, and may be willing to take risks in order to advance the boundaries of human knowledge and understanding.",
+            },
+            {
+                "symbol": "FRINGE",
+                "name": "Fringe",
+                "description": "Located on the outskirts or periphery of civilization. Sometimes isolated or remote, and may have limited access to resources or support. Sometimes considered strange or unusual by others, and may be seen as outsiders or rebels. Sometimes able to leverage their isolation and independence to achieve their goals.",
+            },
+        ],
+        "isRecruiting": True,
+    },
     "GALACTIC": {
         "symbol": "GALACTIC",
         "name": "Galactic Alliance",
@@ -226,7 +307,34 @@ FACTIONS = {
         ],
         "isRecruiting": True,
     },
-    "LORDS": None,
+    "LORDS": {
+        "symbol": "LORDS",
+        "name": "Lords of the Void",
+        "description": "The Lords of the Void are a mysterious civilization who traverse the galaxy in search of knowledge and power, often using their advanced technology to their advantage.",
+        "traits": [
+            {
+                "symbol": "SECRETIVE",
+                "name": "Secretive",
+                "description": "Guarded and secretive, with a tendency to keep their plans and activities hidden from others. Sometimes difficult to negotiate with or trust, but often have valuable information or resources that they are willing to share with the right partners.",
+            },
+            {
+                "symbol": "TECHNOLOGICALLY_ADVANCED",
+                "name": "Technologically Advanced",
+                "description": "Possessing advanced technology and knowledge, often far beyond the level of other factions. Often have access to powerful weapons, ships, and other technology that gives them a significant advantage in battles and other conflicts.",
+            },
+            {
+                "symbol": "RESOURCEFUL",
+                "name": "Resourceful",
+                "description": "Known for their ingenuity and ability to make the most out of limited resources. Able to improvise and adapt to changing circumstances, using whatever is available to them in order to overcome challenges and achieve their goals.",
+            },
+            {
+                "symbol": "SELF_INTERESTED",
+                "name": "Self-Interested",
+                "description": "Focused on their own interests, with a tendency to prioritize their own goals and needs over those of others. Sometimes willing to engage in selfish or unethical behavior in pursuit of their goals, but may also be vulnerable to manipulation or betrayal by others.",
+            },
+        ],
+        "isRecruiting": True,
+    },
     "OBSIDIAN": {
         "symbol": "OBSIDIAN",
         "name": "Obsidian Syndicate",
@@ -281,6 +389,7 @@ FACTIONS = {
                 "description": "Known for their ingenuity and ability to make the most out of limited resources. Able to improvise and adapt to changing circumstances, using whatever is available to them in order to overcome challenges and achieve their goals.",
             },
         ],
+        "isRecruiting": True,
     },
     "QUANTUM": {
         "symbol": "QUANTUM",
@@ -310,7 +419,34 @@ FACTIONS = {
         ],
         "isRecruiting": True,
     },
-    "SHADOW": None,
+    "SHADOW": {
+        "symbol": "SHADOW",
+        "name": "Shadow Stalkers",
+        "description": "The Shadow Stalkers are a clandestine group, seemingly appearing and disappearing at will. Little is known about their actual motivations. Their ability to move without detection has sparked many rumors, some say they are interdimensional travelers.",
+        "traits": [
+            {
+                "symbol": "SECRETIVE",
+                "name": "Secretive",
+                "description": "Guarded and secretive, with a tendency to keep their plans and activities hidden from others. Sometimes difficult to negotiate with or trust, but often have valuable information or resources that they are willing to share with the right partners.",
+            },
+            {
+                "symbol": "UNPREDICTABLE",
+                "name": "Unpredictable",
+                "description": "Difficult to predict or anticipate, with a tendency to act in unexpected or chaotic ways.",
+            },
+            {
+                "symbol": "DEXTEROUS",
+                "name": "Dexterous",
+                "description": "Skilled in the use of their hands and able to perform complex tasks with precision and accuracy. Known for their manual dexterity and ability to manipulate objects with ease, making them valuable in a wide range of tasks and activities.",
+            },
+            {
+                "symbol": "FLEETING",
+                "name": "Fleeting",
+                "description": "Not permanently settled in one place, with a tendency to move frequently or unpredictably. Sometimes difficult to find or track, but may also be able to take advantage of opportunities or evade threats by moving quickly or unexpectedly.",
+            },
+        ],
+        "isRecruiting": True,
+    },
     "SOLITARY": {
         "symbol": "SOLITARY",
         "name": "Solitary Systems Alliance",
@@ -337,6 +473,7 @@ FACTIONS = {
                 "description": "Divided into many smaller groups or factions, with little central organization or coordination. Sometimes difficult to negotiate with or deal with as a single entity, but may also provide opportunities for individual factions to forge their own alliances or partnerships.",
             },
         ],
+        "isRecruiting": True,
     },
     "UNITED": {
         "symbol": "UNITED",
@@ -364,7 +501,7 @@ FACTIONS = {
                 "description": "Comprised of a diverse range of individuals, cultures, or beliefs. Sometimes able to offer a wide range of perspectives and expertise, but may also face challenges in achieving unity or consensus.",
             },
         ],
-        "isRecruiting": False,
+        "isRecruiting": True,
     },
     "VOID": {
         "symbol": "VOID",

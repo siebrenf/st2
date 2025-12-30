@@ -356,7 +356,11 @@ TRAITS_FACTION = {
     },
     "BUREAUCRATIC": None,
     "CAPITALISTIC": None,
-    "CLAN": None,
+    "CLAN": {
+        "symbol": "CLAN",
+        "name": "Clan",
+        "description": "A group of people united by a common ancestry or history. Sometimes able to trace their lineage back to a specific ancestor or founding member, and may be bound together by a set of traditions or customs. Sometimes able to rely on the support and loyalty of their fellow clan members, and may be able to leverage their connections and shared history to achieve their goals.",
+    },
     "COLLABORATIVE": {
         "symbol": "COLLABORATIVE",
         "name": "Collaborative",
@@ -437,7 +441,11 @@ TRAITS_FACTION = {
         "name": "Free Markets",
         "description": "Advocates of free market principles, with a strong emphasis on competition and the ability of individuals and businesses to succeed or fail based on their own efforts. Sometimes willing to engage in risky or unregulated activities in pursuit of profit.",
     },
-    "FRINGE": None,
+    "FRINGE": {
+        "symbol": "FRINGE",
+        "name": "Fringe",
+        "description": "Located on the outskirts or periphery of civilization. Sometimes isolated or remote, and may have limited access to resources or support. Sometimes considered strange or unusual by others, and may be seen as outsiders or rebels. Sometimes able to leverage their isolation and independence to achieve their goals.",
+    },
     "GUILD": None,
     "IMPERIALISTIC": {
         "symbol": "IMPERIALISTIC",
