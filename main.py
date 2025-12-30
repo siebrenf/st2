@@ -14,21 +14,18 @@ Example:
 if __name__ == "__main__":
     from st2.startup import game_server, api_server
     from st2.request import RequestMp
-    from st2.agent import api_agent
 
     game_server()
     manager, api_handler, qa_pairs = api_server()
     request = RequestMp(qa_pairs, priority=0, token=None)
 
     # update databases
-    from st2.db import db_update_factions
-    from st2.stargazers import astronomer, cartographer
+    from st2.stargazers import ambassador, astronomer, cartographer
 
-    token = api_agent(request, priority=0)[1]
-    db_update_factions(request, priority=0, token=token)
-    astronomer(request, priority=0, token=token)
-    cartographer(request, priority=0, token=token, chart="start systems")
-    cartographer(request, priority=3, token=token, chart="gate systems")
+    ambassador(request, priority=0)
+    astronomer(request, priority=0)
+    cartographer(request, priority=0, chart="start systems")
+    cartographer(request, priority=3, chart="gate systems")
 
     # (Re)start the start system probing
     from st2.spies import spymaster, detective
