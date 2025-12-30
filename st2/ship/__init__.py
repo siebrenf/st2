@@ -196,6 +196,7 @@ class Ship(dict):
         return ship_symbol
 
     # import methods
+    # TODO add methods for: repair, scrap, refine, install/remove mounts & modules, scan, warp
     from ._cargo import buy, cargo_yield, jettison, sell, supply, transfer
     from ._contract import contract, deliver
     from ._fuel import refuel
