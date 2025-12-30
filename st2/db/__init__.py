@@ -9,8 +9,6 @@ import subprocess as sp
 
 from psycopg import connect
 
-from st2.db.static import TRAITS_FACTION
-
 
 def db_server_path():
     db = os.path.join(os.environ["ST_DATA_DIR"], "sql")
@@ -356,7 +354,6 @@ def db_tables_init():
                 CREATE INDEX idx_system_symbol_market_transactions ON market_transactions("systemSymbol")
                 """
             )
-            #  PARTITION BY LIST ("waypointSymbol")
 
         if "market_tradegoods" not in tables:
             # - Create a waypoint specific tradegoods table:
@@ -385,7 +382,6 @@ def db_tables_init():
                 CREATE INDEX idx_system_symbol_market_tradegoods ON market_tradegoods("systemSymbol")
                 """
             )
-            #  PARTITION BY LIST ("waypointSymbol")
 
         if "shipyards" not in tables:
             cur.execute(
@@ -420,7 +416,7 @@ def db_tables_init():
                     "shipType" text,
                     "price" integer,
                     "timestamp" timestamptz,
-                    PRIMARY KEY ("waypointSymbol", "timestamp")
+                    PRIMARY KEY ("waypointSymbol", "shipSymbol", "timestamp")
                 )
                 """
             )
@@ -429,7 +425,6 @@ def db_tables_init():
                 CREATE INDEX idx_system_symbol_shipyard_transactions ON shipyard_transactions("systemSymbol")
                 """
             )
-            #  PARTITION BY LIST ("waypointSymbol")
 
         if "shipyard_ships" not in tables:
             # - Create a waypoint specific tradegoods table:
@@ -455,7 +450,6 @@ def db_tables_init():
                 CREATE INDEX idx_system_symbol_shipyard_ships ON shipyard_ships("systemSymbol")
                 """
             )
-            # PARTITION BY LIST ("waypointSymbol")
 
         if "events" not in tables:
             cur.execute(
@@ -519,56 +513,7 @@ def db_tables_init():
             )
 
 
-def db_update_factions(request, priority=0, token=None):
-    factions = {}
-    for fs in request.get_all("factions", priority, token):
-        for f in fs["data"]:
-            factions[f["symbol"]] = f
-
-    with connect("dbname=st2 user=postgres") as conn:
-        with conn.cursor() as cur:
-            # insert factions & faction_traits
-            for symbol in sorted(factions):
-                f = factions[symbol]
-                description = f["description"].replace("'", "''")
-                hq = f["headquarters"]
-                if hq == "":
-                    hq = None
-                traits = [t["symbol"] for t in f["traits"]]
-                cur.execute(
-                    """
-                    INSERT INTO factions 
-                    ("symbol", "name", "description", "headquarters", "traits", "isRecruiting")
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    ON CONFLICT ("symbol") DO NOTHING
-                    """,
-                    (
-                        f["symbol"],
-                        f["name"],
-                        description,
-                        hq,
-                        traits,
-                        f["isRecruiting"],
-                    ),
-                )
-
-                # traits_faction
-                for trait in f["traits"]:
-                    if TRAITS_FACTION.get(trait["symbol"]):
-                        continue
-                    description = trait["description"].replace("'", "''")
-                    cur.execute(
-                        """
-                        INSERT INTO traits_faction
-                        (symbol, name, description)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (symbol) DO NOTHING
-                        """,
-                        (trait["symbol"], trait["name"], description),
-                    )
-
-
-def print_tables():
+def get_tables():
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -580,9 +525,9 @@ def print_tables():
         return [row[0] for row in cur.fetchall()]
 
 
-def print_table(table):
+def get_table(table, show=False):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        # print a table's columns
+        # get a table's columns
         cur.execute(
             """
             SELECT *
@@ -600,20 +545,25 @@ def print_table(table):
             dtype = row[7]
             header.append(name)
             dtypes.append(dtype)
-        print(header)
-        print(dtypes)
+        if show:
+            print(header)
+            print(dtypes)
+        else:
+            yield header
 
-        # print a table's rows
+        # get a table's rows
         cur.execute(f"SELECT * FROM {table}")
         ret = cur.fetchall()
         for row in ret:
-            print(row)
+            if show:
+                print(row)
+            else:
+                yield row
 
 
 def delete_table(table):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(f"DROP TABLE {table}")
-        conn.commit()
 
 
 def delete_tables():
@@ -628,4 +578,3 @@ def delete_tables():
         for row in cur.fetchall():
             table = row[0]
             cur.execute(f"DROP TABLE {table}")
-            conn.commit()

@@ -282,7 +282,7 @@ def buy_ship(ship_type, waypoint_symbol, agent_symbol, request, verbose=True):
                 ("waypointSymbol", "systemSymbol", "shipSymbol",
                  "agentSymbol", "shipType", "price", "timestamp")
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT ("waypointSymbol", "timestamp") DO NOTHING
+                ON CONFLICT ("waypointSymbol", "shipSymbol", "timestamp") DO NOTHING
                 """,
                 (
                     transaction["waypointSymbol"],
