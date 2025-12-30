@@ -234,8 +234,10 @@ class TaskMaster:
         return coro
 
 
+@logger.catch  # catch errors in a separate thread
 async def _test_coroutine(name, seconds=1):
-    print(f"{name} will sleep for {seconds} sec.")
+    seconds = float(seconds)
+    logger.debug(f"{name} will sleep for {seconds} sec.")
     await asyncio.sleep(seconds)
-    print(f"{name} is done after {seconds} seconds")
+    logger.debug(f"{name} is done after {seconds} seconds")
     return name, seconds
