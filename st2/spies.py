@@ -5,7 +5,7 @@ from psycopg import connect
 from psycopg.types.json import Jsonb
 
 from st2 import time
-from st2.agent import register_random_agent
+from st2.agent import api_agent, register_random_agent
 from st2.logging import logger
 from st2.system import System
 
@@ -14,7 +14,11 @@ DEBUG = False
 
 def spymaster(request, priority=3):
     """
+    Dispatch ships to all markets in all starting systems to automatically gather intelligence.
+
     Can be used after all start systems have been charted by the cartographer.
+
+    Requires an active taskmaster with 'pname = "probes"'.
     """
     # Get a dict of start systems per faction
     faction2system = _get_faction2system()
@@ -234,6 +238,10 @@ def _assign_ship(ship_symbol, system_symbol, system2market, pname, cur):
 
 
 def detective(request, priority=3):
+    """
+    Investigate all public agents, and update the active agents
+    """
+    token = api_agent(request, priority)[1]
     page = 1
     total = float("inf")
     n = 0
@@ -241,9 +249,7 @@ def detective(request, priority=3):
         with conn.cursor() as cur:
             while page < total:
                 ret = request.get(
-                    endpoint="agents",
-                    priority=priority,
-                    params={"page": page, "limit": 20},
+                    "agents", priority, token, params={"page": page, "limit": 20}
                 )
                 if total == float("inf"):
                     t = ret["meta"]["total"]
@@ -276,246 +282,31 @@ def detective(request, priority=3):
     if DEBUG:
         logger.debug(f"The Detective identified {n:_} active agents")
 
-    # # get agents from the leaderboard
-    # status = request.get("", priority)
-    # agents = set()
-    # for v in status["leaderboards"].values():
-    #     for md in v:
-    #         if md.get("credits", 999_999) <= 175_000:
-    #             continue
-    #         agents.add(md["agentSymbol"])
-    # print(len(agents), sorted(agents))
-    #
-    # # get agents from the database
-    # with connect("dbname=st2 user=postgres") as conn:
-    #     with conn.cursor() as cur:
-    #         cur.execute(
-    #             """
-    #             SELECT DISTINCT symbol
-    #             FROM agents_public
-    #             """
-    #         )
-    #         agents = agents | set([row[0] for row in cur.fetchall()])
-    #         print(len(agents), sorted(agents))
-    #
-    #         cur.execute(
-    #             """
-    #             SELECT DISTINCT "agentSymbol"
-    #             FROM shipyard_transactions
-    #             """,
-    #             # WHERE NOT "shipType" = %s["SHIP_PROBE"],
-    #         )
-    #         agents = agents | set([row[0] for row in cur.fetchall()])
-    #         print(len(agents), sorted(agents))
-    #
-    #         cur.execute(
-    #             """
-    #             SELECT DISTINCT "shipSymbol"
-    #             FROM market_transactions
-    #             """,
-    #             # WHERE NOT "tradeSymbol" = %s ["FUEL"],
-    #         )
-    #         agents = agents | set([row[0].rsplit("-", 1)[0] for row in cur.fetchall()])
-    #         print(len(agents), sorted(agents))
-    #
-    #         # remove own agents
-    #         cur.execute(
-    #             """
-    #             SELECT "symbol"
-    #             FROM agents
-    #             """
-    #         )
-    #         agents = agents - set([row[0].rsplit("-", 1)[0] for row in cur.fetchall()])
-    #         print(len(agents), sorted(agents))
-    #
-    # # update agents_public
-    # with connect("dbname=st2 user=postgres") as conn:
-    #     with conn.cursor() as cur:
-    #         for agent in sorted(agents):
-    #             agent = request.get(f"agents/{agent}", priority)["data"]
-    #             # ignore junk agents
-    #             if agent["credits"] <= 175_000:
-    #                 continue
-    #             cur.execute(
-    #                 """
-    #                 INSERT INTO agents_public
-    #                 ("symbol", "headquarters", "credits",
-    #                  "startingFaction", "shipCount", "timestamp")
-    #                 VALUES (%s, %s, %s, %s, %s, %s)
-    #                 """,
-    #                 (
-    #                     agent["symbol"],
-    #                     agent["headquarters"],
-    #                     agent["credits"],
-    #                     agent["startingFaction"],
-    #                     agent["shipCount"],
-    #                     time.now(),
-    #                 ),
-    #             )
 
-
-# def spymaster(request, priority=3):
-#     """
-#     Can be used after all start systems have been charted by the cartographer.
-#     """
-#     # get a dict of start systems per faction
-#     faction2start_system2agent = {}
-#     faction2hq = {}
-#     with connect("dbname=st2 user=postgres") as conn:
-#         with conn.cursor() as cur:
-#             cur.execute(
-#                 """
-#                 SELECT "systemSymbol", "faction"
-#                 FROM "waypoints"
-#                 WHERE type = 'ENGINEERED_ASTEROID'
-#                 EXCEPT
-#                 SELECT "headquarters", "symbol"
-#                 FROM "factions"
-#                 ORDER BY "faction", "systemSymbol"
-#                 """
-#             )
-#             for system, faction in cur.fetchall():
-#                 if faction not in faction2start_system2agent:
-#                     faction2start_system2agent[faction] = {}
-#                 if system not in faction2start_system2agent[faction]:
-#                     faction2start_system2agent[faction][system] = None
-#
-#             if DEBUG:
-#                 cur.execute(
-#                     """
-#                     SELECT headquarters, symbol
-#                     FROM factions
-#                     ORDER BY symbol
-#                     """
-#                 )
-#                 for system, faction in cur.fetchall():
-#                     faction2hq[faction] = system
-#
-#     # get agents for each start system per faction
-#     role = "spy"
-#     with connect("dbname=st2 user=postgres") as conn:
-#         with conn.cursor() as cur:
-#             for faction in faction2start_system2agent:
-#                 if DEBUG:
-#                     n = len(faction2start_system2agent[faction])
-#                     logger.debug(
-#                         f"{faction} has {n} start systems (HQ system excluded): "
-#                     )
-#
-#                 # Load agents
-#                 cur.execute(
-#                     """
-#                     SELECT *
-#                     FROM agents
-#                     WHERE (role, faction) = (%s, %s)
-#                     ORDER BY other
-#                     """,
-#                     (role, faction),
-#                 )
-#                 for agent_symbol, _, _, _, system_symbol in cur.fetchall():
-#                     faction2start_system2agent[faction][system_symbol] = agent_symbol
-#                     if DEBUG:
-#                         if system_symbol == faction2hq[faction]:
-#                             logger.debug(f" - {system_symbol} (faction HQ)")
-#                         else:
-#                             logger.debug(f" - {system_symbol}")
-#
-#                 # Register agents
-#                 while None in faction2start_system2agent[faction].values():
-#                     data = register_random_agent(request, priority, faction)
-#                     agent_symbol = data["agent"]["symbol"]
-#                     system_symbol = data["ship"]["nav"]["systemSymbol"]
-#                     if faction2start_system2agent[faction].get(system_symbol):
-#                         continue
-#
-#                     cur.execute(
-#                         """
-#                         UPDATE agents
-#                         SET role = %s,
-#                             other = %s
-#                         WHERE symbol = %s
-#                         """,
-#                         (role, system_symbol, agent_symbol),
-#                     )
-#                     conn.commit()
-#                     faction2start_system2agent[faction][system_symbol] = agent_symbol
-#                     if DEBUG:
-#                         if system_symbol == faction2hq[faction]:
-#                             logger.debug(f" - {system_symbol} (faction HQ)")
-#                         else:
-#                             logger.debug(f" - {system_symbol}")
-#
-#     # (Re)start the seeding & probing of each system
-#     pname = "probes"
-#     system = None
-#     with connect("dbname=st2 user=postgres") as conn:
-#         with conn.cursor() as cur:
-#             for faction in faction2start_system2agent:
-#                 for system_symbol, agent_symbol in faction2start_system2agent[
-#                     faction
-#                 ].items():
-#                     commit = False  # commit per system
-#                     cur.execute(
-#                         """
-#                         SELECT *
-#                         FROM tasks
-#                         WHERE "agentSymbol" = %s
-#                         ORDER BY "symbol"
-#                         """,
-#                         (agent_symbol,),
-#                     )
-#                     for ship_symbol, _, current, _, _, _, _ in cur.fetchall():
-#                         task = str(current).split(" ")
-#                         if task[0] in ["probe", "seed"]:
-#                             continue
-#                         elif task[0] != "None":
-#                             raise ValueError(
-#                                 f"Task not recognized: {ship_symbol=}, {current=}"
-#                             )
-#
-#                         commit = True
-#                         if ship_symbol == f"{agent_symbol}-1":
-#                             task = f"seed {pname} {system_symbol}"
-#                             cur.execute(
-#                                 """
-#                                 UPDATE tasks
-#                                 SET current = %s,
-#                                     pname = %s
-#                                 WHERE "symbol" = %s
-#                                 """,
-#                                 [task, pname, ship_symbol],
-#                             )
-#                         elif ship_symbol == f"{agent_symbol}-2":
-#                             cur.execute(
-#                                 """
-#                                 SELECT nav
-#                                 FROM ships
-#                                 WHERE "symbol" = %s
-#                                 """,
-#                                 [ship_symbol],
-#                             )
-#                             waypoint_symbol = cur.fetchone()[0]["waypointSymbol"]
-#                             if system is None or system.symbol != system_symbol:
-#                                 system = System(system_symbol, request)
-#                             wp_type = "market"
-#                             if waypoint_symbol in system.shipyards:
-#                                 wp_type = "shipyard"
-#                             task = f"probe {wp_type} {waypoint_symbol}"
-#                             cur.execute(
-#                                 """
-#                                 UPDATE tasks
-#                                 SET current = %s,
-#                                     pname = %s
-#                                 WHERE "symbol" = %s
-#                                 """,
-#                                 [task, pname, ship_symbol],
-#                             )
-#                         else:
-#                             # this happens if a probe is bought, but not assigned a waypoint
-#                             logger.error(
-#                                 f"Ship not recognized: {ship_symbol=}, {current=}"
-#                             )
-#                             continue
-#
-#                     if commit:
-#                         conn.commit()
+def private_eye(request, priority=3):
+    """
+    Update public agents that are already known to be active.
+    """
+    token = api_agent(request, priority)[1]
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        for (agent_symbol,) in cur.execute(
+            """SELECT DISTINCT symbol FROM agents_public WHERE credits > 175000"""
+        ).fetchall():
+            agent = request.get(f"agents/{agent_symbol}", priority, token)["data"]
+            timestamp = time.now()
+            cur.execute(
+                """
+                INSERT INTO agents_public
+                ("symbol", "headquarters", "credits",
+                 "startingFaction", "shipCount", "timestamp")
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    agent["symbol"],
+                    agent["headquarters"],
+                    agent["credits"],
+                    agent["startingFaction"],
+                    agent["shipCount"],
+                    timestamp,
+                ),
+            )

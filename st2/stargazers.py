@@ -4,15 +4,108 @@ from psycopg import connect
 from psycopg.types.json import Jsonb
 
 from st2.agent import api_agent
-from st2.db.static import TRAITS_WAYPOINT
+from st2.db.static import FACTIONS, TRAITS_FACTION, TRAITS_WAYPOINT
 from st2.logging import logger
 
 DEBUG = False
 
 
-def astronomer(request, priority=3, token=None):
-    if token is None:
-        token = api_agent(request, priority)[1]
+# def merchant(request, priority=0):  # TODO: formalize
+#     """
+#     Map all supply chains.
+#     """
+#     token = api_agent(request, priority)[1]
+#     ret = request.get("market/supply-chain", priority, token)
+#     print("SUPPLY_CHAIN = {")
+#     print("    # export: imports")
+#     for export in sorted(ret["data"]["exportToImportMap"]):
+#         imports = ret["data"]["exportToImportMap"][export]
+#         imports = '", "'.join(imports)
+#         print(
+#             f"""    "{export}": ["{imports}"],"""
+#         )
+#     print("}")
+#     print()
+
+
+def ambassador(request, priority=0):
+    """
+    Map all factions.
+    """
+    factions = {}
+    token = api_agent(request, priority)[1]
+    for fs in request.get_all("factions", priority, token):
+        for f in fs["data"]:
+            factions[f["symbol"]] = f
+
+    with connect("dbname=st2 user=postgres") as conn:
+        with conn.cursor() as cur:
+            # insert factions & faction_traits
+            for symbol in sorted(factions):
+                f = factions[symbol]
+                description = f["description"].replace("'", "''")
+                hq = f["headquarters"]
+                if hq == "":
+                    hq = None
+                traits = [t["symbol"] for t in f["traits"]]
+                cur.execute(
+                    """
+                    INSERT INTO factions 
+                    ("symbol", "name", "description", "headquarters", "traits", "isRecruiting")
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT ("symbol") DO NOTHING
+                    """,
+                    (
+                        f["symbol"],
+                        f["name"],
+                        description,
+                        hq,
+                        traits,
+                        f["isRecruiting"],
+                    ),
+                )
+
+                # compare to st2.db.static
+                if FACTIONS.get(f["symbol"]) is None:
+                    logger.info(f"A new faction has been discovered: {f['symbol']}!")
+                else:
+                    for k, v in f.items():
+                        if k == "headquarters":
+                            continue
+                        if FACTIONS[f["symbol"]][k] != v:
+                            logger.info(f"{f['symbol']} {k} has changed to '{v}'")
+
+                # traits_faction
+                for trait in f["traits"]:
+                    description = trait["description"].replace("'", "''")
+                    cur.execute(
+                        """
+                        INSERT INTO traits_faction
+                        (symbol, name, description)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (symbol) DO NOTHING
+                        """,
+                        (trait["symbol"], trait["name"], description),
+                    )
+
+                    # compare to st2.db.static
+                    if TRAITS_FACTION.get(trait["symbol"]) is None:
+                        logger.info(
+                            f"A new faction trait has discovered: {trait['symbol']}!"
+                        )
+                    else:
+                        for k, v in trait.items():
+                            if TRAITS_FACTION[trait["symbol"]][k] != v:
+                                logger.info(
+                                    f"{trait['symbol']} {k} has changed to '{v}'"
+                                )
+
+
+def astronomer(request, priority=3):
+    """
+    Map all systems.
+    """
+    token = api_agent(request, priority)[1]
     with connect("dbname=st2 user=postgres") as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -110,17 +203,15 @@ def astronomer(request, priority=3, token=None):
                     """,
                     (current, page, total),
                 )
-                conn.commit()
+
     logger.info(f"The Astronomer has completed its chart!")
 
 
-def cartographer(request, priority=3, token=None, chart="start systems"):
+def cartographer(request, priority=3, chart="start systems"):
     """
     Can be used after all systems have been mapped by the astronomer.
     """
-    if token is None:
-        token = api_agent(request, priority)[1]
-    completed = False
+    token = api_agent(request, priority)[1]
     with connect("dbname=st2 user=postgres") as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -133,21 +224,18 @@ def cartographer(request, priority=3, token=None, chart="start systems"):
                 )
                 """
             )
-            conn.commit()
 
     # start systems (fully charted by default)
-    index = "start systems"
-    if chart == index:
+    if chart == "start systems":
         query = """
         SELECT "systemSymbol" 
         FROM "waypoints" 
         WHERE "type" = 'ENGINEERED_ASTEROID' 
         ORDER BY "systemSymbol"
         """
-        completed = _chart_systems(request, priority, token, index, query)
+        completed = _chart_systems(request, priority, token, "start systems", query)
 
-    index = "gate systems"
-    if chart == index:
+    elif chart == "gate systems":
         # gate systems (can be charted by other players)
         query = """
         SELECT "systemSymbol" 
@@ -159,7 +247,12 @@ def cartographer(request, priority=3, token=None, chart="start systems"):
         WHERE "type" = 'ENGINEERED_ASTEROID'
         ORDER BY "systemSymbol"
         """
-        completed = _chart_systems(request, priority, token, index, query)
+        completed = _chart_systems(request, priority, token, "gate systems", query)
+
+    else:
+        raise ValueError(
+            f"{chart=} not recognized! Options: 'start systems' or 'gate systems'"
+        )
 
     if completed:
         logger.info(f"The Cartographer has completed its chart!")

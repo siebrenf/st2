@@ -18,6 +18,7 @@ from .ship_roles import SHIP_ROLES
 from .ship_status import SHIP_STATUS
 from .ships import SHIPS
 from .supply import SUPPLY
+from .supply_chain import SUPPLY_CHAIN
 
 # waypoint related
 from .traits import TRAITS_FACTION, TRAITS_WAYPOINT
