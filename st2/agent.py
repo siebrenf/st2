@@ -25,8 +25,7 @@ def api_agent(request, priority=0):
                 data = register_random_agent(
                     request,
                     priority,
-                    insert_ship=False,
-                    insert_probe=False,
+                    insert_ships=False,
                 )
                 symbol = data["agent"]["symbol"]
                 token = data["token"]
@@ -50,8 +49,7 @@ def register_random_agent(
     email=None,
     insert_agent=False,
     insert_contract=False,
-    insert_ship=True,
-    insert_probe=True,
+    insert_ships=True,
     max_tries=10,
 ):
     tries = []
@@ -68,8 +66,7 @@ def register_random_agent(
                 email,
                 insert_agent,
                 insert_contract,
-                insert_ship,
-                insert_probe,
+                insert_ships,
             )
             return data
         except Exception as e:
@@ -87,14 +84,13 @@ def register_agent(
     email=None,
     insert_agent=True,
     insert_contract=True,
-    insert_ship=True,
-    insert_probe=True,
+    insert_ships=True,
 ):
     assert symbol == symbol.upper()
     payload = {"symbol": symbol, "faction": faction}
     if email:
         payload["email"] = email
-    # data keys: ['token', 'agent', 'contract', 'faction', 'ship']
+    # data keys: ['token', 'agent', 'contract', 'faction', 'ships']
     token = os.environ["ST_ACCOUNT_TOKEN"]
     data = request.post("register", priority, token, payload)["data"]
     with connect("dbname=st2 user=postgres") as conn:
@@ -149,73 +145,37 @@ def register_agent(
                     ),
                 )
 
-            if insert_ship:
-                ship = data["ship"]
-                ship["cooldown"]["expiration"] = time.write()
-                cur.execute(
-                    """
-                    INSERT INTO ships
-                    ("symbol", "agentSymbol", "nav", "crew", "fuel", "cooldown", "frame",
-                     "reactor", "engine", "modules", "mounts", "registration", "cargo")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        ship["symbol"],
-                        symbol,
-                        Jsonb(ship["nav"]),
-                        Jsonb(ship["crew"]),
-                        Jsonb(ship["fuel"]),
-                        Jsonb(ship["cooldown"]),
-                        Jsonb(ship["frame"]),
-                        Jsonb(ship["reactor"]),
-                        Jsonb(ship["engine"]),
-                        Jsonb(ship["modules"]),
-                        Jsonb(ship["mounts"]),
-                        Jsonb(ship["registration"]),
-                        Jsonb(ship["cargo"]),
-                    ),
-                )
-                cur.execute(
-                    """
-                    INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (ship["symbol"], symbol, None, None, False, None, None),
-                )
-
-            if insert_probe:
-                ship = request.get(f"my/ships/{symbol}-2", priority, data["token"])[
-                    "data"
-                ]
-                ship["cooldown"]["expiration"] = time.write()
-                cur.execute(
-                    """
-                    INSERT INTO ships
-                    ("symbol", "agentSymbol", "nav", "crew", "fuel", "cooldown", "frame",
-                     "reactor", "engine", "modules", "mounts", "registration", "cargo")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        ship["symbol"],
-                        symbol,
-                        Jsonb(ship["nav"]),
-                        Jsonb(ship["crew"]),
-                        Jsonb(ship["fuel"]),
-                        Jsonb(ship["cooldown"]),
-                        Jsonb(ship["frame"]),
-                        Jsonb(ship["reactor"]),
-                        Jsonb(ship["engine"]),
-                        Jsonb(ship["modules"]),
-                        Jsonb(ship["mounts"]),
-                        Jsonb(ship["registration"]),
-                        Jsonb(ship["cargo"]),
-                    ),
-                )
-                cur.execute(
-                    """
-                    INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (ship["symbol"], symbol, None, None, False, None, None),
-                )
+            if insert_ships:
+                for ship in data["ships"]:
+                    ship["cooldown"]["expiration"] = time.write()
+                    cur.execute(
+                        """
+                        INSERT INTO ships
+                        ("symbol", "agentSymbol", "nav", "crew", "fuel", "cooldown", "frame",
+                         "reactor", "engine", "modules", "mounts", "registration", "cargo")
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            ship["symbol"],
+                            symbol,
+                            Jsonb(ship["nav"]),
+                            Jsonb(ship["crew"]),
+                            Jsonb(ship["fuel"]),
+                            Jsonb(ship["cooldown"]),
+                            Jsonb(ship["frame"]),
+                            Jsonb(ship["reactor"]),
+                            Jsonb(ship["engine"]),
+                            Jsonb(ship["modules"]),
+                            Jsonb(ship["mounts"]),
+                            Jsonb(ship["registration"]),
+                            Jsonb(ship["cargo"]),
+                        ),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (ship["symbol"], symbol, None, None, False, None, None),
+                    )
     return data
