@@ -525,7 +525,7 @@ def get_tables():
         return [row[0] for row in cur.fetchall()]
 
 
-def get_table(table, show=False):
+def get_table(table):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         # get a table's columns
         cur.execute(
@@ -537,28 +537,17 @@ def get_table(table, show=False):
             """,
             (table,),
         )
-        ret = cur.fetchall()
-        header = []
-        dtypes = []
-        for row in ret:
-            name = row[3]
-            dtype = row[7]
-            header.append(name)
-            dtypes.append(dtype)
-        if show:
-            print(header)
-            print(dtypes)
-        else:
-            yield header
+        header = [row[3] for row in cur.fetchall()]
+        yield header
 
         # get a table's rows
-        cur.execute(f"SELECT * FROM {table}")
-        ret = cur.fetchall()
-        for row in ret:
-            if show:
-                print(row)
-            else:
-                yield row
+        query = f"SELECT * FROM {table}"
+        for col in ["timestamp", "deadlineToAccept", "symbol"]:
+            if col in header:
+                query = f"SELECT * FROM {table} ORDER BY {col}"
+                break
+        for row in cur.execute(query).fetchall():
+            yield row
 
 
 def delete_table(table):
