@@ -1,4 +1,5 @@
 from psycopg import connect
+from psycopg.types.json import Jsonb
 
 from st2 import time
 
@@ -44,6 +45,26 @@ def shipyard(self):
                         s["activity"],
                         s["purchasePrice"],
                         timestamp,
+                    ),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO ship_templates
+                    ("type", "name", "description", "frame", "reactor", 
+                    "engine", "modules", "mounts", "crew")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT ("type") DO NOTHING
+                    """,
+                    (
+                        s["type"],
+                        s["name"],
+                        s["description"],
+                        Jsonb(s["frame"]),
+                        Jsonb(s["reactor"]),
+                        Jsonb(s["engine"]),
+                        Jsonb(s["modules"]),
+                        Jsonb(s["mounts"]),
+                        Jsonb(s["crew"]),
                     ),
                 )
             for s in data.get("transactions", []):

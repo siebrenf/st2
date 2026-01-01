@@ -451,6 +451,24 @@ def db_tables_init():
                 """
             )
 
+        if "ship_templates" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE ship_templates
+                (
+                    "type" text PRIMARY KEY,
+                    "name" text,
+                    "description" text,
+                    "frame" JsonB,
+                    "reactor" JsonB,
+                    "engine" JsonB,
+                    "modules" JsonB,
+                    "mounts" JsonB,
+                    "crew" JsonB
+                )
+                """
+            )
+
         if "events" not in tables:
             cur.execute(
                 """
@@ -525,7 +543,7 @@ def get_tables():
         return [row[0] for row in cur.fetchall()]
 
 
-def get_table(table):
+def get_table(table, n=None, ascending=True, column_names=True):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         # get a table's columns
         cur.execute(
@@ -538,14 +556,19 @@ def get_table(table):
             (table,),
         )
         header = [row[3] for row in cur.fetchall()]
-        yield header
+        if column_names:
+            yield header
 
         # get a table's rows
         query = f"SELECT * FROM {table}"
-        for col in ["timestamp", "deadlineToAccept", "symbol"]:
+        for col in ["timestamp", "deadlineToAccept", "symbol", "type"]:
             if col in header:
                 query = f"SELECT * FROM {table} ORDER BY {col}"
+                if not ascending:
+                    query += " DESC"
                 break
+        if n:
+            query += f" LIMIT {n}"
         for row in cur.execute(query).fetchall():
             yield row
 
