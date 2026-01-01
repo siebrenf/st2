@@ -6,9 +6,9 @@ REACTORS = {
         "description": "A basic chemical power reactor, used to generate electricity from chemical reactions.",
         "powerOutput": 15,
         "quality": 3,
-        "requirements": {"crew": 3},
         "condition": 1,
         "integrity": 1,
+        "requirements": {"crew": 3},
     },
     "REACTOR_FISSION_I": {
         "symbol": "REACTOR_FISSION_I",
@@ -16,9 +16,9 @@ REACTORS = {
         "description": "A basic fission power reactor, used to generate electricity from nuclear fission reactions.",
         "powerOutput": 31,
         "quality": 5,
-        "requirements": {"crew": 8},
         "condition": 1,
         "integrity": 1,
+        "requirements": {"crew": 8},
     },
     "REACTOR_FUSION_I": {
         "symbol": "REACTOR_FUSION_I",
@@ -26,9 +26,9 @@ REACTORS = {
         "description": "A basic fusion power reactor, used to generate electricity from nuclear fusion reactions.",
         "powerOutput": 40,
         "quality": 7,
-        "requirements": {"crew": 12},
         "condition": 1,
         "integrity": 1,
+        "requirements": {"crew": 12},
     },
     "REACTOR_SOLAR_I": {
         "symbol": "REACTOR_SOLAR_I",
@@ -36,8 +36,8 @@ REACTORS = {
         "description": "A basic solar power reactor, used to generate electricity from solar energy.",
         "powerOutput": 3,
         "quality": 1,
-        "requirements": {"crew": 0},
         "condition": 1,
         "integrity": 1,
+        "requirements": {"crew": 0},
     },
 }

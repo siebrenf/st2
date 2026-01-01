@@ -116,8 +116,8 @@ def update_ships():
 
 
 def update_frames():
-    for symbol, ship in SHIPS.items():
-        FRAMES[symbol] = ship["frame"]
+    for ship in SHIPS.values():
+        FRAMES[ship["frame"]["symbol"]] = ship["frame"]
 
     order = [
         "symbol",
@@ -142,8 +142,8 @@ def update_frames():
 
 
 def update_reactors():
-    for symbol, ship in SHIPS.items():
-        REACTORS[symbol] = ship["reactor"]
+    for ship in SHIPS.values():
+        REACTORS[ship["reactor"]["symbol"]] = ship["reactor"]
 
     order = [
         "symbol",
@@ -166,8 +166,8 @@ def update_reactors():
 
 
 def update_engines():
-    for symbol, ship in SHIPS.items():
-        ENGINES[symbol] = ship["engine"]
+    for ship in SHIPS.values():
+        ENGINES[ship["engine"]["symbol"]] = ship["engine"]
 
     order = [
         "symbol",
@@ -190,7 +190,7 @@ def update_engines():
 
 
 def update_modules():
-    for symbol, ship in SHIPS.items():
+    for ship in SHIPS.values():
         for module in ship["modules"]:
             MODULES[module["symbol"]] = module
 
@@ -206,7 +206,7 @@ def update_modules():
 
 
 def update_mounts():
-    for symbol, ship in SHIPS.items():
+    for ship in SHIPS.values():
         for mount in ship["mounts"]:
             MOUNTS[mount["symbol"]] = mount
 
@@ -226,6 +226,16 @@ def update_mounts():
     with open(file_name, "w") as f:
         f.write("MOUNTS = " + json.dumps(MOUNTS, indent=4).replace("null", "None"))
     sp.check_output(f"black -q {file_name}", shell=True)
+
+
+# TODO:
+#   - factions
+#   - waypoints
+#   - faction traits
+#   - waypoint traits
+#   - system types
+#   - waypoint types
+#   - ship roles?
 
 
 # def update_tables():

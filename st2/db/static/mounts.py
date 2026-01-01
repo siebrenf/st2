@@ -2,16 +2,16 @@ MOUNTS = {
     "MOUNT_GAS_SIPHON_I": {
         "symbol": "MOUNT_GAS_SIPHON_I",
         "name": "Gas Siphon I",
-        "description": "A basic gas siphon that can extract gas from gas giants and other gas-rich bodies.",
+        "description": "A basic gas siphon that can extract gas and other resources from gas giants and other gas-rich bodies.",
         "strength": 10,
-        "requirements": {"crew": 0, "power": 1},
+        "requirements": {"power": 1, "crew": 0},
     },
     "MOUNT_GAS_SIPHON_II": {
         "symbol": "MOUNT_GAS_SIPHON_II",
         "name": "Gas Siphon II",
         "description": "An advanced gas siphon that can extract gas from gas giants and other gas-rich bodies more efficiently and at a higher rate.",
         "strength": 20,
-        "requirements": {"crew": 2, "power": 2},
+        "requirements": {"power": 2, "crew": 2},
     },
     "MOUNT_GAS_SIPHON_III": None,
     "MOUNT_LASER_CANNON_I": None,
@@ -20,14 +20,14 @@ MOUNTS = {
         "name": "Mining Laser I",
         "description": "A basic mining laser that can be used to extract valuable minerals from asteroids and other space objects.",
         "strength": 3,
-        "requirements": {"crew": 1, "power": 1},
+        "requirements": {"power": 1, "crew": 1},
     },
     "MOUNT_MINING_LASER_II": {
         "symbol": "MOUNT_MINING_LASER_II",
         "name": "Mining Laser II",
         "description": "An advanced mining laser that is more efficient and effective at extracting valuable minerals from asteroids and other space objects.",
         "strength": 5,
-        "requirements": {"crew": 2, "power": 2},
+        "requirements": {"power": 2, "crew": 2},
     },
     "MOUNT_MINING_LASER_III": None,
     "MOUNT_MISSILE_LAUNCHER_I": {
@@ -42,7 +42,7 @@ MOUNTS = {
         "name": "Sensor Array II",
         "description": "An advanced sensor array that improves a ship's ability to detect and track other objects in space with greater accuracy and range.",
         "strength": 4,
-        "requirements": {"crew": 2, "power": 2},
+        "requirements": {"power": 2, "crew": 2},
     },
     "MOUNT_SENSOR_ARRAY_III": None,
     "MOUNT_SURVEYOR_I": {
@@ -63,7 +63,7 @@ MOUNTS = {
             "GOLD_ORE",
             "PLATINUM_ORE",
         ],
-        "requirements": {"crew": 1, "power": 1},
+        "requirements": {"power": 1, "crew": 1},
     },
     "MOUNT_SURVEYOR_II": {
         "symbol": "MOUNT_SURVEYOR_II",
@@ -85,7 +85,7 @@ MOUNTS = {
             "DIAMONDS",
             "URANITE_ORE",
         ],
-        "requirements": {"crew": 4, "power": 3},
+        "requirements": {"power": 3, "crew": 4},
     },
     "MOUNT_SURVEYOR_III": None,
     "MOUNT_TURRET_I": {
