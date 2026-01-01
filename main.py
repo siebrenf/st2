@@ -28,7 +28,9 @@ if __name__ == "__main__":
     cartographer(request, priority=3, chart="gate systems")
 
     # (Re)start the start system probing
-    from st2.spies import spymaster, detective
+    from st2.spies import spymaster, detective, private_eye
+
+    detective(request, priority=3)
 
     spymaster(request, priority=3)
 
@@ -47,5 +49,5 @@ if __name__ == "__main__":
 
     from time import sleep
     while True:
-        detective(request, priority=3)
         sleep(3600)
+        private_eye(request, priority=3)
