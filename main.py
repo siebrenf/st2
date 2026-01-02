@@ -20,9 +20,8 @@ if __name__ == "__main__":
     request = RequestMp(qa_pairs, priority=0, token=None)
 
     # update databases
-    from st2.stargazers import scribe, merchant, ambassador, astronomer, cartographer
+    from st2.stargazers import merchant, ambassador, astronomer, cartographer
 
-    scribe(request, priority=0)
     merchant(request, priority=0)
     ambassador(request, priority=0)
     astronomer(request, priority=0)
@@ -36,15 +35,24 @@ if __name__ == "__main__":
 
     spymaster(request, priority=3)
 
-    # start the probing process
+    import atexit
     import multiprocessing as mp
     from st2.ai import taskmaster
 
+    # start the probing process
     pname = "probes"
     probe_taskmaster = mp.Process(
         target=taskmaster,
         kwargs={"pname": pname, "qa_pairs": qa_pairs},
     )
+
+
+    def stop_probe_taskmaster():
+        probe_taskmaster.terminate()
+        probe_taskmaster.join()
+
+
+    atexit.register(stop_probe_taskmaster)
     probe_taskmaster.start()
 
     ###
