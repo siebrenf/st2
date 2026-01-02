@@ -8,6 +8,7 @@ import os
 import subprocess as sp
 
 from psycopg import connect
+from psycopg.rows import dict_row, tuple_row
 
 
 def db_server_path():
@@ -564,8 +565,11 @@ def get_tables():
         return [row[0] for row in cur.fetchall()]
 
 
-def get_table(table, n=None, ascending=True, column_names=True):
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+def get_table(table, n=None, ascending=True, header=True, as_dict=False):
+    factory = dict_row if as_dict else tuple_row
+    with connect(
+        "dbname=st2 user=postgres", row_factory=factory
+    ) as conn, conn.cursor() as cur:
         # get a table's columns
         cur.execute(
             """
@@ -576,14 +580,14 @@ def get_table(table, n=None, ascending=True, column_names=True):
             """,
             (table,),
         )
-        header = [row[3] for row in cur.fetchall()]
-        if column_names:
-            yield header
+        columns = [row["column_name" if as_dict else 3] for row in cur.fetchall()]
+        if header:
+            yield columns
 
         # get a table's rows
         query = f"SELECT * FROM {table}"
         for col in ["timestamp", "deadlineToAccept", "symbol", "type"]:
-            if col in header:
+            if col in columns:
                 query = f"SELECT * FROM {table} ORDER BY {col}"
                 if not ascending:
                     query += " DESC"

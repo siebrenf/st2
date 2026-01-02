@@ -68,7 +68,7 @@ def _update_ships():
         modules,
         mounts,
         crew,
-    ) in get_table("ship_templates", column_names=False):
+    ) in get_table("ship_templates", header=False):
         price = SHIPS[ship].get("purchasePrice", None)
         SHIPS[ship] = {
             "type": ship,
@@ -282,7 +282,7 @@ def update_factions():
     """
     Update all faction related static DBs
     """
-    for symbol, name, description in get_table("traits_faction", column_names=False):
+    for symbol, name, description in get_table("traits_faction", header=False):
         TRAITS_FACTION[symbol] = {
             "symbol": symbol,
             "name": name,
@@ -306,7 +306,7 @@ def update_factions():
     sp.check_output(f"black -q {file_name}", shell=True)
 
     for symbol, name, description, _, traits, is_recruiting in get_table(
-        "factions", column_names=False
+        "factions", header=False
     ):
         FACTIONS[symbol] = {
             "symbol": symbol,
@@ -327,7 +327,7 @@ def update_waypoints():
     """
     Update all waypoint related static DBs
     """
-    for symbol, name, description in get_table("traits_waypoint", column_names=False):
+    for symbol, name, description in get_table("traits_waypoint", header=False):
         TRAITS_WAYPOINT[symbol] = {
             "symbol": symbol,
             "name": name,
@@ -351,11 +351,11 @@ def update_waypoints():
     sp.check_output(f"black -q {file_name}", shell=True)
 
     wp_types = set(TYPES_WAYPOINT)
-    for row in get_table("waypoints", column_names=False):
+    for row in get_table("waypoints", header=False):
         wp_types.add(row[2])
 
     system_types = set(TYPES_SYSTEM)
-    for row in get_table("systems", column_names=False):
+    for row in get_table("systems", header=False):
         system_types.add(row[1])
 
     file_name = static_init_file.replace("__init__.py", "types.py")
@@ -371,7 +371,7 @@ def update_supply_chain():
     """
     Update the supply chain DB
     """
-    for export, imports in get_table("supply_chain", column_names=False):
+    for export, imports in get_table("supply_chain", header=False):
         SUPPLY_CHAIN[export] = imports
 
     version = os.environ["ST_VERSION"]
@@ -392,14 +392,14 @@ def check_other():
     types = set()
     supplies = set()
     activity = set()
-    for row in get_table("market_tradegoods", column_names=False):
+    for row in get_table("market_tradegoods", header=False):
         goods.add(row[2])
         types.add(row[4])
         supplies.add(row[5])
         activity.add(row[6])
 
     ships = set()
-    for row in get_table("shipyard_ships", column_names=False):
+    for row in get_table("shipyard_ships", header=False):
         ships.add(row[2])
         supplies.add(row[3])
         activity.add(row[4])
