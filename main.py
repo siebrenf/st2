@@ -20,8 +20,9 @@ if __name__ == "__main__":
     request = RequestMp(qa_pairs, priority=0, token=None)
 
     # update databases
-    from st2.stargazers import merchant, ambassador, astronomer, cartographer
+    from st2.stargazers import scribe, merchant, ambassador, astronomer, cartographer
 
+    scribe(request, priority=0)
     merchant(request, priority=0)
     ambassador(request, priority=0)
     astronomer(request, priority=0)

@@ -1,3 +1,4 @@
+# SpaceTraders v2.3.0. Last update: 2025-12-28_2026-01-04
 SHIPS = {
     "SHIP_COMMAND_FRIGATE": {
         "type": "SHIP_COMMAND_FRIGATE",

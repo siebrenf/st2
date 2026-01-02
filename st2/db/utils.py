@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess as sp
 
 from st2.db import get_table
@@ -20,13 +21,14 @@ from st2.db.static import (
     TYPES_WAYPOINT,
 )
 from st2.db.static import __file__ as static_init_file
+from st2.logging import logger
 
 
 def update_all():
     """
     Update (almost) all static databases
     """
-    # missing DBs: modifiers, ship_roles
+    # missing DBs: goods, modifiers, ship_events, ship_modes, ship_roles, ship_status
     update_ships()
     update_factions()
     update_waypoints()
@@ -139,8 +141,11 @@ def _update_ships():
         order = ["current", "required", "capacity", "rotation", "morale", "wages"]
         ship["crew"] = _reorder(ship["crew"], order)
 
+    version = os.environ["ST_VERSION"]
+    session = os.environ["ST_RESET_WINDOW"]
     file_name = static_init_file.replace("__init__.py", "ships.py")
     with open(file_name, "w") as f:
+        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
         f.write("SHIPS = " + json.dumps(SHIPS, indent=4).replace("null", "None"))
     sp.check_output(f"black -q {file_name}", shell=True)
 
@@ -165,8 +170,11 @@ def _update_frames():
         if isinstance(e, dict):
             e = _reorder(e, order)
 
+    version = os.environ["ST_VERSION"]
+    session = os.environ["ST_RESET_WINDOW"]
     file_name = static_init_file.replace("__init__.py", "frames.py")
     with open(file_name, "w") as f:
+        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
         f.write("FRAMES = " + json.dumps(FRAMES, indent=4).replace("null", "None"))
     sp.check_output(f"black -q {file_name}", shell=True)
 
@@ -189,8 +197,11 @@ def _update_reactors():
         if isinstance(e, dict):
             e = _reorder(e, order)
 
+    version = os.environ["ST_VERSION"]
+    session = os.environ["ST_RESET_WINDOW"]
     file_name = static_init_file.replace("__init__.py", "reactors.py")
     with open(file_name, "w") as f:
+        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
         f.write("REACTORS = " + json.dumps(REACTORS, indent=4).replace("null", "None"))
     sp.check_output(f"black -q {file_name}", shell=True)
 
@@ -213,8 +224,11 @@ def _update_engines():
         if isinstance(e, dict):
             e = _reorder(e, order)
 
+    version = os.environ["ST_VERSION"]
+    session = os.environ["ST_RESET_WINDOW"]
     file_name = static_init_file.replace("__init__.py", "engines.py")
     with open(file_name, "w") as f:
+        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
         f.write("ENGINES = " + json.dumps(ENGINES, indent=4).replace("null", "None"))
     sp.check_output(f"black -q {file_name}", shell=True)
 
@@ -229,8 +243,11 @@ def _update_modules():
         if isinstance(e, dict):
             e = _reorder(e, order)
 
+    version = os.environ["ST_VERSION"]
+    session = os.environ["ST_RESET_WINDOW"]
     file_name = static_init_file.replace("__init__.py", "modules.py")
     with open(file_name, "w") as f:
+        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
         f.write("MODULES = " + json.dumps(MODULES, indent=4).replace("null", "None"))
     sp.check_output(f"black -q {file_name}", shell=True)
 
@@ -252,8 +269,11 @@ def _update_mounts():
         if isinstance(e, dict):
             e = _reorder(e, order)
 
+    version = os.environ["ST_VERSION"]
+    session = os.environ["ST_RESET_WINDOW"]
     file_name = static_init_file.replace("__init__.py", "mounts.py")
     with open(file_name, "w") as f:
+        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
         f.write("MOUNTS = " + json.dumps(MOUNTS, indent=4).replace("null", "None"))
     sp.check_output(f"black -q {file_name}", shell=True)
 
@@ -269,8 +289,11 @@ def update_factions():
             "description": description,
         }
 
+    version = os.environ["ST_VERSION"]
+    session = os.environ["ST_RESET_WINDOW"]
     file_name = static_init_file.replace("__init__.py", "traits.py")
     with open(file_name, "w") as f:
+        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
         f.write(
             "TRAITS_WAYPOINT = "
             + json.dumps(TRAITS_WAYPOINT, indent=4).replace("null", "None")
@@ -295,6 +318,7 @@ def update_factions():
 
     file_name = static_init_file.replace("__init__.py", "factions.py")
     with open(file_name, "w") as f:
+        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
         f.write("FACTIONS = " + json.dumps(FACTIONS, indent=4).replace("true", "True"))
     sp.check_output(f"black -q {file_name}", shell=True)
 
@@ -310,8 +334,11 @@ def update_waypoints():
             "description": description,
         }
 
+    version = os.environ["ST_VERSION"]
+    session = os.environ["ST_RESET_WINDOW"]
     file_name = static_init_file.replace("__init__.py", "traits.py")
     with open(file_name, "w") as f:
+        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
         f.write(
             "TRAITS_WAYPOINT = "
             + json.dumps(TRAITS_WAYPOINT, indent=4).replace("null", "None")
@@ -333,6 +360,7 @@ def update_waypoints():
 
     file_name = static_init_file.replace("__init__.py", "types.py")
     with open(file_name, "w") as f:
+        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
         f.write("TYPES_WAYPOINT = " + json.dumps(sorted(wp_types), indent=4))
         f.write("\n")
         f.write("TYPES_SYSTEM = " + json.dumps(sorted(system_types), indent=4))
@@ -346,8 +374,11 @@ def update_supply_chain():
     for export, imports in get_table("supply_chain", column_names=False):
         SUPPLY_CHAIN[export] = imports
 
+    version = os.environ["ST_VERSION"]
+    session = os.environ["ST_RESET_WINDOW"]
     file_name = static_init_file.replace("__init__.py", "supply_chain.py")
     with open(file_name, "w") as f:
+        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
         f.write("# export: [imports]\n")
         f.write("SUPPLY_CHAIN = " + json.dumps(SUPPLY_CHAIN, indent=4))
     sp.check_output(f"black -q {file_name}", shell=True)
@@ -374,21 +405,17 @@ def check_other():
         activity.add(row[4])
 
     if sorted(types) != ["EXCHANGE", "EXPORT", "IMPORT"]:
-        print(f"Types changed: {types}")
+        logger.info(f"Types changed: {types}")
 
     if sorted(supplies) != sorted(SUPPLY):
-        print(f"Supply levels changed: {supplies}")
+        logger.info(f"Supply levels changed: {supplies}")
 
     activity.discard(None)
     if sorted(activity) != sorted(ACTIVITY):
-        print(f"Activity levels changed: {activity}")
+        logger.info(f"Activity levels changed: {activity}")
 
     for good in goods:
         if good not in GOODS:
-            print(f"New tradegood found: {good}")
-
-    for ship in ships:
-        if ship not in GOODS:
-            print(f"New ship found: {ship}")
+            logger.info(f"New tradegood found: {good}")
 
     return goods, types, supplies, activity, ships

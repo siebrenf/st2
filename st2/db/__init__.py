@@ -114,6 +114,16 @@ def db_tables_init():
         )
         tables = [row[0] for row in cur.fetchall()]
 
+        if "version" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE version
+                (
+                    "version" text PRIMARY KEY
+                )
+                """
+            )
+
         # Create missing tables
         if "agents" not in tables:
             cur.execute(

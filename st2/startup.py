@@ -31,6 +31,7 @@ def game_server():
         last_reset = status["resetDate"]
         next_reset = status["serverResets"]["next"]
         session = f"{last_reset}_{next_reset[:10]}"
+        os.environ["ST_VERSION"] = status["version"]
         os.environ["ST_RESET_WINDOW"] = session
         logger.info(
             f"SpaceTraders {status['version']} ({session}) {status['status'][13:]}!"

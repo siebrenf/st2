@@ -1,3 +1,4 @@
+# SpaceTraders v2.3.0. Last update: 2025-12-28_2026-01-04
 FRAMES = {
     "FRAME_CARRIER": None,
     "FRAME_CRUISER": None,
