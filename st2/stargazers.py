@@ -4,28 +4,29 @@ from psycopg import connect
 from psycopg.types.json import Jsonb
 
 from st2.agent import api_agent
-from st2.db.static import FACTIONS, TRAITS_FACTION, TRAITS_WAYPOINT
 from st2.logging import logger
 
 DEBUG = False
 
 
-# def merchant(request, priority=0):  # TODO: formalize
-#     """
-#     Map all supply chains.
-#     """
-#     token = api_agent(request, priority)[1]
-#     ret = request.get("market/supply-chain", priority, token)
-#     print("SUPPLY_CHAIN = {")
-#     print("    # export: imports")
-#     for export in sorted(ret["data"]["exportToImportMap"]):
-#         imports = ret["data"]["exportToImportMap"][export]
-#         imports = '", "'.join(imports)
-#         print(
-#             f"""    "{export}": ["{imports}"],"""
-#         )
-#     print("}")
-#     print()
+def merchant(request, priority=0):
+    """
+    Map all supply chains.
+    """
+    token = api_agent(request, priority)[1]
+    data = request.get("market/supply-chain", priority, token)["data"]
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        for export in sorted(data["exportToImportMap"]):
+            imports = data["exportToImportMap"][export]
+            cur.execute(
+                """
+                INSERT INTO supply_chain
+                ("export", "imports")
+                VALUES (%s, %s)
+                ON CONFLICT ("export") DO NOTHING
+                """,
+                (export, imports),
+            )
 
 
 def ambassador(request, priority=0):
@@ -43,7 +44,7 @@ def ambassador(request, priority=0):
             # insert factions & faction_traits
             for symbol in sorted(factions):
                 f = factions[symbol]
-                description = f["description"].replace("'", "''")
+                # description = f["description"].replace("'", "''")
                 hq = f["headquarters"]
                 if hq == "":
                     hq = None
@@ -58,26 +59,16 @@ def ambassador(request, priority=0):
                     (
                         f["symbol"],
                         f["name"],
-                        description,
+                        f["description"],
                         hq,
                         traits,
                         f["isRecruiting"],
                     ),
                 )
 
-                # compare to st2.db.static
-                if FACTIONS.get(f["symbol"]) is None:
-                    logger.info(f"A new faction has been discovered: {f['symbol']}!")
-                else:
-                    for k, v in f.items():
-                        if k == "headquarters":
-                            continue
-                        if FACTIONS[f["symbol"]][k] != v:
-                            logger.info(f"{f['symbol']} {k} has changed to '{v}'")
-
                 # traits_faction
                 for trait in f["traits"]:
-                    description = trait["description"].replace("'", "''")
+                    # description = trait["description"].replace("'", "''")
                     cur.execute(
                         """
                         INSERT INTO traits_faction
@@ -85,20 +76,8 @@ def ambassador(request, priority=0):
                         VALUES (%s, %s, %s)
                         ON CONFLICT (symbol) DO NOTHING
                         """,
-                        (trait["symbol"], trait["name"], description),
+                        (trait["symbol"], trait["name"], trait["description"]),
                     )
-
-                    # compare to st2.db.static
-                    if TRAITS_FACTION.get(trait["symbol"]) is None:
-                        logger.info(
-                            f"A new faction trait has discovered: {trait['symbol']}!"
-                        )
-                    else:
-                        for k, v in trait.items():
-                            if TRAITS_FACTION[trait["symbol"]][k] != v:
-                                logger.info(
-                                    f"{trait['symbol']} {k} has changed to '{v}'"
-                                )
 
 
 def astronomer(request, priority=3):
@@ -341,20 +320,17 @@ def _chart_systems(request, priority, token, index, query):
 
                         # store unknown traits
                         for trait in traits:
-                            if TRAITS_WAYPOINT.get(trait) is None:
-                                t = [t for t in wp["traits"] if t["symbol"] == trait][0]
-                                description = t["description"].replace("'", "''")
-                                cur.execute(
-                                    """
-                                    INSERT INTO traits_waypoint
-                                    (symbol, name, description) 
-                                    VALUES (%s, %s, %s)
-                                    """,
-                                    (t["symbol"], t["name"], description),
-                                )
-                                logger.info(
-                                    f"The Cartographer has discovered a new trait: {t['symbol']}!"
-                                )
+                            t = [t for t in wp["traits"] if t["symbol"] == trait][0]
+                            # description = t["description"].replace("'", "''")
+                            cur.execute(
+                                """
+                                INSERT INTO traits_waypoint
+                                (symbol, name, description) 
+                                VALUES (%s, %s, %s)
+                                ON CONFLICT ("symbol") DO NOTHING
+                                """,
+                                (t["symbol"], t["name"], t["description"]),
+                            )
                 current += 1
                 # log progress
                 cur.execute(

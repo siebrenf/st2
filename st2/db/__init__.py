@@ -530,6 +530,17 @@ def db_tables_init():
                 """
             )
 
+        if "supply_chain" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE supply_chain
+                (
+                    "export" text PRIMARY KEY,
+                    "imports" text[]
+                )
+                """
+            )
+
 
 def get_tables():
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:

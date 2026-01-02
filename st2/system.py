@@ -10,7 +10,6 @@ from psycopg.types.json import Jsonb
 from scipy.spatial.distance import cdist
 
 from st2.agent import api_agent
-from st2.db.static import TRAITS_WAYPOINT
 from st2.logging import logger
 
 DEBUG = False
@@ -135,20 +134,17 @@ class System:
 
                 # store unknown traits
                 for trait in traits:
-                    if TRAITS_WAYPOINT.get(trait) is None:
-                        t = [t for t in wp["traits"] if t["symbol"] == trait][0]
-                        description = t["description"].replace("'", "''")
-                        cur.execute(
-                            """
-                            INSERT INTO traits_waypoint
-                            (symbol, name, description) 
-                            VALUES (%s, %s, %s)
-                            """,
-                            (t["symbol"], t["name"], description),
-                        )
-                        logger.info(
-                            f"The Cartographer has discovered a new trait: {t['symbol']}!"
-                        )
+                    t = [t for t in wp["traits"] if t["symbol"] == trait][0]
+                    # description = t["description"].replace("'", "''")
+                    cur.execute(
+                        """
+                        INSERT INTO traits_waypoint
+                        (symbol, name, description) 
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (symbol) DO NOTHING
+                        """,
+                        (t["symbol"], t["name"], t["description"]),
+                    )
 
     def _get_gate(self, waypoint_symbol, cur):
         connections = self.request.get(
