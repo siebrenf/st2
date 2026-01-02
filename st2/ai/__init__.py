@@ -6,7 +6,7 @@ from uuid import uuid1
 from psycopg import connect
 
 from st2.ai.probe import ai_probe_waypoint
-from st2.ai.system import ai_seed_system
+from st2.ai.system import ai_seed_system, ai_trade_system
 from st2.logging import logger
 
 
@@ -93,113 +93,113 @@ class TaskMaster:
         self.terminate()
 
     def run(self):
-        with connect("dbname=st2 user=postgres") as conn:
-            with conn.cursor() as cur:
-                while True:
-                    cur.execute(
-                        """
-                        SELECT *
-                        FROM tasks
-                        WHERE pname = %s
-                        """,
-                        (self.name,),
-                    )
-                    for (
-                        ship_symbol,
-                        agent_symbol,
-                        current_task,
-                        queued_task,
-                        cancel_task,
-                        pname,
-                        pid,
-                    ) in cur.fetchall():
-                        commit = False
-                        if pid != self.pid:
-                            # uuid changed: a script (re)start occurred
-                            if current_task is not None:
-                                # continue the previous task
-                                task = self.get_task(
-                                    ship_symbol, agent_symbol, current_task
-                                )
-                                self.put(ship_symbol, task)
-                                if DEBUG:
-                                    logger.debug(
-                                        f"Starting {ship_symbol} with task '{current_task}'"
-                                    )
-                            pid = self.pid
-                            cur.execute(
-                                """
-                                UPDATE tasks
-                                SET pid = %s
-                                WHERE symbol = %s
-                                """,
-                                (pid, ship_symbol),
-                            )
-                            commit = True
-
-                        if self.done(ship_symbol):
-                            if DEBUG:
-                                logger.debug(
-                                    f"{ship_symbol} stopped task '{current_task}'"
-                                )
-                            ret = self.get(ship_symbol)
-                            if ret:
-                                # TODO: do we need the coroutine result?
-                                logger.debug(ret)
-                            current_task = None
-                            cur.execute(
-                                """
-                                UPDATE tasks
-                                SET current = %s
-                                WHERE symbol = %s
-                                """,
-                                (current_task, ship_symbol),
-                            )
-                            commit = True
-
-                        if cancel_task:
-                            self.cancel(ship_symbol)
-                            current_task = None
-                            cancel_task = False
-                            cur.execute(
-                                """
-                                UPDATE tasks
-                                SET current = %s,
-                                    cancel = %s
-                                WHERE symbol = %s
-                                """,
-                                (current_task, cancel_task, ship_symbol),
-                            )
-                            commit = True
-
-                        if current_task is None and queued_task is not None:
-                            current_task = queued_task
-                            queued_task = None
+        with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+            while True:
+                cur.execute(
+                    """
+                    SELECT *
+                    FROM tasks
+                    WHERE pname = %s
+                    """,
+                    (self.name,),
+                )
+                for (
+                    ship_symbol,
+                    agent_symbol,
+                    current_task,
+                    queued_task,
+                    cancel_task,
+                    pname,
+                    pid,
+                ) in cur.fetchall():
+                    commit = False
+                    if pid != self.pid:
+                        # uuid changed: a script (re)start occurred
+                        if current_task is not None:
+                            # continue the previous task
                             task = self.get_task(
                                 ship_symbol, agent_symbol, current_task
                             )
                             self.put(ship_symbol, task)
-                            cur.execute(
-                                """
-                                UPDATE tasks
-                                SET current = %s,
-                                    queued = %s
-                                WHERE symbol = %s
-                                """,
-                                (current_task, queued_task, ship_symbol),
-                            )
-                            commit = True
+                            if DEBUG:
+                                logger.debug(
+                                    f"Starting {ship_symbol} with task '{current_task}'"
+                                )
+                        pid = self.pid
+                        cur.execute(
+                            """
+                            UPDATE tasks
+                            SET pid = %s
+                            WHERE symbol = %s
+                            """,
+                            (pid, ship_symbol),
+                        )
+                        commit = True
 
-                        if commit:
-                            conn.commit()
+                    if self.done(ship_symbol):
+                        if DEBUG:
+                            logger.debug(f"{ship_symbol} stopped task '{current_task}'")
+                        ret = self.get(ship_symbol)
+                        if ret:
+                            # TODO: do we need the coroutine result?
+                            logger.debug(ret)
+                        current_task = None
+                        cur.execute(
+                            """
+                            UPDATE tasks
+                            SET current = %s
+                            WHERE symbol = %s
+                            """,
+                            (current_task, ship_symbol),
+                        )
+                        commit = True
 
-                    sleep(0.1)  # TODO: remove?
+                    if cancel_task:
+                        self.cancel(ship_symbol)
+                        current_task = None
+                        cancel_task = False
+                        cur.execute(
+                            """
+                            UPDATE tasks
+                            SET current = %s,
+                                cancel = %s
+                            WHERE symbol = %s
+                            """,
+                            (current_task, cancel_task, ship_symbol),
+                        )
+                        commit = True
+
+                    if current_task is None and queued_task is not None:
+                        current_task = queued_task
+                        queued_task = None
+                        task = self.get_task(ship_symbol, agent_symbol, current_task)
+                        self.put(ship_symbol, task)
+                        cur.execute(
+                            """
+                            UPDATE tasks
+                            SET current = %s,
+                                queued = %s
+                            WHERE symbol = %s
+                            """,
+                            (current_task, queued_task, ship_symbol),
+                        )
+                        commit = True
+
+                    if commit:
+                        conn.commit()
+
+                sleep(0.1)  # TODO: remove?
 
     def get_task(self, ship_symbol, agent_symbol, task):
         task = task.split(" ")
         match task[0]:
             case "test":
                 coro = _test_coroutine(*task[1:])
+
+            case "trade":
+                coro = ai_trade_system(  # noqa: always loaded on time
+                    system_symbol=task[1],
+                )
 
             case "probe":
                 # if "ai_probe_waypoint" not in self._loaded:

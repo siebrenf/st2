@@ -39,6 +39,21 @@ if __name__ == "__main__":
     import multiprocessing as mp
     from st2.ai import taskmaster
 
+    pname = "traders"
+    trade_taskmaster = mp.Process(
+        target=taskmaster,
+        kwargs={"pname": pname, "qa_pairs": qa_pairs},
+    )
+
+
+    def stop_trade_taskmaster():
+        trade_taskmaster.terminate()
+        trade_taskmaster.join()
+
+
+    atexit.register(stop_trade_taskmaster)
+    trade_taskmaster.start()
+
     # start the probing process
     pname = "probes"
     probe_taskmaster = mp.Process(
