@@ -102,7 +102,7 @@ def db_server_init():
         atexit.register(db_server_stop, db)
 
 
-def db_tables_init():
+def db_tables_init(status=None):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
 
         # Fetch existing table names
@@ -116,13 +116,29 @@ def db_tables_init():
         tables = [row[0] for row in cur.fetchall()]
 
         if "version" not in tables:
+            if status is None:
+                raise ValueError("Argument 'status' is required for versioning!")
             cur.execute(
                 """
                 CREATE TABLE version
                 (
-                    "version" text PRIMARY KEY
+                    "version" text PRIMARY KEY,
+                    "session" text
                 )
                 """
+            )
+            version = status["version"]
+            last_reset = status["resetDate"]
+            next_reset = status["serverResets"]["next"]
+            session = f"{last_reset}_{next_reset[:10]}"
+            cur.execute(
+                """
+                INSERT INTO version
+                ("version", "session")
+                VALUES (%s, %s)
+                ON CONFLICT ("version") DO NOTHING
+                """,
+                (version, session),
             )
 
         # Create missing tables

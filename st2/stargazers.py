@@ -9,24 +9,6 @@ from st2.logging import logger
 DEBUG = False
 
 
-def scribe(request, priority=0):
-    """
-    Record the game's current version.
-    """
-    token = api_agent(request, priority)[1]
-    version = request.get("status", priority, token)["version"]
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO version
-            ("version")
-            VALUES (%s)
-            ON CONFLICT ("version") DO NOTHING
-            """,
-            (version,),
-        )
-
-
 def merchant(request, priority=0):
     """
     Map all supply chains.

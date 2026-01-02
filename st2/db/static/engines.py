@@ -15,7 +15,7 @@ ENGINES = {
         "symbol": "ENGINE_ION_DRIVE_I",
         "name": "Ion Drive I",
         "description": "An advanced propulsion system that uses ionized particles to generate high-speed, low-thrust acceleration.",
-        "speed": 10,
+        "speed": 15,
         "quality": 3,
         "condition": 1,
         "integrity": 1,

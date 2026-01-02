@@ -2,6 +2,8 @@ import json
 import os
 import subprocess as sp
 
+from psycopg import connect
+
 from st2.db import get_table
 from st2.db.static import (
     ACTIVITY,
@@ -36,18 +38,6 @@ def update_all():
     check_other()
 
 
-def update_ships():
-    """
-    Update all ship related static DBs
-    """
-    _update_ships()
-    _update_frames()
-    _update_reactors()
-    _update_engines()
-    _update_modules()
-    _update_mounts()
-
-
 def _reorder(dict_old, order):
     dict_new = {k: dict_old[k] for k in order if k in dict_old}
     if "requirements" in dict_new:
@@ -56,8 +46,11 @@ def _reorder(dict_old, order):
     return dict_new
 
 
-def _update_ships():
-    # update ships from logs
+def update_ships():
+    """
+    Update all ship related static DBs
+    """
+    # update ships in the logs
     for (
         ship,
         name,
@@ -82,200 +75,107 @@ def _update_ships():
             "mounts": mounts,
             "crew": crew,
         }
-
-    # sort ship keys
-    for ship in SHIPS.values():
-        order = [
-            "symbol",
-            "name",
-            "description",
-            "moduleSlots",
-            "mountingPoints",
-            "fuelCapacity",
-            "quality",
-            "condition",
-            "integrity",
-            "requirements",
-        ]
-        ship["frame"] = _reorder(ship["frame"], order)
-
-        order = [
-            "symbol",
-            "name",
-            "description",
-            "powerOutput",
-            "quality",
-            "condition",
-            "integrity",
-            "requirements",
-        ]
-        ship["reactor"] = _reorder(ship["reactor"], order)
-
-        order = [
-            "symbol",
-            "name",
-            "description",
-            "speed",
-            "quality",
-            "condition",
-            "integrity",
-            "requirements",
-        ]
-        ship["engine"] = _reorder(ship["engine"], order)
-
-        order = ["symbol", "name", "description", "capacity", "range", "requirements"]
-        for i in range(len(ship["modules"])):
-            ship["modules"][i] = _reorder(ship["modules"][i], order)
-
-        order = [
-            "symbol",
-            "name",
-            "description",
-            "strength",
-            "deposits",
-            "requirements",
-        ]
-        for i in range(len(ship["mounts"])):
-            ship["mounts"][i] = _reorder(ship["mounts"][i], order)
-
-        order = ["current", "required", "capacity", "rotation", "morale", "wages"]
-        ship["crew"] = _reorder(ship["crew"], order)
-
-    version = os.environ["ST_VERSION"]
-    session = os.environ["ST_RESET_WINDOW"]
-    file_name = static_init_file.replace("__init__.py", "ships.py")
-    with open(file_name, "w") as f:
-        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
-        f.write("SHIPS = " + json.dumps(SHIPS, indent=4).replace("null", "None"))
-    sp.check_output(f"black -q {file_name}", shell=True)
-
-
-def _update_frames():
-    for ship in SHIPS.values():
-        FRAMES[ship["frame"]["symbol"]] = ship["frame"]
-
-    order = [
-        "symbol",
-        "name",
-        "description",
-        "moduleSlots",
-        "mountingPoints",
-        "fuelCapacity",
-        "quality",
-        "condition",
-        "integrity",
-        "requirements",
-    ]
-    for e in FRAMES.values():
-        if isinstance(e, dict):
-            e = _reorder(e, order)
-
-    version = os.environ["ST_VERSION"]
-    session = os.environ["ST_RESET_WINDOW"]
-    file_name = static_init_file.replace("__init__.py", "frames.py")
-    with open(file_name, "w") as f:
-        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
-        f.write("FRAMES = " + json.dumps(FRAMES, indent=4).replace("null", "None"))
-    sp.check_output(f"black -q {file_name}", shell=True)
-
-
-def _update_reactors():
-    for ship in SHIPS.values():
-        REACTORS[ship["reactor"]["symbol"]] = ship["reactor"]
-
-    order = [
-        "symbol",
-        "name",
-        "description",
-        "powerOutput",
-        "quality",
-        "condition",
-        "integrity",
-        "requirements",
-    ]
-    for e in REACTORS.values():
-        if isinstance(e, dict):
-            e = _reorder(e, order)
-
-    version = os.environ["ST_VERSION"]
-    session = os.environ["ST_RESET_WINDOW"]
-    file_name = static_init_file.replace("__init__.py", "reactors.py")
-    with open(file_name, "w") as f:
-        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
-        f.write("REACTORS = " + json.dumps(REACTORS, indent=4).replace("null", "None"))
-    sp.check_output(f"black -q {file_name}", shell=True)
-
-
-def _update_engines():
-    for ship in SHIPS.values():
-        ENGINES[ship["engine"]["symbol"]] = ship["engine"]
-
-    order = [
-        "symbol",
-        "name",
-        "description",
-        "speed",
-        "quality",
-        "condition",
-        "integrity",
-        "requirements",
-    ]
-    for e in ENGINES.values():
-        if isinstance(e, dict):
-            e = _reorder(e, order)
-
-    version = os.environ["ST_VERSION"]
-    session = os.environ["ST_RESET_WINDOW"]
-    file_name = static_init_file.replace("__init__.py", "engines.py")
-    with open(file_name, "w") as f:
-        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
-        f.write("ENGINES = " + json.dumps(ENGINES, indent=4).replace("null", "None"))
-    sp.check_output(f"black -q {file_name}", shell=True)
-
-
-def _update_modules():
-    for ship in SHIPS.values():
-        for module in ship["modules"]:
+        FRAMES[frame["symbol"]] = frame
+        REACTORS[reactor["symbol"]] = reactor
+        ENGINES[engine["symbol"]] = engine
+        for module in modules:
             MODULES[module["symbol"]] = module
-
-    order = ["symbol", "name", "description", "capacity", "range", "requirements"]
-    for e in MODULES.values():
-        if isinstance(e, dict):
-            e = _reorder(e, order)
-
-    version = os.environ["ST_VERSION"]
-    session = os.environ["ST_RESET_WINDOW"]
-    file_name = static_init_file.replace("__init__.py", "modules.py")
-    with open(file_name, "w") as f:
-        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
-        f.write("MODULES = " + json.dumps(MODULES, indent=4).replace("null", "None"))
-    sp.check_output(f"black -q {file_name}", shell=True)
-
-
-def _update_mounts():
-    for ship in SHIPS.values():
-        for mount in ship["mounts"]:
+        for mount in mounts:
             MOUNTS[mount["symbol"]] = mount
 
+    # update remaining ships with the updated components
+    for symbol, ship in SHIPS.items():
+        SHIPS[symbol]["frame"] = FRAMES[ship["frame"]["symbol"]]
+        SHIPS[symbol]["reactor"] = REACTORS[ship["reactor"]["symbol"]]
+        SHIPS[symbol]["engine"] = ENGINES[ship["engine"]["symbol"]]
+        for i, module in enumerate(SHIPS[symbol]["modules"]):
+            SHIPS[symbol]["modules"][i] = MODULES[module["symbol"]]
+        for i, mounts in enumerate(SHIPS[symbol]["mounts"]):
+            SHIPS[symbol]["mounts"][i] = MOUNTS[mounts["symbol"]]
+
+    # sort keys
     order = [
         "symbol",
         "name",
         "description",
-        "strength",
-        "deposits",
+        "moduleSlots",  # frame
+        "mountingPoints",  # frame
+        "fuelCapacity",  # frame
+        "powerOutput",  # reactor
+        "speed",  # engine
+        "capacity",  # module
+        "range",  # module
+        "strength",  # mount
+        "deposits",  # mount
+        "quality",
+        "condition",
+        "integrity",
         "requirements",
     ]
-    for e in MOUNTS.values():
-        if isinstance(e, dict):
-            e = _reorder(e, order)
+    order_crew = ["current", "required", "capacity", "rotation", "morale", "wages"]
+    for ship in SHIPS.values():
+        ship["frame"] = _reorder(ship["frame"], order)
+        ship["reactor"] = _reorder(ship["reactor"], order)
+        ship["engine"] = _reorder(ship["engine"], order)
+        for i in range(len(ship["modules"])):
+            ship["modules"][i] = _reorder(ship["modules"][i], order)
+        for i in range(len(ship["mounts"])):
+            ship["mounts"][i] = _reorder(ship["mounts"][i], order)
+        ship["crew"] = _reorder(ship["crew"], order_crew)
+    for k, v in FRAMES.items():
+        if isinstance(v, dict):
+            FRAMES[k] = _reorder(v, order)
+    for k, v in REACTORS.items():
+        if isinstance(v, dict):
+            REACTORS[k] = _reorder(v, order)
+    for k, v in ENGINES.items():
+        if isinstance(v, dict):
+            ENGINES[k] = _reorder(v, order)
+    for k, v in MODULES.items():
+        if isinstance(v, dict):
+            MODULES[k] = _reorder(v, order)
+    for k, v in MOUNTS.items():
+        if isinstance(v, dict):
+            MOUNTS[k] = _reorder(v, order)
 
-    version = os.environ["ST_VERSION"]
-    session = os.environ["ST_RESET_WINDOW"]
+    # write to file
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        version, session = cur.execute("""SELECT * FROM version LIMIT 1""").fetchone()
+    header = f"# SpaceTraders {version}. Last update: {session}\n"
+
+    file_name = static_init_file.replace("__init__.py", "ships.py")
+    with open(file_name, "w") as f:
+        f.write(header)
+        f.write("SHIPS = " + json.dumps(SHIPS, indent=4).replace("null", "None"))
+
+    file_name = static_init_file.replace("__init__.py", "frames.py")
+    with open(file_name, "w") as f:
+        f.write(header)
+        f.write("FRAMES = " + json.dumps(FRAMES, indent=4).replace("null", "None"))
+
+    file_name = static_init_file.replace("__init__.py", "reactors.py")
+    with open(file_name, "w") as f:
+        f.write(header)
+        f.write("REACTORS = " + json.dumps(REACTORS, indent=4).replace("null", "None"))
+
+    file_name = static_init_file.replace("__init__.py", "engines.py")
+    with open(file_name, "w") as f:
+        f.write(header)
+        f.write("ENGINES = " + json.dumps(ENGINES, indent=4).replace("null", "None"))
+
+    file_name = static_init_file.replace("__init__.py", "modules.py")
+    with open(file_name, "w") as f:
+        f.write(header)
+        f.write("MODULES = " + json.dumps(MODULES, indent=4).replace("null", "None"))
+
     file_name = static_init_file.replace("__init__.py", "mounts.py")
     with open(file_name, "w") as f:
-        f.write(f"# SpaceTraders {version}. Last update: {session}\n")
+        f.write(header)
         f.write("MOUNTS = " + json.dumps(MOUNTS, indent=4).replace("null", "None"))
-    sp.check_output(f"black -q {file_name}", shell=True)
+
+    # apply linting
+    dir_name = os.path.dirname(static_init_file)
+    sp.check_output(f"black -q {dir_name}", shell=True)
 
 
 def update_factions():
@@ -289,8 +189,8 @@ def update_factions():
             "description": description,
         }
 
-    version = os.environ["ST_VERSION"]
-    session = os.environ["ST_RESET_WINDOW"]
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        version, session = cur.execute("""SELECT * FROM version LIMIT 1""").fetchone()
     file_name = static_init_file.replace("__init__.py", "traits.py")
     with open(file_name, "w") as f:
         f.write(f"# SpaceTraders {version}. Last update: {session}\n")
@@ -334,8 +234,8 @@ def update_waypoints():
             "description": description,
         }
 
-    version = os.environ["ST_VERSION"]
-    session = os.environ["ST_RESET_WINDOW"]
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        version, session = cur.execute("""SELECT * FROM version LIMIT 1""").fetchone()
     file_name = static_init_file.replace("__init__.py", "traits.py")
     with open(file_name, "w") as f:
         f.write(f"# SpaceTraders {version}. Last update: {session}\n")
@@ -374,8 +274,8 @@ def update_supply_chain():
     for export, imports in get_table("supply_chain", header=False):
         SUPPLY_CHAIN[export] = imports
 
-    version = os.environ["ST_VERSION"]
-    session = os.environ["ST_RESET_WINDOW"]
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        version, session = cur.execute("""SELECT * FROM version LIMIT 1""").fetchone()
     file_name = static_init_file.replace("__init__.py", "supply_chain.py")
     with open(file_name, "w") as f:
         f.write(f"# SpaceTraders {version}. Last update: {session}\n")

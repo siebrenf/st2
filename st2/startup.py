@@ -31,12 +31,12 @@ def game_server():
         last_reset = status["resetDate"]
         next_reset = status["serverResets"]["next"]
         session = f"{last_reset}_{next_reset[:10]}"
-        os.environ["ST_VERSION"] = status["version"]
         os.environ["ST_RESET_WINDOW"] = session
         logger.info(
             f"SpaceTraders {status['version']} ({session}) {status['status'][13:]}!"
         )
     else:
+        status = None
         session = os.environ["ST_RESET_WINDOW"]
         logger.info(f"SpaceTraders ({session}) offline database loaded!")
     data_dir = os.path.join(XDG_DATA_HOME, "st2", session)
@@ -44,7 +44,7 @@ def game_server():
 
     # start the database (if needed)
     db_server_init()
-    db_tables_init()
+    db_tables_init(status)
 
 
 def api_server():
