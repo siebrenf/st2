@@ -1,0 +1,73 @@
+BASE_PRICES = {
+    "ADVANCED_CIRCUITRY": 5000,
+    "AI_MAINFRAMES": 44444,  # unclear
+    "ALUMINUM": 200,
+    "ALUMINUM_ORE": 60,
+    "AMMONIA_ICE": 40,
+    "AMMUNITION": 1400,
+    "ANTIMATTER": 14000,
+    "ASSAULT_RIFLES": 3400,
+    "BIOCOMPOSITES": 4800,
+    "BOTANICAL_SPECIMENS": 16000,  # unclear
+    "CLOTHING": 4000,
+    "COPPER": 240,
+    "COPPER_ORE": 55,
+    "CULTURAL_ARTIFACTS": None,
+    "CYBER_IMPLANTS": 38400,  # unclear
+    "DIAMONDS": 90,
+    "DRUGS": 4200,
+    "ELECTRONICS": 2200,
+    "EQUIPMENT": 2600,
+    "EXOTIC_MATTER": 26300,  # unclear
+    "EXPLOSIVES": 140,
+    "FABRICS": 2000,
+    "FAB_MATS": 1600,
+    "FERTILIZERS": 180,
+    "FIREARMS": 3200,
+    "FOOD": 1800,
+    "FUEL": 70,
+    "GENE_THERAPEUTICS": 20200,  # unclear
+    "GOLD": 300,
+    "GOLD_ORE": None,
+    "GRAVITON_EMITTERS": 46400,  # unclear
+    "HYDROCARBON": 45,
+    "HOLOGRAPHICS": 28275,  # unclear
+    "ICE_WATER": 15,
+    "IRON": 120,
+    "IRON_ORE": 50,
+    "JEWELRY": 2800,
+    "LAB_INSTRUMENTS": 4600,
+    "LASER_RIFLES": 24300,  # unclear
+    "LIQUID_HYDROGEN": 25,
+    "LIQUID_NITROGEN": 30,
+    "MACHINERY": 2400,
+    "MEDICINE": 3800,
+    "MERITIUM": None,
+    "MERITIUM_ORE": 1200,
+    "MICROPROCESSORS": 3000,
+    "MICRO_FUSION_GENERATORS": None,
+    "MILITARY_EQUIPMENT": None,
+    "MOOD_REGULATORS": 30300,  # unclear
+    "NANOBOTS": 34300,  # unclear
+    "NEURAL_CHIPS": 36000,  # unclear
+    "NOVEL_LIFEFORMS": 18000,  # unclear
+    "PLASTICS": 160,
+    "PLATINUM": 280,
+    "PLATINUM_ORE": None,
+    "POLYNUCLEOTIDES": 220,
+    "PRECIOUS_STONES": 75,
+    "QUANTUM_DRIVES": 48500,  # unclear
+    "QUANTUM_STABILIZERS": 42400,  # unclear
+    "QUARTZ_SAND": 20,
+    "RELIC_TECH": 50500,  # unclear
+    "ROBOTIC_DRONES": 32300,  # unclear
+    "SHIP_PARTS": 5400,
+    "SHIP_PLATING": 5200,
+    "SILICON_CRYSTALS": 35,
+    "SILVER": 260,
+    "SILVER_ORE": None,
+    "SUPERGRAINS": 22200,  # unclear
+    "URANITE": None,
+    "URANITE_ORE": 320,
+    "VIRAL_AGENTS": 40000,
+}

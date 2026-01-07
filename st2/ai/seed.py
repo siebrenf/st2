@@ -1,8 +1,6 @@
-import os
 from asyncio import sleep
 
 from psycopg import connect
-from psycopg.rows import dict_row
 
 from st2.exceptions import GameError
 from st2.logging import logger
@@ -243,71 +241,3 @@ def assign_unused_probes(ship, shipyards, markets, pname):
                 else:
                     markets[waypoint_symbol] = probe_symbol
     return shipyards, markets
-
-
-@logger.catch  # catch errors in a separate thread
-async def ai_trade_system(
-    system_symbol,
-    verbose=False,
-):
-    """
-    Trade in the system by submitting assignments to the task list
-    """
-    pname = "traders"
-    agent = os.environ["ST_AGENT_SYMBOL"]
-    while True:
-        with connect(
-            "dbname=st2 user=postgres", row_factory=dict_row
-        ) as conn, conn.cursor() as cur:
-            assigned_ships = cur.execute(
-                """
-                SELECT * FROM "tasks" 
-                WHERE "agentSymbol" = %s 
-                AND "pname" = %s
-                AND "symbol" IN (
-                    SELECT "symbol" FROM "ships"
-                    WHERE "agentSymbol" = %s
-                    AND "nav" ->> 'systemSymbol' = %s
-                )
-                """,
-                (agent, pname, agent, system_symbol),
-            ).fetchall()
-        if DEBUG:
-            logger.debug(
-                f"{len(assigned_ships)} ships assigned to trade in {system_symbol}"
-            )
-
-        available = []
-        for task in assigned_ships:
-            if task["queued"] is None:
-                available.append(task["symbol"])
-        if len(available) == 0:
-            await sleep(60)
-            continue
-        if DEBUG:
-            logger.debug(
-                f"{len(available )} ships available to trade in {system_symbol}"
-            )
-
-        # TODO: with multiple ships: take cargo capacity, speed and range into account
-        #   - SHIP_COMMAND_FRIGATE: 40 cargo, 30 speed, 400 fuel, limit: 1
-        #     - for goods with small tradeVolumes/medium distances/update markets
-        #   - SHIP_LIGHT_SHUTTLE: 40 cargo, 15 speed, 300 fuel, 100k
-        #     - for goods with small tradeVolumes/short distances
-        #   - SHIP_LIGHT_HAULER: 80 cargo, 15 speed, 600 fuel, 400k
-        #     - for large tradeVolumes/long distances
-
-        outdated_markets = []
-        # TODO: identify outdated markets
-        # TODO: assign 1 outdated market to 1 available ship using task["queued"]
-        # TODO: remove assigned ships from available
-        if len(available) == 0:
-            await sleep(60)
-            continue
-
-        trades = {}
-        # TODO: identify trade opportunities
-        # TODO: assign trade opportunities (+ priority?) using task["queued"]
-        # TODO: remove assigned ships from available
-
-        await sleep(60)

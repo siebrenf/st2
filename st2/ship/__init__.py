@@ -3,6 +3,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from st2 import time
+from st2.exceptions import ShipNotFoundError
 from st2.logging import logger
 from st2.request import RequestMp
 
@@ -14,6 +15,8 @@ class Ship(dict):
                 data = cur.execute(
                     "SELECT * FROM ships WHERE symbol = %s", (symbol,)
                 ).fetchone()
+                if data is None:
+                    raise ShipNotFoundError(f"Could not find ship {symbol}")
                 token = cur.execute(
                     "SELECT token FROM agents WHERE symbol = %s", (data["agentSymbol"],)
                 ).fetchone()["token"]

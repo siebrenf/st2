@@ -382,6 +382,19 @@ def db_tables_init(status=None):
                 """
             )
 
+        if "market_a" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE market_a 
+                (
+                    "waypointSymbol" text,
+                    "symbol" text,
+                    "a" float4,
+                    PRIMARY KEY ("waypointSymbol", "symbol")
+                )
+                """
+            )
+
         if "market_tradegoods" not in tables:
             # - Create a waypoint specific tradegoods table:
             #   CREATE TABLE tradegoods_wp1 PARTITION OF tradegoods FOR VALUES IN ('wp1');

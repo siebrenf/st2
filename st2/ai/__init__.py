@@ -6,7 +6,10 @@ from uuid import uuid1
 from psycopg import connect
 
 from st2.ai.probe import ai_probe_waypoint
-from st2.ai.system import ai_seed_system, ai_trade_system
+from st2.ai.scout import ai_scout_waypoint
+from st2.ai.seed import ai_seed_system
+from st2.ai.trade import ai_trade_system
+from st2.ai.trade_controller import ai_trade_controller
 from st2.logging import logger
 
 
@@ -15,7 +18,7 @@ def taskmaster(*args, **kwargs):
     t.run()
 
 
-DEBUG = True
+DEBUG = False
 
 
 class TaskMaster:
@@ -193,14 +196,6 @@ class TaskMaster:
     def get_task(self, ship_symbol, agent_symbol, task):
         task = task.split(" ")
         match task[0]:
-            case "test":
-                coro = _test_coroutine(*task[1:])
-
-            case "trade":
-                coro = ai_trade_system(  # noqa: always loaded on time
-                    system_symbol=task[1],
-                )
-
             case "probe":
                 # if "ai_probe_waypoint" not in self._loaded:
                 #     self._loaded.add("ai_probe_waypoint")
@@ -226,6 +221,37 @@ class TaskMaster:
                     pname=pname,
                     qa_pairs=self.qa_pairs,
                     priority=priority,
+                    verbose=True,  # TODO: remove
+                )
+
+            case "test":
+                coro = _test_coroutine(*task[1:])
+
+            case "trade":
+                coro = ai_trade_system(
+                    ship_symbol=ship_symbol,
+                    good=task[1],
+                    units=int(task[2]),
+                    buy_wp=task[3],
+                    sell_wp=task[4],
+                    qa_pairs=self.qa_pairs,
+                    # priority,
+                    verbose=True,  # TODO: remove
+                )
+
+            case "trade_controller":
+                coro = ai_trade_controller(  # noqa: always loaded on time
+                    system_symbol=task[1],
+                    agent_symbol=agent_symbol,
+                    restart=True,
+                )
+
+            case "scout":
+                coro = ai_scout_waypoint(
+                    ship_symbol=ship_symbol,
+                    waypoint_symbol=task[1],
+                    qa_pairs=self.qa_pairs,
+                    # priority,
                     verbose=True,  # TODO: remove
                 )
 

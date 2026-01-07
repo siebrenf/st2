@@ -23,9 +23,12 @@ async def travel(
 
       asyncio.run(await asyncio.gather(travel(s1, t2), travel(s2, t2)))
     """
+    price = 0
+    if t := ship.nav_remaining():
+        await sleep(t)
+
     if ship["nav"]["waypointSymbol"] == destination:
-        if t := ship.nav_remaining():
-            await sleep(t)
+        pass
 
     elif ship["frame"]["symbol"] == "FRAME_PROBE":
         ship.navigate(destination, verbose)
@@ -41,7 +44,7 @@ async def travel(
                 ship.navigate(waypoint_symbol, verbose)
             await sleep(ship.nav_remaining())
             if waypoint_symbol in fuel_stops:
-                ship.refuel()
+                price += ship.refuel()
             if explore:
                 if waypoint_symbol in system.shipyards:
                     ship.shipyard()
@@ -50,6 +53,7 @@ async def travel(
 
     if verbose:
         logger.info(f"{ship.name()} has arrived at {destination}")
+    return price
 
 
 def get_path(ship, destination, fuel_stops, system):

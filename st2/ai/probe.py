@@ -15,10 +15,10 @@ async def ai_probe_waypoint(
     verbose=False,
 ):
     ship = Ship(ship_symbol, qa_pairs, priority)
-    # ship.refresh()
+    ship.refresh()
 
     # navigate to the waypoint
-    await travel(ship, waypoint_symbol, verbose=verbose)
+    await travel(ship, waypoint_symbol, explore=True, verbose=verbose)
 
     # start probing
     if verbose:

@@ -12,6 +12,7 @@ Example:
 """
 
 if __name__ == "__main__":
+    # load the backend
     from st2.startup import game_server, api_server
     from st2.request import RequestMp
 
@@ -19,25 +20,74 @@ if __name__ == "__main__":
     manager, api_handler, qa_pairs = api_server()
     request = RequestMp(qa_pairs, priority=0, token=None)
 
-    # update databases
-    from st2.stargazers import merchant, ambassador, astronomer, cartographer
+    # load the player ship
+    import os
+    from psycopg import connect
+    from st2.ship import Ship, ShipNotFoundError
+    from st2.agent import register_agent
 
-    merchant(request, priority=0)
-    ambassador(request, priority=0)
-    astronomer(request, priority=0)
-    cartographer(request, priority=0, chart="start systems")
-    cartographer(request, priority=3, chart="gate systems")
+    agent_symbol = os.environ["ST_AGENT_SYMBOL"]
+    try:
+        ship = Ship(f"{agent_symbol}-1", qa_pairs, 0)
+    except ShipNotFoundError:
+        register_agent(
+            request,
+            priority=0,
+            symbol=agent_symbol,
+            faction="COSMIC",
+        )
+        with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE agents
+                SET role = %s
+                WHERE symbol = %s
+                """,
+                ("player", agent_symbol),
+            )
+            cur.execute(
+                """
+                UPDATE tasks
+                SET "pname" = %s
+                WHERE "symbol" = %s
+                """,
+                ("traders", f"{agent_symbol}-1"),
+            )
+        ship = Ship(f"{agent_symbol}-1", qa_pairs, 0)
 
-    # (Re)start the start system probing
-    from st2.spies import spymaster, detective, private_eye
-
-    detective(request, priority=3)
-
-    spymaster(request, priority=3)
-
+    # start background processes
     import atexit
     import multiprocessing as mp
     from st2.ai import taskmaster
+
+    pname = "probes"
+    probe_taskmaster = mp.Process(
+        target=taskmaster,
+        kwargs={"pname": pname, "qa_pairs": qa_pairs},
+    )
+
+    def stop_probe_taskmaster():
+        probe_taskmaster.terminate()
+        probe_taskmaster.join()
+
+
+    atexit.register(stop_probe_taskmaster)
+    probe_taskmaster.start()
+
+    # start trading
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        system_symbol = ship["nav"]["systemSymbol"]
+        symbol = f"trade_controller_{system_symbol[3:]}"
+        current = f"trade_controller {system_symbol}"
+        cur.execute(
+            """
+            INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT ("symbol") DO UPDATE
+            SET "current" = EXCLUDED."current"
+            """,
+            (symbol, agent_symbol, current, None, False, "traders", None),
+        )
 
     pname = "traders"
     trade_taskmaster = mp.Process(
@@ -54,25 +104,37 @@ if __name__ == "__main__":
     atexit.register(stop_trade_taskmaster)
     trade_taskmaster.start()
 
-    # start the probing process
-    pname = "probes"
-    probe_taskmaster = mp.Process(
-        target=taskmaster,
-        kwargs={"pname": pname, "qa_pairs": qa_pairs},
+    # update databases
+    from st2.spies import spymasters_apprentice
+    sa = mp.Process(
+        target=spymasters_apprentice,
+        kwargs={
+            "system_symbol": ship["nav"]["systemSymbol"],
+            "request": request,
+            "priority": 2,
+        },
     )
+    sa.start()
 
-
-    def stop_probe_taskmaster():
-        probe_taskmaster.terminate()
-        probe_taskmaster.join()
-
-
-    atexit.register(stop_probe_taskmaster)
-    probe_taskmaster.start()
-
-    ###
-
+    # TODO: create one long priority 3 background processes
     from time import sleep
-    while True:
-        sleep(3600)
-        private_eye(request, priority=3)
+    from st2.stargazers import merchant, ambassador, astronomer, cartographer
+    from st2.spies import spymaster, detective, private_eye
+
+    def background_processes(request):
+        merchant(request, priority=3)
+        ambassador(request, priority=3)
+        astronomer(request, priority=3)
+        cartographer(request, priority=3, chart="start systems")
+        cartographer(request, priority=3, chart="gate systems")
+        detective(request, priority=3)
+        spymaster(request, priority=3)
+        while True:
+            sleep(3600)
+            private_eye(request, priority=3)
+
+    bp = mp.Process(
+        target=background_processes,
+        kwargs={"request": request},
+    )
+    bp.start()

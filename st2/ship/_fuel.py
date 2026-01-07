@@ -8,3 +8,6 @@ def refuel(self, units=None, from_cargo=False):
         payload["units"] = units
     data = self.request.post(f'my/ships/{self["symbol"]}/refuel', data=payload)["data"]
     self._update(data)
+
+    price = data.get("transaction", {}).get("totalPrice", 0)
+    return price

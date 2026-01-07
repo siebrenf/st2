@@ -9,7 +9,77 @@ from st2.agent import api_agent, register_random_agent
 from st2.logging import logger
 from st2.system import System
 
-DEBUG = False
+DEBUG = True
+
+
+def spymasters_apprentice(system_symbol, request, priority=3):
+    """
+    Dispatch ships to all markets in one starting systems to automatically gather intelligence.
+
+    Can be used on any start system.
+
+    Requires an active taskmaster with 'pname = "probes"'.
+    """
+    token = api_agent(request, priority)[1]
+    # TODO: check system is loaded into the DB by this function, even without the cartographer.
+    system2market = {}
+    faction = _add_system_to_system2market(
+        system_symbol, system2market, request, token, priority
+    )
+    total = len(system2market[system_symbol])
+
+    # load assigned ships
+    role = "spy"
+    pname = "probes"
+    unassigned = _load_assigned_ships(system2market, role, pname)
+
+    # load unassigned ships
+    _load_unassigned_ships(system2market, unassigned, pname)
+
+    remaining = len(system2market[system_symbol])
+    if DEBUG:
+        logger.debug(
+            f"{total-remaining:_}/{total:_} markets probed by the Spymaster's apprentice in start system {system_symbol}"
+        )
+    if remaining == 0:
+        return
+
+    logger.info(
+        f"The Spymaster's apprentice has found {total:_} markets in start system {system_symbol}"
+    )
+    target_system_symbol = system_symbol
+    while len(system2market[target_system_symbol]) != 0:
+        data = register_random_agent(request, priority, faction)
+        agent_symbol = data["agent"]["symbol"]
+        system_symbol = data["ships"][0]["nav"]["systemSymbol"]
+        if system_symbol not in system2market:
+            _add_system_to_system2market(
+                system_symbol, system2market, request, token, priority
+            )
+        if len(system2market[system_symbol]) == 0:
+            continue
+
+        with connect("dbname=st2 user=postgres") as conn:
+            with conn.cursor() as cur:
+                _assign_agent(agent_symbol, role, system_symbol, cur)
+                for ship_symbol in [f"{agent_symbol}-1", f"{agent_symbol}-2"]:
+                    _assign_ship(ship_symbol, system_symbol, system2market, pname, cur)
+
+
+def _add_system_to_system2market(
+    system_symbol, system2market, request, token, priority
+):
+    system2market[system_symbol] = []
+    faction = None
+    system = System(system_symbol, request, token, priority)
+    for waypoint_symbol, wp in system.waypoints.items():
+        if wp["faction"]:
+            faction = wp["faction"]
+        if "MARKETPLACE" in wp["traits"]:
+            wp_type = "shipyard" if "SHIPYARD" in wp["traits"] else "market"
+            system2market[system_symbol].append((wp_type, waypoint_symbol))
+    assert faction is not None, f"{faction=} for {system_symbol=}"
+    return faction
 
 
 def spymaster(request, priority=3):
@@ -183,7 +253,7 @@ def _load_assigned_ships(system2market, role, pname):
                     system_symbol = waypoint_symbol.rsplit("-", 1)[0]
                     key = (wp_type, waypoint_symbol)
                     # in case multiple ships have been assigned
-                    if key in system2market[system_symbol]:
+                    if key in system2market.get(system_symbol, []):
                         system2market[system_symbol].remove(key)
                 else:
                     raise NotImplementedError(f"{ship_symbol=} {task=}")
@@ -220,7 +290,7 @@ def _assign_agent(agent_symbol, role, system_symbol, cur):
 
 def _assign_ship(ship_symbol, system_symbol, system2market, pname, cur):
     if len(system2market[system_symbol]) != 0:
-        # frigates can fly to the furthest waypoints, probed the nearest
+        # frigates can fly to the furthest waypoints, probes to the nearest
         i = -1 if ship_symbol.endswith("-1") else 0
         wp_type, waypoint_symbol = system2market[system_symbol].pop(i)
         task = f"probe {wp_type} {waypoint_symbol}"
