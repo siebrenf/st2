@@ -5,9 +5,9 @@ from uuid import uuid1
 
 from psycopg import connect
 
+from st2.ai.contract_controller import ai_contract_controller
+from st2.ai.deliver import ai_deliver_system
 from st2.ai.probe import ai_probe_purchase, ai_probe_waypoint
-
-# from st2.ai.seed import ai_seed_system
 from st2.ai.probe_controller import ai_probe_controller
 from st2.ai.scout import ai_scout_waypoint
 from st2.ai.trade import ai_trade_system
@@ -207,12 +207,29 @@ class TaskMaster:
     def get_task(self, ship_symbol, agent_symbol, task):
         task = task.split(" ")
         match task[0]:
+            case "contract_controller":
+                coro = ai_contract_controller(
+                    agent_symbol=agent_symbol,
+                    qa_pairs=self.qa_pairs,
+                    verbose=True,  # TODO: remove
+                )
+
+            case "deliver":
+                coro = ai_deliver_system(
+                    ship_symbol=ship_symbol,
+                    good=task[1],
+                    units=int(task[2]),
+                    purchase_wp=task[3],
+                    deliver_wp=task[4],
+                    qa_pairs=self.qa_pairs,
+                    verbose=True,  # TODO: remove
+                )
+
             case "probe":
-                is_shipyard = task[1] == "shipyard"
                 coro = ai_probe_waypoint(
                     ship_symbol=ship_symbol,
                     waypoint_symbol=task[2],
-                    is_shipyard=is_shipyard,
+                    is_shipyard=task[1] == "shipyard",
                     qa_pairs=self.qa_pairs,
                 )
 
@@ -221,8 +238,6 @@ class TaskMaster:
                     system_symbol=task[1],
                     agent_symbol=agent_symbol,
                     qa_pairs=self.qa_pairs,
-                    # probe_markets=False,
-                    # priority=3,
                     verbose=True,  # TODO: remove
                 )
 
@@ -234,14 +249,12 @@ class TaskMaster:
                     verbose=True,  # TODO: remove
                 )
 
-            # case "seed":
-            #     pname = task[1]
-            #     coro = ai_seed_system(
-            #         ship_symbol=ship_symbol,
-            #         pname=pname,
-            #         qa_pairs=self.qa_pairs,
-            #         verbose=True,  # TODO: remove
-            #     )
+            case "scout":
+                coro = ai_scout_waypoint(
+                    ship_symbol=ship_symbol,
+                    waypoint_symbol=task[1],
+                    qa_pairs=self.qa_pairs,
+                )
 
             case "test":
                 coro = _test_coroutine(*task[1:])
@@ -251,7 +264,7 @@ class TaskMaster:
                     ship_symbol=ship_symbol,
                     good=task[1],
                     units=int(task[2]),
-                    buy_wp=task[3],
+                    purchase_wp=task[3],
                     sell_wp=task[4],
                     qa_pairs=self.qa_pairs,
                     verbose=True,  # TODO: remove
@@ -262,13 +275,6 @@ class TaskMaster:
                     system_symbol=task[1],
                     agent_symbol=agent_symbol,
                     restart=True,
-                )
-
-            case "scout":
-                coro = ai_scout_waypoint(
-                    ship_symbol=ship_symbol,
-                    waypoint_symbol=task[1],
-                    qa_pairs=self.qa_pairs,
                 )
 
             case _:

@@ -5,7 +5,7 @@ from st2 import time
 from st2.logging import logger
 
 
-def contract(self):
+def contract(self, verbose=True):
     """Request a new contract. Ship must be present at a faction controlled waypoint"""
     self.dock()
 
@@ -23,7 +23,7 @@ def contract(self):
                 """,
                 (
                     data["id"],
-                    self["agent"],
+                    self["agentSymbol"],
                     data["factionSymbol"],
                     data["type"],
                     Jsonb(data["terms"]),
@@ -32,14 +32,18 @@ def contract(self):
                     time.read(data["deadlineToAccept"]),
                 ),
             )
+    if verbose:
+        logger.info(f"Contract negotiated!")
     return data
 
 
 def deliver(self, symbol, units, contract, verbose=True):
     self.dock()
 
+    if not isinstance(contract, str):
+        contract = contract["id"]
     data = self.request.post(
-        f'my/contracts/{contract["id"]}/deliver',
+        f"my/contracts/{contract}/deliver",
         data={"shipSymbol": self["symbol"], "tradeSymbol": symbol, "units": units},
     )["data"]
     self._update(data)

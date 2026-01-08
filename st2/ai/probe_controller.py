@@ -3,6 +3,7 @@ from asyncio import sleep
 from psycopg import connect
 from psycopg.rows import dict_row
 
+from st2.agent import get_agent, get_agent_public
 from st2.logging import logger
 from st2.request import RequestMp
 from st2.ship import Ship, buy_ship
@@ -29,14 +30,7 @@ async def ai_probe_controller(
     Note: if the Spymaster is in use, probe_markets should be set to False.
     """
     pname = "probes"
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        token = cur.execute(
-            """
-            SELECT "token" FROM "agents"
-            WHERE "symbol" = %s
-            """,
-            (agent_symbol,),
-        ).fetchone()[0]
+    token = get_agent(agent_symbol)["token"]
     request = RequestMp(qa_pairs, priority, token)
     system = System(system_symbol, request, priority)
 
@@ -104,26 +98,12 @@ async def ai_probe_controller(
                 agent_symbol,
                 pname,
                 request,
-                qa_pairs,
                 verbose,
             )
 
     if DEBUG:
         logger.debug(f"probe controller {system_symbol} exiting")
     return "self destruct"
-
-
-def _get_funds(agent_symbol):
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        credits = cur.execute(
-            """
-            SELECT "credits" FROM "agents_public" 
-            WHERE "symbol" = %s 
-            ORDER BY "timestamp" DESC
-            """,
-            (agent_symbol,),
-        ).fetchone()[0]
-    return credits
 
 
 async def _buy_and_assign_probe(
@@ -136,21 +116,20 @@ async def _buy_and_assign_probe(
     agent_symbol,
     pname,
     request,
-    qa_pairs,
     verbose,
 ):
     shipyard_symbol = _get_shipyard(system, unprobed_shipyards_selling_probes)
     shipyard_probe = [
         k for k, v in probes2shipyards_selling_probes.items() if v == shipyard_symbol
     ][0]
-    shipyard_probe = Ship(shipyard_probe, qa_pairs, priority=2)
+    shipyard_probe = Ship(shipyard_probe, request, priority=2)
     if t := shipyard_probe.nav_remaining():
         await sleep(t)
-    credits = _get_funds(agent_symbol)
+    credits = get_agent_public(agent_symbol)["credits"]
     supply = system.shipyards_with("SHIP_PROBE")[shipyard_symbol]["supply"]
     while credits < 500_000 or supply == "SCARCE":
         await sleep(60)
-        credits = _get_funds(agent_symbol)
+        credits = get_agent_public(agent_symbol)["credits"]
         supply = system.shipyards_with("SHIP_PROBE")[shipyard_symbol]["supply"]
     probe_symbol = buy_ship(
         "SHIP_PROBE", shipyard_symbol, agent_symbol, request, verbose

@@ -13,7 +13,7 @@ def test_get_path():
 
     agent_symbol = get_test_agent(request)
     ship_symbol = f"{agent_symbol}-1"
-    ship = Ship(ship_symbol, qa_pairs, 0)
+    ship = Ship(ship_symbol, request)
     system = System(ship["nav"]["systemSymbol"], ship.request)
     fuel_stops = system.markets_with("FUEL", "sells")
 

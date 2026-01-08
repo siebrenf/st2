@@ -3,6 +3,7 @@ import random
 import string
 
 from psycopg import connect
+from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from st2 import time
@@ -91,8 +92,8 @@ def register_agent(
     if email:
         payload["email"] = email
     # data keys: ['token', 'agent', 'contract', 'faction', 'ships']
-    token = os.environ["ST_ACCOUNT_TOKEN"]
-    data = request.post("register", priority, token, payload)["data"]
+    account_token = os.environ["ST_ACCOUNT_TOKEN"]
+    data = request.post("register", priority, account_token, payload)["data"]
     with connect("dbname=st2 user=postgres") as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -179,3 +180,30 @@ def register_agent(
                         (ship["symbol"], symbol, None, None, False, None, None),
                     )
     return data
+
+
+def get_agent(symbol):
+    with connect(
+        "dbname=st2 user=postgres", row_factory=dict_row
+    ) as conn, conn.cursor() as cur:
+        agent = cur.execute(
+            """SELECT token FROM agents WHERE symbol = %s""",
+            (symbol,),
+        ).fetchone()
+    return agent
+
+
+def get_agent_public(symbol):
+    with connect(
+        "dbname=st2 user=postgres", row_factory=dict_row
+    ) as conn, conn.cursor() as cur:
+        agent_public = cur.execute(
+            """
+            SELECT * 
+            FROM "agents_public" 
+            WHERE "symbol" = %s 
+            ORDER BY "timestamp" DESC
+            """,
+            (symbol,),
+        ).fetchone()
+    return agent_public

@@ -25,7 +25,7 @@ def test_ai_probe_waypoint():
 
     agent_symbol = get_test_agent(request)
     probe = f"{agent_symbol}-2"
-    ship = Ship(probe, qa_pairs, 0)
+    ship = Ship(probe, request)
     waypoint = ship["nav"]["waypointSymbol"]
 
     t0 = time.now()

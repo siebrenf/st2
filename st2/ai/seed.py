@@ -24,7 +24,7 @@ async def ai_seed_system(
     Assumption: any pre-existing probes meant for probing should have
     their task set to probe prior to starting this function.
     """
-    ship = Ship(ship_symbol, qa_pairs, priority)
+    ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     ship.refresh()
     system_symbol = ship["nav"]["systemSymbol"]
     system = System(system_symbol, ship.request)
@@ -86,7 +86,7 @@ async def ai_seed_system(
 
     # wait until all probes arrived to the shipyards
     for probe_symbol in shipyards.values():
-        probe = Ship(probe_symbol, qa_pairs, priority)
+        probe = Ship(probe_symbol, qa_pairs=qa_pairs, priority=priority)
         if t := probe.nav_remaining():
             await sleep(t)
 

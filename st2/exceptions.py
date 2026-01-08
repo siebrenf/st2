@@ -12,6 +12,11 @@ class ExtractDestabilizedError(Exception):
         super().__init__(*args)
 
 
+class ContractNotFoundError(Exception):
+    def __init__(self, *args):
+        super().__init__(*args)
+
+
 class ShipNotFoundError(Exception):
     def __init__(self, *args):
         super().__init__(*args)

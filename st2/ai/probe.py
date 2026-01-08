@@ -16,7 +16,7 @@ async def ai_probe_waypoint(
     priority=3,
     verbose=False,
 ):
-    ship = Ship(ship_symbol, qa_pairs, priority)
+    ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     # ship.refresh()
 
     # navigate to the waypoint
@@ -41,7 +41,7 @@ async def ai_probe_purchase(
     priority=3,
     verbose=False,
 ):
-    ship = Ship(ship_symbol, qa_pairs, priority)
+    ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     # ship.refresh()
 
     # navigate to the waypoint

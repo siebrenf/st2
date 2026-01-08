@@ -617,7 +617,7 @@ def get_table(table, n=None, ascending=True, header=True, as_dict=False):
         query = f"SELECT * FROM {table}"
         for col in ["timestamp", "deadlineToAccept", "symbol", "type"]:
             if col in columns:
-                query = f"SELECT * FROM {table} ORDER BY {col}"
+                query = f'SELECT * FROM "{table}" ORDER BY "{col}"'
                 if not ascending:
                     query += " DESC"
                 break

@@ -6,14 +6,14 @@ from st2.ship import Ship
 
 @logger.catch  # catch errors in a separate thread
 async def ai_trade_system(
-    ship_symbol, good, units, buy_wp, sell_wp, qa_pairs, priority=1, verbose=False
+    ship_symbol, good, units, purchase_wp, sell_wp, qa_pairs, priority=1, verbose=False
 ):
     if verbose:
         logger.info(
-            f"{ship_symbol} will trade {units} {good} between {buy_wp} and {sell_wp}"
+            f"{ship_symbol} will trade {units} {good} between {purchase_wp} and {sell_wp}"
         )
 
-    ship = Ship(ship_symbol, qa_pairs, priority)
+    ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     # jettison unrelated cargo
     purchase_units = units
     for g, u in ship.cargo_yield():
@@ -26,7 +26,7 @@ async def ai_trade_system(
     pp = 0
     t0 = time.now()
     if purchase_units > 0:
-        fp += await travel(ship, buy_wp, explore=True, verbose=False)
+        fp += await travel(ship, purchase_wp, explore=True, verbose=False)
         pp = ship.buy(good, purchase_units, verbose=False)
     fp += await travel(ship, sell_wp, explore=True, verbose=False)
     sp = ship.sell(good, units, verbose=False)

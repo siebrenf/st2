@@ -166,7 +166,7 @@ def test_integration():
             assert ship["frame"]["symbol"] == "FRAME_PROBE"
 
     # Instantiate a Ship
-    probe = Ship(agent_symbol + "-2", qa_pairs, 0)
+    probe = Ship(agent_symbol + "-2", request)
 
     # basic API commands
     probe.orbit()
@@ -193,7 +193,7 @@ def test_integration():
         ["symbol", "imports", "exports", "exchange", "transactions", "tradeGoods"]
     )
 
-    ship = Ship(f"{agent_symbol}-1", qa_pairs, 0)
+    ship = Ship(f"{agent_symbol}-1", request)
     ship.nav_patch("CRUISE")
     assert ship["nav"]["flightMode"] == "CRUISE"
     ship.nav_patch("BURN")

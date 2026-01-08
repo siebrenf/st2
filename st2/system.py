@@ -9,7 +9,6 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from scipy.spatial.distance import cdist
 
-from st2.agent import api_agent
 from st2.logging import logger
 
 DEBUG = False
@@ -26,20 +25,14 @@ class System:
     uncharted: dict = None
     graph: nx.Graph = None
 
-    def __init__(self, symbol, request=None, token=None, priority=None):
+    def __init__(self, symbol, request=None, priority=None):
         # maybe add _ = self.waypoints  # ensure _get_waypoints() ran
         self.symbol = symbol
-        self.request = request
+        self.request = None
+        if request:
+            self.request = request.copy()
         if priority:
-            self.priority = priority
-        elif hasattr(self.request, "priority"):
-            self.priority = self.request.priority
-        if token:
-            self.token = token
-        elif hasattr(self.request, "token") and self.request.token:
-            self.token = self.request.token
-        elif self.request:
-            self.token = api_agent(request, self.priority)[1]
+            self.request.priority = priority
 
     def _get_system(self, cur):
         """

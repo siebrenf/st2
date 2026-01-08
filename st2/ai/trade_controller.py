@@ -38,11 +38,11 @@ async def ai_trade_controller(
 
         # identify trade opportunities
         trades, outdated_markets = _get_trade_goods(system_symbol, blacklisted_goods)
-        if DEBUG:
-            logger.debug(f"{len(trades)} trades found in {system_symbol}")
-            logger.debug(
-                f"{len(outdated_markets)} outdated markets found in {system_symbol}"
-            )
+        # if DEBUG:
+        #     logger.debug(f"{len(trades)} trades found in {system_symbol}")
+        #     logger.debug(
+        #         f"{len(outdated_markets)} outdated markets found in {system_symbol}"
+        #     )
         cargo_capacity_max = max([v["cargo"] for v in ships.values()])
         for good, (_, seller, buyer) in trades.items():
             max_units, purchase_price, sell_price = _get_trade_units(
@@ -64,11 +64,12 @@ async def ai_trade_controller(
             if estimated_return_of_investment < 0.05:
                 continue  # unsafe trade
 
-            ship, units, estimated_profit = _get_trade_ship(
+            ship, units, estimated_profit, task_old = _get_trade_ship(
                 queued_tasks, ships, max_units, seller, buyer
             )
             task = f"trade {good} {units} {seller["waypointSymbol"]} {buyer["waypointSymbol"]}"
-            _queue_task(ship, task, estimated_profit)
+            if task != task_old:
+                _queue_task(ship, task, estimated_profit)
             if len(queued_tasks) == 0:
                 break
 
@@ -114,11 +115,11 @@ def _get_queued_tasks(assigned_ships, ship_dict, restart=False):
     for task in assigned_ships:
         ship = task["symbol"]
         if task["current"] is not None:
-            args = task["current"].split(" ")[:2]
-            if args[0] in ["trade", "supply", "contract"]:
+            args = task["current"].split(" ")
+            if args[0] in ["trade", "supply", "deliver"]:
                 good = args[1]
                 if restart and good not in _get_ship_cargo(ship):
-                    _cancel_task(ship)
+                    _cancel_task(ship, reason="script restart", task=task["current"])
                 else:
                     blacklisted_goods.add(good)
         # ignore ships working on a supply/contract task, or selling leftover cargo
@@ -138,7 +139,7 @@ def _get_ship_cargo(ship_symbol):
     ) as conn, conn.cursor() as cur:
         ship = cur.execute(
             """
-            SELECT * FROM "ships" 
+            SELECT cargo FROM "ships" 
             WHERE "symbol" = %s 
             """,
             (ship_symbol,),
@@ -152,7 +153,7 @@ def _set_ship_metadata(ship_symbol, ships_dict):
     ) as conn, conn.cursor() as cur:
         ship = cur.execute(
             """
-            SELECT * FROM "ships" 
+            SELECT cargo, fuel, engine FROM "ships" 
             WHERE "symbol" = %s 
             """,
             (ship_symbol,),
@@ -285,8 +286,8 @@ def _get_trade_ship(
         if estimated_profit > best[-1]:
             best = ship, units, estimated_profit
     ship, units, estimated_profit = best
-    queued_tasks.pop(ship)
-    return ship, units, estimated_profit
+    task_old = queued_tasks.pop(ship)
+    return ship, units, estimated_profit, task_old
 
 
 def _get_scout_ship(queued_tasks, ships):
@@ -330,7 +331,7 @@ def _queue_task(ship, task, estimated_profit=None):
         logger.debug(msg)
 
 
-def _cancel_task(ship):
+def _cancel_task(ship, reason=None, task=None):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -341,4 +342,7 @@ def _cancel_task(ship):
             (True, ship),
         )
     if DEBUG:
-        logger.debug(f"Cancelling task for {ship}")
+        msg = "Cancelled " + (f"{task=}" if task else "task") + f" for {ship}"
+        if reason:
+            msg += f" {reason=}"
+        logger.debug(msg)

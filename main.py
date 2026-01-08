@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     agent_symbol = os.environ["ST_AGENT_SYMBOL"]
     try:
-        ship = Ship(f"{agent_symbol}-1", qa_pairs, 0)
+        ship = Ship(f"{agent_symbol}-1", request)
     except ShipNotFoundError:
         register_agent(
             request,
@@ -61,7 +61,7 @@ if __name__ == "__main__":
                 """,
                 ("probes", f"{agent_symbol}-2"),
             )
-        ship = Ship(f"{agent_symbol}-1", qa_pairs, 0)
+        ship = Ship(f"{agent_symbol}-1", request)
         # from st2.system import System
         #
         # system = System(ship["nav"]["systemSymbol"], request)
@@ -71,6 +71,16 @@ if __name__ == "__main__":
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         system_symbol = ship["nav"]["systemSymbol"]
         symbol = f"trade_controller {system_symbol}"
+        cur.execute(
+            """
+            INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT ("symbol") DO UPDATE
+            SET "current" = EXCLUDED."current"
+            """,
+            (symbol, agent_symbol, symbol, None, False, "traders", None),
+        )
+        symbol = "contract_controller"
         cur.execute(
             """
             INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
@@ -95,6 +105,7 @@ if __name__ == "__main__":
     import atexit
     import multiprocessing as mp
     from st2.ai import taskmaster
+    from st2 import time
 
     pname = "probes"
     probe_taskmaster = mp.Process(
@@ -110,6 +121,9 @@ if __name__ == "__main__":
     atexit.register(stop_probe_taskmaster)
     probe_taskmaster.start()
 
+    # allow the probes to "warm up"
+    time.sleep(10)
+
     pname = "traders"
     trade_taskmaster = mp.Process(
         target=taskmaster,
@@ -124,6 +138,9 @@ if __name__ == "__main__":
 
     atexit.register(stop_trade_taskmaster)
     trade_taskmaster.start()
+
+
+
 
     # update databases
     from st2.spies import spymasters_apprentice

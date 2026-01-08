@@ -3,25 +3,33 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from st2 import time
+from st2.agent import get_agent
 from st2.exceptions import ShipNotFoundError
 from st2.logging import logger
 from st2.request import RequestMp
 
 
 class Ship(dict):
-    def __init__(self, symbol, qa_pairs, priority):
-        with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-            with conn.cursor() as cur:
-                data = cur.execute(
-                    "SELECT * FROM ships WHERE symbol = %s", (symbol,)
-                ).fetchone()
-                if data is None:
-                    raise ShipNotFoundError(f"Could not find ship {symbol}")
-                token = cur.execute(
-                    "SELECT token FROM agents WHERE symbol = %s", (data["agentSymbol"],)
-                ).fetchone()["token"]
+    def __init__(self, symbol, request=None, qa_pairs=None, priority=None):
+        with connect(
+            "dbname=st2 user=postgres", row_factory=dict_row
+        ) as conn, conn.cursor() as cur:
+            data = cur.execute(
+                "SELECT * FROM ships WHERE symbol = %s", (symbol,)
+            ).fetchone()
+            if data is None:
+                raise ShipNotFoundError(f"Could not find ship {symbol}")
+            token = get_agent(data["agentSymbol"])["token"]
         super().__init__(data)
-        self.request = RequestMp(qa_pairs, priority, token)
+        if request:
+            self.request = request.copy()
+            if priority:
+                self.request.priority = priority
+            self.request.token = token
+        elif qa_pairs:
+            self.request = RequestMp(qa_pairs, priority, token)
+        else:
+            raise ValueError(f"Ship required arguments 'request' or 'qa_pairs'")
 
     def name(self):
         return f'{self["registration"]["role"].capitalize()} {self["frame"]["name"].lower()} {self["symbol"]}'
@@ -301,7 +309,7 @@ def buy_ship(ship_type, waypoint_symbol, agent_symbol, request, verbose=True):
     if verbose:
         logger.info(
             f'{ship["registration"]["role"].capitalize()} {ship["frame"]["name"].lower()} {ship["symbol"]} '
-            f'bought at {waypoint_symbol} for {data["transaction"]["price"]} credits'
+            f'purchased at {waypoint_symbol} for {data["transaction"]["price"]:_} credits'
         )
 
     return ship["symbol"]

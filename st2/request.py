@@ -1,3 +1,4 @@
+from copy import deepcopy
 from json import dumps
 from time import sleep
 from uuid import uuid1
@@ -39,6 +40,12 @@ class Request:
             per_second=2,
             limit_statuses=self.rate_limit_codes,
         )
+
+    def __copy__(self):
+        return deepcopy(self)
+
+    def copy(self):
+        return self.__copy__()
 
     def _request(
         self,
@@ -183,11 +190,17 @@ class RequestMp:
 
     def __init__(self, qa_pairs, priority=0, token=None):
         self.queues = {}
+        self.priority = priority
         for priority, (queue, answer_dict) in enumerate(qa_pairs):
             self.queues[priority] = (queue, answer_dict)
-        self.priority = priority
         self.token = token
         self.sleep = 0.01
+
+    def __copy__(self):
+        return RequestMp(tuple(self.queues.values()), self.priority, self.token)
+
+    def copy(self):
+        return self.__copy__()
 
     def _request(self, method, endpoint, priority, token, data=None, params=None):
         if priority is None:
