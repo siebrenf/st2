@@ -27,6 +27,7 @@ class System:
     graph: nx.Graph = None
 
     def __init__(self, symbol, request=None, token=None, priority=None):
+        # maybe add _ = self.waypoints  # ensure _get_waypoints() ran
         self.symbol = symbol
         self.request = request
         if priority:

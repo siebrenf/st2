@@ -5,9 +5,11 @@ from uuid import uuid1
 
 from psycopg import connect
 
-from st2.ai.probe import ai_probe_waypoint
+from st2.ai.probe import ai_probe_purchase, ai_probe_waypoint
+
+# from st2.ai.seed import ai_seed_system
+from st2.ai.probe_controller import ai_probe_controller
 from st2.ai.scout import ai_scout_waypoint
-from st2.ai.seed import ai_seed_system
 from st2.ai.trade import ai_trade_system
 from st2.ai.trade_controller import ai_trade_controller
 from st2.logging import logger
@@ -24,7 +26,7 @@ DEBUG = False
 class TaskMaster:
 
     def __init__(self, pname, qa_pairs):
-        self.name = pname
+        self.name = pname  # only tasks with matching pname will be handled
         self.pid = uuid1()
         self.qa_pairs = qa_pairs
         self._tasks = {}
@@ -143,9 +145,18 @@ class TaskMaster:
                         if DEBUG:
                             logger.debug(f"{ship_symbol} stopped task '{current_task}'")
                         ret = self.get(ship_symbol)
-                        if ret:
-                            # TODO: do we need the coroutine result?
-                            logger.debug(ret)
+                        if ret == "self destruct":
+                            cur.execute(
+                                """
+                                DELETE FROM tasks
+                                WHERE symbol = %s
+                                """,
+                                (ship_symbol,),
+                            )
+                        elif ret:
+                            logger.debug(
+                                f"unknown task output for {ship_symbol}: {ret}"
+                            )
                         current_task = None
                         cur.execute(
                             """
@@ -197,32 +208,40 @@ class TaskMaster:
         task = task.split(" ")
         match task[0]:
             case "probe":
-                # if "ai_probe_waypoint" not in self._loaded:
-                #     self._loaded.add("ai_probe_waypoint")
-                #     from st2.ai.probe import ai_probe_waypoint
-                #     sleep(1)
                 is_shipyard = task[1] == "shipyard"
-                coro = ai_probe_waypoint(  # noqa: always loaded on time
+                coro = ai_probe_waypoint(
                     ship_symbol=ship_symbol,
                     waypoint_symbol=task[2],
                     is_shipyard=is_shipyard,
                     qa_pairs=self.qa_pairs,
                 )
 
-            case "seed":
-                # if "ai_seed_system" not in self._loaded:
-                #     self._loaded.add("ai_seed_system")
-                #     from st2.ai.system import ai_seed_system
-                #     sleep(1)
-                pname = task[1]
-                priority = None
-                coro = ai_seed_system(  # noqa: always loaded on time
-                    ship_symbol=ship_symbol,
-                    pname=pname,
+            case "probe_controller":
+                coro = ai_probe_controller(
+                    system_symbol=task[1],
+                    agent_symbol=agent_symbol,
                     qa_pairs=self.qa_pairs,
-                    priority=priority,
+                    # probe_markets=False,
+                    # priority=3,
                     verbose=True,  # TODO: remove
                 )
+
+            case "probe_purchase":
+                coro = ai_probe_purchase(
+                    ship_symbol=ship_symbol,
+                    waypoint_symbol=task[1],
+                    qa_pairs=self.qa_pairs,
+                    verbose=True,  # TODO: remove
+                )
+
+            # case "seed":
+            #     pname = task[1]
+            #     coro = ai_seed_system(
+            #         ship_symbol=ship_symbol,
+            #         pname=pname,
+            #         qa_pairs=self.qa_pairs,
+            #         verbose=True,  # TODO: remove
+            #     )
 
             case "test":
                 coro = _test_coroutine(*task[1:])
@@ -235,12 +254,11 @@ class TaskMaster:
                     buy_wp=task[3],
                     sell_wp=task[4],
                     qa_pairs=self.qa_pairs,
-                    # priority,
                     verbose=True,  # TODO: remove
                 )
 
             case "trade_controller":
-                coro = ai_trade_controller(  # noqa: always loaded on time
+                coro = ai_trade_controller(
                     system_symbol=task[1],
                     agent_symbol=agent_symbol,
                     restart=True,
@@ -251,13 +269,11 @@ class TaskMaster:
                     ship_symbol=ship_symbol,
                     waypoint_symbol=task[1],
                     qa_pairs=self.qa_pairs,
-                    # priority,
-                    verbose=True,  # TODO: remove
                 )
 
             case _:
                 raise ValueError(f"Task not recognized: {ship_symbol=}, {task=}")
-        return coro
+        return coro  # noqa: always loaded on time
 
 
 @logger.catch  # catch errors in a separate thread

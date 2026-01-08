@@ -28,7 +28,7 @@ async def ai_trade_controller(
             await sleep(interval)
             continue
 
-        # available ships, currently queued tasks & blacklisted goods
+        # currently queued tasks per ship (that can be overwritten) & blacklisted goods
         queued_tasks, blacklisted_goods = _get_queued_tasks(
             assigned_ships, ships, restart
         )
@@ -58,24 +58,24 @@ async def ai_trade_controller(
             )
             if estimated_max_profit < 1000:
                 continue  # unworthwhile trade
-            estimated_return_of_investment = sell_price / (
-                purchase_price + estimated_fuel_cost + estimated_time_cost
-            )
-            if estimated_return_of_investment < 1.05:
+            estimated_return_of_investment = (
+                sell_price - purchase_price - estimated_fuel_cost - estimated_time_cost
+            ) / (purchase_price + estimated_fuel_cost + estimated_time_cost)
+            if estimated_return_of_investment < 0.05:
                 continue  # unsafe trade
 
             ship, units, estimated_profit = _get_trade_ship(
                 queued_tasks, ships, max_units, seller, buyer
             )
             task = f"trade {good} {units} {seller["waypointSymbol"]} {buyer["waypointSymbol"]}"
-            _assign_task(ship, task, estimated_profit)
+            _queue_task(ship, task, estimated_profit)
             if len(queued_tasks) == 0:
                 break
 
         while len(queued_tasks) and len(outdated_markets):
             ship = _get_scout_ship(queued_tasks, ships)
             wp = _get_scout_waypoint(outdated_markets)
-            _assign_task(ship, f"scout {wp}")
+            _queue_task(ship, f"scout {wp}")
 
         if restart:
             restart = False
@@ -144,20 +144,6 @@ def _get_ship_cargo(ship_symbol):
             (ship_symbol,),
         ).fetchone()
     return [tg["symbol"] for tg in ship["cargo"]["inventory"]]
-
-
-def _cancel_task(ship):
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE tasks
-            SET "cancel" = %s
-            WHERE "symbol" = %s
-            """,
-            (True, ship),
-        )
-    if DEBUG:
-        logger.debug(f"Cancelling task for {ship}")
 
 
 def _set_ship_metadata(ship_symbol, ships_dict):
@@ -327,7 +313,7 @@ def _get_scout_waypoint(outdated_markets):
     return wp
 
 
-def _assign_task(ship, task, estimated_profit=None):
+def _queue_task(ship, task, estimated_profit=None):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -338,7 +324,21 @@ def _assign_task(ship, task, estimated_profit=None):
             (task, ship),
         )
     if DEBUG:
-        msg = f"Assigning {ship} to {task=}"
+        msg = f"Queueing {task=} to {ship}"
         if estimated_profit:
-            msg += f" for {estimated_profit=}"
+            msg += f" for {estimated_profit=:_}"
         logger.debug(msg)
+
+
+def _cancel_task(ship):
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE tasks
+            SET "cancel" = %s
+            WHERE "symbol" = %s
+            """,
+            (True, ship),
+        )
+    if DEBUG:
+        logger.debug(f"Cancelling task for {ship}")

@@ -71,7 +71,7 @@ def _buy_sell(self, symbol, units, action, verbose=True):
     if verbose:
         wp = self["nav"]["waypointSymbol"]
         key_word = "sold" if action == "sell" else "purchased"
-        logger.info(f"{self.name()} {key_word} {units} {symbol} for {price} at {wp}")
+        logger.info(f"{self.name()} {key_word} {units} {symbol} for {price:_} at {wp}")
     return price
 
 

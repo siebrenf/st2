@@ -53,7 +53,43 @@ if __name__ == "__main__":
                 """,
                 ("traders", f"{agent_symbol}-1"),
             )
+            cur.execute(
+                """
+                UPDATE tasks
+                SET "pname" = %s
+                WHERE "symbol" = %s
+                """,
+                ("probes", f"{agent_symbol}-2"),
+            )
         ship = Ship(f"{agent_symbol}-1", qa_pairs, 0)
+        # from st2.system import System
+        #
+        # system = System(ship["nav"]["systemSymbol"], request)
+        # _ = system.waypoints  # make sure all waypoints are loaded intro the DB
+
+    # start trading & probing
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        system_symbol = ship["nav"]["systemSymbol"]
+        symbol = f"trade_controller {system_symbol}"
+        cur.execute(
+            """
+            INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT ("symbol") DO UPDATE
+            SET "current" = EXCLUDED."current"
+            """,
+            (symbol, agent_symbol, symbol, None, False, "traders", None),
+        )
+        symbol = f"probe_controller {system_symbol}"
+        cur.execute(
+            """
+            INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT ("symbol") DO UPDATE
+            SET "current" = EXCLUDED."current"
+            """,
+            (symbol, agent_symbol, symbol, None, False, "probes", None),
+        )
 
     # start background processes
     import atexit
@@ -73,21 +109,6 @@ if __name__ == "__main__":
 
     atexit.register(stop_probe_taskmaster)
     probe_taskmaster.start()
-
-    # start trading
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        system_symbol = ship["nav"]["systemSymbol"]
-        symbol = f"trade_controller_{system_symbol[3:]}"
-        current = f"trade_controller {system_symbol}"
-        cur.execute(
-            """
-            INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT ("symbol") DO UPDATE
-            SET "current" = EXCLUDED."current"
-            """,
-            (symbol, agent_symbol, current, None, False, "traders", None),
-        )
 
     pname = "traders"
     trade_taskmaster = mp.Process(

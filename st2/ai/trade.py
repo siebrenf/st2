@@ -26,15 +26,15 @@ async def ai_trade_system(
     pp = 0
     t0 = time.now()
     if purchase_units > 0:
-        fp += await travel(ship, buy_wp, explore=True, verbose=verbose)
-        pp = ship.buy(good, purchase_units, verbose)
-    fp += await travel(ship, sell_wp, explore=True, verbose=verbose)
-    sp = ship.sell(good, units, verbose)
+        fp += await travel(ship, buy_wp, explore=True, verbose=False)
+        pp = ship.buy(good, purchase_units, verbose=False)
+    fp += await travel(ship, sell_wp, explore=True, verbose=False)
+    sp = ship.sell(good, units, verbose=False)
 
     if verbose:
         travel_time = (time.now() - t0).seconds
         total_profit = sp - pp - fp
-        return_of_interest = round(sp / (pp + fp), 2)
+        return_of_investment = round((sp - pp - fp) / max(pp + fp, 70), 2)
         logger.info(
-            f"{ship.name()} traded {units} {good} for {total_profit:_} ({travel_time=}, {return_of_interest=})"
+            f"{ship.name()} traded {units} {good} for {total_profit:_} ({travel_time=}, {return_of_investment=})"
         )
