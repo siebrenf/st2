@@ -13,7 +13,7 @@ async def ai_probe_waypoint(
     waypoint_symbol,
     is_shipyard,
     qa_pairs,
-    priority=3,
+    priority=2,
     verbose=False,
 ):
     ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
@@ -38,7 +38,7 @@ async def ai_probe_purchase(
     ship_symbol,
     waypoint_symbol,
     qa_pairs,
-    priority=3,
+    priority=1,
     verbose=False,
 ):
     ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)

@@ -119,6 +119,7 @@ def _get_queued_tasks(assigned_ships, ship_dict, restart=False):
             if args[0] in ["trade", "supply", "deliver"]:
                 good = args[1]
                 if restart and good not in _get_ship_cargo(ship):
+                    # TODO: this can cancel supply and deliver tasks. is that OK?
                     _cancel_task(ship, reason="script restart", task=task["current"])
                 else:
                     blacklisted_goods.add(good)

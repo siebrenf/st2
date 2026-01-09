@@ -12,7 +12,7 @@ from st2.system import System
 DEBUG = True
 
 
-def spymasters_apprentice(system_symbol, request, priority=3):
+def spymasters_apprentice(system_symbol, request, priority=3, verbose=True):
     """
     Dispatch ships to all markets in one starting systems to automatically gather intelligence.
 
@@ -21,10 +21,12 @@ def spymasters_apprentice(system_symbol, request, priority=3):
     Requires an active taskmaster with 'pname = "probes"'.
     """
     token = api_agent(request, priority)[1]
+    request = request.copy()
+    request.token = token
     # TODO: check system is loaded into the DB by this function, even without the cartographer.
     system2market = {}
     faction = _add_system_to_system2market(
-        system_symbol, system2market, request, token, priority
+        system_symbol, system2market, request, priority
     )
     total = len(system2market[system_symbol])
 
@@ -37,16 +39,18 @@ def spymasters_apprentice(system_symbol, request, priority=3):
     _load_unassigned_ships(system2market, unassigned, pname)
 
     remaining = len(system2market[system_symbol])
-    if DEBUG:
+    if verbose and DEBUG:
         logger.debug(
-            f"{total-remaining:_}/{total:_} markets probed by the Spymaster's apprentice in start system {system_symbol}"
+            f"{total-remaining:_}/{total:_} markets probed by the Spymaster's apprentice "
+            f"in start system {system_symbol}"
         )
     if remaining == 0:
         return
 
-    logger.info(
-        f"The Spymaster's apprentice has found {total:_} markets in start system {system_symbol}"
-    )
+    if verbose:
+        logger.info(
+            f"The Spymaster's apprentice has found {total:_} markets in start system {system_symbol}"
+        )
     target_system_symbol = system_symbol
     while len(system2market[target_system_symbol]) != 0:
         data = register_random_agent(request, priority, faction)
@@ -54,7 +58,7 @@ def spymasters_apprentice(system_symbol, request, priority=3):
         system_symbol = data["ships"][0]["nav"]["systemSymbol"]
         if system_symbol not in system2market:
             _add_system_to_system2market(
-                system_symbol, system2market, request, token, priority
+                system_symbol, system2market, request, priority
             )
         if len(system2market[system_symbol]) == 0:
             continue
@@ -66,12 +70,10 @@ def spymasters_apprentice(system_symbol, request, priority=3):
                     _assign_ship(ship_symbol, system_symbol, system2market, pname, cur)
 
 
-def _add_system_to_system2market(
-    system_symbol, system2market, request, token, priority
-):
+def _add_system_to_system2market(system_symbol, system2market, request, priority):
     system2market[system_symbol] = []
     faction = None
-    system = System(system_symbol, request, token, priority)
+    system = System(system_symbol, request, priority)
     for waypoint_symbol, wp in system.waypoints.items():
         if wp["faction"]:
             faction = wp["faction"]
@@ -82,7 +84,7 @@ def _add_system_to_system2market(
     return faction
 
 
-def spymaster(request, priority=3):
+def spymaster(request, priority=3, verbose=True):
     """
     Dispatch ships to all markets in all starting systems to automatically gather intelligence.
 
@@ -107,18 +109,19 @@ def spymaster(request, priority=3):
     _load_unassigned_ships(system2market, unassigned, pname)
 
     remaining = sum([len(markets) for markets in system2market.values()])
-    if DEBUG:
+    if verbose and DEBUG:
         logger.debug(f"{total-remaining:_}/{total:_} markets probed by the Spymaster")
     if remaining == 0:
         return
 
-    logger.info(f"The Spymaster has found {total:_} markets in start systems")
+    if verbose:
+        logger.info(f"The Spymaster has found {total:_} markets in start systems")
     # register new agents to assign
     for faction, systems in faction2system.items():
         while remaining := [
             system for system in systems if len(system2market[system]) != 0
         ]:
-            if DEBUG:
+            if verbose and DEBUG:
                 n = sum([len(system2market[system]) for system in remaining])
                 logger.debug(
                     f"{len(remaining): >2} {faction} systems remaining ({n: >3} markets)"
@@ -307,7 +310,7 @@ def _assign_ship(ship_symbol, system_symbol, system2market, pname, cur):
             logger.debug(f"Assigned {ship_symbol} to {wp_type} {waypoint_symbol}")
 
 
-def detective(request, priority=3):
+def detective(request, priority=3, verbose=True):
     """
     Investigate all public agents, and update the active agents
     """
@@ -324,9 +327,9 @@ def detective(request, priority=3):
                 if total == float("inf"):
                     t = ret["meta"]["total"]
                     total = math.ceil(t / 20)
-                    if DEBUG:
+                    if verbose and DEBUG:
                         logger.debug(f"The Detective is investigating {t:_} agents")
-                if DEBUG:
+                if verbose and DEBUG:
                     logger.debug(f"Processing page {page:_}/{total:_}")
                 timestamp = time.now()
                 for agent in ret["data"]:
@@ -349,15 +352,16 @@ def detective(request, priority=3):
                         )
                         n += 1
                 page += 1
-    if DEBUG:
-        logger.debug(f"The Detective identified {n:_} active agents")
+    if verbose:
+        logger.info(f"The Detective identified {n:_} active agents")
 
 
-def private_eye(request, priority=3):
+def private_eye(request, priority=3, verbose=True):
     """
     Update public agents that are already known to be active.
     """
     token = api_agent(request, priority)[1]
+    n = 0
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         for (agent_symbol,) in cur.execute(
             """SELECT DISTINCT symbol FROM agents_public WHERE credits > 175000"""
@@ -380,3 +384,6 @@ def private_eye(request, priority=3):
                     timestamp,
                 ),
             )
+            n += 1
+    if verbose:
+        logger.info(f"The private eye tracked all {n:_} active agents")

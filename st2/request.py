@@ -188,7 +188,7 @@ class RequestMp:
     See main.py.
     """
 
-    def __init__(self, qa_pairs, priority=0, token=None):
+    def __init__(self, qa_pairs, priority=1, token=None):
         self.queues = {}
         self.priority = priority
         for priority, (queue, answer_dict) in enumerate(qa_pairs):

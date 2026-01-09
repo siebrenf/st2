@@ -9,7 +9,7 @@ from st2.logging import logger
 DEBUG = False
 
 
-def merchant(request, priority=0):
+def merchant(request, priority=1):
     """
     Map all supply chains.
     """
@@ -29,7 +29,7 @@ def merchant(request, priority=0):
             )
 
 
-def ambassador(request, priority=0):
+def ambassador(request, priority=1):
     """
     Map all factions.
     """
@@ -80,7 +80,7 @@ def ambassador(request, priority=0):
                     )
 
 
-def astronomer(request, priority=3):
+def astronomer(request, priority=3, verbose=True):
     """
     Map all systems.
     """
@@ -123,10 +123,13 @@ def astronomer(request, priority=3):
             if current == total:
                 return
 
-            logger.info(f"The Astronomer has found {total:_} stars in the night sky")
+            if verbose:
+                logger.info(
+                    f"The Astronomer has found {total:_} stars in the night sky"
+                )
             total_pages = math.ceil(total / 20)
             while current < total:
-                if DEBUG:
+                if verbose and DEBUG:
                     logger.debug(f"Processing page {page:_}/{total_pages:_}")
                 systems = request.get(
                     endpoint="systems",
@@ -182,11 +185,11 @@ def astronomer(request, priority=3):
                     """,
                     (current, page, total),
                 )
+    if verbose:
+        logger.info(f"The Astronomer has completed its chart!")
 
-    logger.info(f"The Astronomer has completed its chart!")
 
-
-def cartographer(request, priority=3, chart="start systems"):
+def cartographer(request, priority=3, chart="start systems", verbose=True):
     """
     Can be used after all systems have been mapped by the astronomer.
     """
@@ -212,7 +215,9 @@ def cartographer(request, priority=3, chart="start systems"):
         WHERE "type" = 'ENGINEERED_ASTEROID' 
         ORDER BY "systemSymbol"
         """
-        completed = _chart_systems(request, priority, token, "start systems", query)
+        completed = _chart_systems(
+            request, priority, token, "start systems", query, verbose
+        )
 
     elif chart == "gate systems":
         # gate systems (can be charted by other players)
@@ -226,18 +231,20 @@ def cartographer(request, priority=3, chart="start systems"):
         WHERE "type" = 'ENGINEERED_ASTEROID'
         ORDER BY "systemSymbol"
         """
-        completed = _chart_systems(request, priority, token, "gate systems", query)
+        completed = _chart_systems(
+            request, priority, token, "gate systems", query, verbose
+        )
 
     else:
         raise ValueError(
             f"{chart=} not recognized! Options: 'start systems' or 'gate systems'"
         )
 
-    if completed:
+    if completed and verbose:
         logger.info(f"The Cartographer has completed its chart!")
 
 
-def _chart_systems(request, priority, token, index, query):
+def _chart_systems(request, priority, token, index, query, verbose):
     with connect("dbname=st2 user=postgres") as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -264,13 +271,14 @@ def _chart_systems(request, priority, token, index, query):
             if current == total:
                 return False
 
-            logger.info(
-                f"The Cartographer has found {total-current:_} {index} to chart"
-            )
+            if verbose:
+                logger.info(
+                    f"The Cartographer has found {total-current:_} {index} to chart"
+                )
             cur.execute(query)
             ret = cur.fetchall()
             while current != total:
-                if DEBUG:
+                if verbose and DEBUG:
                     logger.debug(f"Processing {current+1:_}/{total:_}")
                 system_symbol = ret[current][0]
                 for ret2 in request.get_all(

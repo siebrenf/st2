@@ -9,7 +9,7 @@ from psycopg.types.json import Jsonb
 from st2 import time
 
 
-def api_agent(request, priority=0):
+def api_agent(request=None, priority=1):
     """
     Register an agent to use for agent-independent API requests.
     This is to notice server resets immediately.
@@ -23,6 +23,10 @@ def api_agent(request, priority=0):
             )
             ret = cur.fetchone()
             if ret is None:
+                if request is None:
+                    raise ValueError(
+                        "Argument request is required when no api_agent exists!"
+                    )
                 data = register_random_agent(
                     request,
                     priority,

@@ -131,7 +131,7 @@ async def ai_contract_controller(
                     f"{len(available_traders)} ships available to deliver {good} to {deliver_wp}"
                 )
                 logger.debug(
-                    f"Contract delivery: {units} remaining/{term["unitsFulfilled"]-units} underway/"
+                    f"Contract delivery: {units} remaining/{units-term["unitsFulfilled"]} underway/"
                     f"{term["unitsFulfilled"]} fulfilled/{term["unitsRequired"]} total {good}"
                 )
             if len(available_traders) == 0:

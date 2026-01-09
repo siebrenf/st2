@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     game_server()
     manager, api_handler, qa_pairs = api_server()
-    request = RequestMp(qa_pairs, priority=0, token=None)
+    request = RequestMp(qa_pairs, priority=1, token=None)
 
     # load the player ship
     import os
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     except ShipNotFoundError:
         register_agent(
             request,
-            priority=0,
+            priority=1,
             symbol=agent_symbol,
             faction="COSMIC",
         )
@@ -89,6 +89,16 @@ if __name__ == "__main__":
             SET "current" = EXCLUDED."current"
             """,
             (symbol, agent_symbol, symbol, None, False, "traders", None),
+        )
+        symbol = "advisor_controller"
+        cur.execute(
+            """
+            INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT ("symbol") DO UPDATE
+            SET "current" = EXCLUDED."current"
+            """,
+            (symbol, agent_symbol, symbol, None, False, "probes", None),
         )
         symbol = f"probe_controller {system_symbol}"
         cur.execute(
@@ -153,26 +163,3 @@ if __name__ == "__main__":
         },
     )
     sa.start()
-
-    # TODO: create one long priority 3 background processes
-    from time import sleep
-    from st2.stargazers import merchant, ambassador, astronomer, cartographer
-    from st2.spies import spymaster, detective, private_eye
-
-    def background_processes(request):
-        merchant(request, priority=3)
-        ambassador(request, priority=3)
-        astronomer(request, priority=3)
-        cartographer(request, priority=3, chart="start systems")
-        cartographer(request, priority=3, chart="gate systems")
-        detective(request, priority=3)
-        spymaster(request, priority=3)
-        while True:
-            sleep(3600)
-            private_eye(request, priority=3)
-
-    bp = mp.Process(
-        target=background_processes,
-        kwargs={"request": request},
-    )
-    bp.start()

@@ -18,7 +18,7 @@ async def ai_probe_controller(
     agent_symbol,
     qa_pairs,
     probe_markets=False,
-    priority=3,
+    priority=2,
     verbose=False,
 ):
     """
@@ -98,6 +98,7 @@ async def ai_probe_controller(
                 agent_symbol,
                 pname,
                 request,
+                priority,
                 verbose,
             )
 
@@ -116,13 +117,14 @@ async def _buy_and_assign_probe(
     agent_symbol,
     pname,
     request,
+    priority,
     verbose,
 ):
     shipyard_symbol = _get_shipyard(system, unprobed_shipyards_selling_probes)
     shipyard_probe = [
         k for k, v in probes2shipyards_selling_probes.items() if v == shipyard_symbol
     ][0]
-    shipyard_probe = Ship(shipyard_probe, request, priority=2)
+    shipyard_probe = Ship(shipyard_probe, request, priority=priority)
     if t := shipyard_probe.nav_remaining():
         await sleep(t)
     credits = get_agent_public(agent_symbol)["credits"]
