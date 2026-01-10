@@ -23,6 +23,7 @@ async def travel(
 
       asyncio.run(await asyncio.gather(travel(s1, t2), travel(s2, t2)))
     """
+    # TODO: returns None if the ship did not arrive due to a time desync
     price = 0
     if t := ship.nav_remaining():
         await sleep(t)

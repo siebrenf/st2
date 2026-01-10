@@ -12,6 +12,7 @@ Example:
 """
 
 if __name__ == "__main__":
+    # TODO: check if System().markets works straight after a reset
     # load the backend
     from st2.startup import game_server, api_server
     from st2.request import RequestMp
@@ -90,6 +91,16 @@ if __name__ == "__main__":
             """,
             (symbol, agent_symbol, symbol, None, False, "traders", None),
         )
+        symbol = "spymaster_controller"
+        cur.execute(
+            """
+            INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT ("symbol") DO UPDATE
+            SET "current" = EXCLUDED."current"
+            """,
+            (symbol, agent_symbol, symbol, None, False, "probes", None),
+        )
         symbol = "advisor_controller"
         cur.execute(
             """
@@ -115,7 +126,6 @@ if __name__ == "__main__":
     import atexit
     import multiprocessing as mp
     from st2.ai import taskmaster
-    from st2 import time
 
     pname = "probes"
     probe_taskmaster = mp.Process(
@@ -130,9 +140,6 @@ if __name__ == "__main__":
 
     atexit.register(stop_probe_taskmaster)
     probe_taskmaster.start()
-
-    # allow the probes to "warm up"
-    time.sleep(10)
 
     pname = "traders"
     trade_taskmaster = mp.Process(
@@ -150,16 +157,14 @@ if __name__ == "__main__":
     trade_taskmaster.start()
 
 
-
-
-    # update databases
-    from st2.spies import spymasters_apprentice
-    sa = mp.Process(
-        target=spymasters_apprentice,
-        kwargs={
-            "system_symbol": ship["nav"]["systemSymbol"],
-            "request": request,
-            "priority": 2,
-        },
-    )
-    sa.start()
+    # # update databases
+    # from st2.spies import spymasters_apprentice
+    # sa = mp.Process(
+    #     target=spymasters_apprentice,
+    #     kwargs={
+    #         "system_symbol": ship["nav"]["systemSymbol"],
+    #         "request": request,
+    #         "priority": 2,
+    #     },
+    # )
+    # sa.start()

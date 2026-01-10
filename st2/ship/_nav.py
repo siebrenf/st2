@@ -16,6 +16,7 @@ def dist(x1, y1, x2, y2):
 
 def navigate(self, waypoint, verbose=True):
     """navigate to a waypoint in the same system"""
+    # TODO: raises error code 42.. with an incorrect DB
     self.orbit()
 
     data = self.request.post(

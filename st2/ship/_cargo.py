@@ -40,23 +40,23 @@ def sell(self, symbol, units, verbose=True):
 
 
 def _get_trade_volume(self, symbol):
-    with connect("dbname=st2 user=postgres") as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT "tradeVolume" 
-                FROM market_tradegoods 
-                WHERE "waypointSymbol" = %s 
-                AND symbol = %s
-                """,
-                (self["nav"]["waypointSymbol"], symbol),
-            )
-            ret = cur.fetchone()
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        ret = cur.execute(
+            """
+            SELECT "tradeVolume" 
+            FROM market_tradegoods 
+            WHERE "waypointSymbol" = %s 
+            AND symbol = %s
+            """,
+            (self["nav"]["waypointSymbol"], symbol),
+        ).fetchone()
     if ret:
         tv = ret[0]
         return tv
     else:
         self.market()
+        # TODO: causes a recursionError if the ship did not arrive
+        #   due to a time desync or incorrect DB
         return _get_trade_volume(self, symbol)
 
 

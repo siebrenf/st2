@@ -26,7 +26,6 @@ class System:
     graph: nx.Graph = None
 
     def __init__(self, symbol, request=None, priority=None):
-        # maybe add _ = self.waypoints  # ensure _get_waypoints() ran
         self.symbol = symbol
         self.request = None
         if request:
@@ -251,6 +250,7 @@ class System:
             case "gate":
                 if DEBUG:
                     logger.debug(f"Loading {name}")
+                _ = self.waypoints  # load waypoints into DB
                 with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
                     with conn.cursor() as cur:
                         ret = cur.execute(
@@ -289,6 +289,7 @@ class System:
             case "shipyards":
                 if DEBUG:
                     logger.debug(f"Loading {name}")
+                _ = self.waypoints  # load waypoints into DB
                 with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
                     with conn.cursor() as cur:
                         ret = cur.execute(
@@ -310,6 +311,7 @@ class System:
             case "markets":
                 if DEBUG:
                     logger.debug(f"Loading {name}")
+                _ = self.waypoints  # load waypoints into DB
                 with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
                     with conn.cursor() as cur:
                         ret = cur.execute(
@@ -331,6 +333,7 @@ class System:
             case "uncharted":
                 if DEBUG:
                     logger.debug(f"Loading {name}")
+                _ = self.waypoints  # load waypoints into DB
                 with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
                     with conn.cursor() as cur:
                         ret = cur.execute(
@@ -352,6 +355,7 @@ class System:
             case "graph":
                 if DEBUG:
                     logger.debug(f"Loading {name}")
+                _ = self.waypoints  # load waypoints into DB
                 val = self._get_graph()
                 setattr(self, name, val)
 
@@ -640,3 +644,30 @@ class System:
             yield wp, math.ceil(md["distance"])
         if reverse is True and source in waypoints:
             yield source, 0
+
+
+def get_start_systems(faction):
+    """
+    Start systems:
+      - contain an ENGINEERED_ASTEROID
+      - do not sell "SHIP_EXPLORER"
+      - can be the faction's headquarters
+      - (might) have 3 "ORBITAL_STATION"s instead of 2?
+    """
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        ret = cur.execute(
+            """
+            SELECT "systemSymbol"
+            FROM "waypoints"
+            WHERE "faction" = %s 
+              AND "type" = %s
+              AND "systemSymbol" NOT IN (
+                  SELECT "systemSymbol"
+                    FROM "shipyards"
+                   WHERE %s = ANY("shipTypes")
+              )
+            """,
+            [faction, "ENGINEERED_ASTEROID", "SHIP_EXPLORER"],
+        ).fetchall()
+    start_systems = [row[0] for row in ret]
+    return start_systems

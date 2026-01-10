@@ -1,4 +1,5 @@
 import math
+from asyncio import sleep
 
 from psycopg import connect
 from psycopg.types.json import Jsonb
@@ -39,173 +40,169 @@ def ambassador(request, priority=1):
         for f in fs["data"]:
             factions[f["symbol"]] = f
 
-    with connect("dbname=st2 user=postgres") as conn:
-        with conn.cursor() as cur:
-            # insert factions & faction_traits
-            for symbol in sorted(factions):
-                f = factions[symbol]
-                # description = f["description"].replace("'", "''")
-                hq = f["headquarters"]
-                if hq == "":
-                    hq = None
-                traits = [t["symbol"] for t in f["traits"]]
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        # insert factions & faction_traits
+        for symbol in sorted(factions):
+            f = factions[symbol]
+            # description = f["description"].replace("'", "''")
+            hq = f["headquarters"]
+            if hq == "":
+                hq = None
+            traits = [t["symbol"] for t in f["traits"]]
+            cur.execute(
+                """
+                INSERT INTO factions 
+                ("symbol", "name", "description", "headquarters", "traits", "isRecruiting")
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT ("symbol") DO NOTHING
+                """,
+                (
+                    f["symbol"],
+                    f["name"],
+                    f["description"],
+                    hq,
+                    traits,
+                    f["isRecruiting"],
+                ),
+            )
+
+            # traits_faction
+            for trait in f["traits"]:
+                # description = trait["description"].replace("'", "''")
                 cur.execute(
                     """
-                    INSERT INTO factions 
-                    ("symbol", "name", "description", "headquarters", "traits", "isRecruiting")
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    ON CONFLICT ("symbol") DO NOTHING
+                    INSERT INTO traits_faction
+                    (symbol, name, description)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (symbol) DO NOTHING
                     """,
-                    (
-                        f["symbol"],
-                        f["name"],
-                        f["description"],
-                        hq,
-                        traits,
-                        f["isRecruiting"],
-                    ),
+                    (trait["symbol"], trait["name"], trait["description"]),
                 )
 
-                # traits_faction
-                for trait in f["traits"]:
-                    # description = trait["description"].replace("'", "''")
-                    cur.execute(
-                        """
-                        INSERT INTO traits_faction
-                        (symbol, name, description)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (symbol) DO NOTHING
-                        """,
-                        (trait["symbol"], trait["name"], trait["description"]),
-                    )
 
-
-def astronomer(request, priority=3, verbose=True):
+async def astronomer(request, priority=3, verbose=True):
     """
     Map all systems.
     """
     token = api_agent(request, priority)[1]
-    with connect("dbname=st2 user=postgres") as conn:
-        with conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS astronomer 
+            (
+                total integer PRIMARY KEY,
+                current integer,
+                page integer
+            )
+            """
+        )
+        cur.execute("SELECT * FROM astronomer")
+        ret = cur.fetchone()
+        if ret is None:
+            total = request.get(
+                endpoint="systems",
+                priority=priority,
+                token=token,
+                params={"page": 1, "limit": 1},
+            )["meta"]["total"]
+            current = 0
+            page = 1
             cur.execute(
                 """
-                CREATE TABLE IF NOT EXISTS astronomer 
-                (
-                    total integer PRIMARY KEY,
-                    current integer,
-                    page integer
-                )
-                """
+                INSERT INTO astronomer
+                (total, current, page)
+                VALUES (%s, %s, %s)
+                """,
+                (total, current, page),
             )
-            cur.execute("SELECT * FROM astronomer")
-            ret = cur.fetchone()
-            if ret is None:
-                total = request.get(
-                    endpoint="systems",
-                    priority=priority,
-                    token=token,
-                    params={"page": 1, "limit": 1},
-                )["meta"]["total"]
-                current = 0
-                page = 1
+            conn.commit()
+        else:
+            total, current, page = ret
+
+        if current == total:
+            return
+
+        if verbose:
+            logger.info(f"The Astronomer has found {total:_} stars in the night sky")
+        total_pages = math.ceil(total / 20)
+        while current < total:
+            if verbose and DEBUG:
+                logger.debug(f"Processing page {page:_}/{total_pages:_}")
+            systems = request.get(
+                endpoint="systems",
+                priority=priority,
+                token=token,
+                params={"page": page, "limit": 20},
+            )
+            for s in systems["data"]:
+                system_symbol = s["symbol"]
                 cur.execute(
                     """
-                    INSERT INTO astronomer
-                    (total, current, page)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO systems 
+                    (symbol, type, x, y)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (symbol) DO NOTHING
                     """,
-                    (total, current, page),
+                    (system_symbol, s["type"], s["x"], s["y"]),
                 )
-                conn.commit()
-            else:
-                total, current, page = ret
 
-            if current == total:
-                return
-
-            if verbose:
-                logger.info(
-                    f"The Astronomer has found {total:_} stars in the night sky"
-                )
-            total_pages = math.ceil(total / 20)
-            while current < total:
-                if verbose and DEBUG:
-                    logger.debug(f"Processing page {page:_}/{total_pages:_}")
-                systems = request.get(
-                    endpoint="systems",
-                    priority=priority,
-                    token=token,
-                    params={"page": page, "limit": 20},
-                )
-                for s in systems["data"]:
-                    system_symbol = s["symbol"]
+                # update waypoints (with very limited fields)
+                waypoints = {}
+                for wp in s["waypoints"]:
+                    waypoints[wp["symbol"]] = wp
+                for waypoints_symbol in sorted(waypoints):
+                    wp = waypoints[waypoints_symbol]
+                    orbits = wp.get("orbits")
+                    orbitals = [o["symbol"] for o in wp["orbitals"]]
                     cur.execute(
                         """
-                        INSERT INTO systems 
-                        (symbol, type, x, y)
-                        VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (symbol) DO NOTHING
+                        INSERT INTO waypoints
+                        ("symbol", "systemSymbol", "type", "x", "y", "orbits", "orbitals")
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT ("symbol") DO NOTHING
                         """,
-                        (system_symbol, s["type"], s["x"], s["y"]),
+                        (
+                            waypoints_symbol,
+                            system_symbol,
+                            wp["type"],
+                            wp["x"],
+                            wp["y"],
+                            orbits,
+                            orbitals,
+                        ),
                     )
-
-                    # update waypoints (with very limited fields)
-                    waypoints = {}
-                    for wp in s["waypoints"]:
-                        waypoints[wp["symbol"]] = wp
-                    for waypoints_symbol in sorted(waypoints):
-                        wp = waypoints[waypoints_symbol]
-                        orbits = wp.get("orbits")
-                        orbitals = [o["symbol"] for o in wp["orbitals"]]
-                        cur.execute(
-                            """
-                            INSERT INTO waypoints
-                            ("symbol", "systemSymbol", "type", "x", "y", "orbits", "orbitals")
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT ("symbol") DO NOTHING
-                            """,
-                            (
-                                waypoints_symbol,
-                                system_symbol,
-                                wp["type"],
-                                wp["x"],
-                                wp["y"],
-                                orbits,
-                                orbitals,
-                            ),
-                        )
-                    current += 1
-                page += 1
-                # log progress
-                cur.execute(
-                    """
-                    UPDATE astronomer
-                    SET current = %s, page = %s
-                    WHERE total = %s
-                    """,
-                    (current, page, total),
-                )
+                current += 1
+            page += 1
+            # log progress
+            cur.execute(
+                """
+                UPDATE astronomer
+                SET current = %s, page = %s
+                WHERE total = %s
+                """,
+                (current, page, total),
+            )
+            await sleep(0)  # give other processes a turn
     if verbose:
         logger.info(f"The Astronomer has completed its chart!")
 
 
-def cartographer(request, priority=3, chart="start systems", verbose=True):
+async def cartographer(request, priority=3, chart="start systems", verbose=True):
     """
     Can be used after all systems have been mapped by the astronomer.
     """
     token = api_agent(request, priority)[1]
-    with connect("dbname=st2 user=postgres") as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS cartographer 
-                (
-                    index text PRIMARY KEY,
-                    total integer,
-                    current integer
-                )
-                """
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cartographer 
+            (
+                index text PRIMARY KEY,
+                total integer,
+                current integer
             )
+            """
+        )
 
     # start systems (fully charted by default)
     if chart == "start systems":
@@ -215,7 +212,7 @@ def cartographer(request, priority=3, chart="start systems", verbose=True):
         WHERE "type" = 'ENGINEERED_ASTEROID' 
         ORDER BY "systemSymbol"
         """
-        completed = _chart_systems(
+        completed = await _chart_systems(
             request, priority, token, "start systems", query, verbose
         )
 
@@ -231,7 +228,7 @@ def cartographer(request, priority=3, chart="start systems", verbose=True):
         WHERE "type" = 'ENGINEERED_ASTEROID'
         ORDER BY "systemSymbol"
         """
-        completed = _chart_systems(
+        completed = await _chart_systems(
             request, priority, token, "gate systems", query, verbose
         )
 
@@ -244,112 +241,109 @@ def cartographer(request, priority=3, chart="start systems", verbose=True):
         logger.info(f"The Cartographer has completed its chart!")
 
 
-def _chart_systems(request, priority, token, index, query, verbose):
-    with connect("dbname=st2 user=postgres") as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT * FROM cartographer WHERE index = %s",
-                (index,),
-            )
-            ret = cur.fetchone()
-            if ret is None:
-                current = 0
-                cur.execute(query)
-                total = len(cur.fetchall())
-                cur.execute(
-                    """
-                    INSERT INTO cartographer
-                    (index, total, current)
-                    VALUES (%s, %s, %s)
-                    """,
-                    (index, total, current),
-                )
-                conn.commit()
-            else:
-                total, current = ret[1:]
-
-            if current == total:
-                return False
-
-            if verbose:
-                logger.info(
-                    f"The Cartographer has found {total-current:_} {index} to chart"
-                )
+async def _chart_systems(request, priority, token, index, query, verbose):
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT * FROM cartographer WHERE index = %s",
+            (index,),
+        )
+        ret = cur.fetchone()
+        if ret is None:
+            current = 0
             cur.execute(query)
-            ret = cur.fetchall()
-            while current != total:
-                if verbose and DEBUG:
-                    logger.debug(f"Processing {current+1:_}/{total:_}")
-                system_symbol = ret[current][0]
-                for ret2 in request.get_all(
-                    endpoint=f"systems/{system_symbol}/waypoints",
-                    priority=priority,
-                    token=token,
-                ):
-                    for wp in ret2["data"]:
-                        symbol = wp["symbol"]
-                        traits = [t["symbol"] for t in wp["traits"]]
-                        # update the values that may have been updated
-                        chart = Jsonb(wp.get("chart"))
-                        faction = wp.get("faction", {}).get("symbol")
-                        cur.execute(
-                            """
-                            UPDATE "waypoints"
-                            SET "traits" = %s,
-                                "chart" = %s,
-                                "faction" = %s,
-                                "isUnderConstruction" = %s
-                            WHERE "symbol" = %s
-                            """,
-                            (
-                                traits,
-                                chart,
-                                faction,
-                                wp["isUnderConstruction"],
-                                symbol,
-                            ),
+            total = len(cur.fetchall())
+            cur.execute(
+                """
+                INSERT INTO cartographer
+                (index, total, current)
+                VALUES (%s, %s, %s)
+                """,
+                (index, total, current),
+            )
+            conn.commit()
+        else:
+            total, current = ret[1:]
+
+        if current == total:
+            return False
+
+        if verbose:
+            logger.info(
+                f"The Cartographer has found {total-current:_} {index} to chart"
+            )
+        ret = cur.execute(query).fetchall()
+        while current != total:
+            if verbose and DEBUG:
+                logger.debug(f"Processing {current+1:_}/{total:_}")
+            system_symbol = ret[current][0]
+            for ret2 in request.get_all(
+                endpoint=f"systems/{system_symbol}/waypoints",
+                priority=priority,
+                token=token,
+            ):
+                for wp in ret2["data"]:
+                    symbol = wp["symbol"]
+                    traits = [t["symbol"] for t in wp["traits"]]
+                    # update the values that may have been updated
+                    chart = Jsonb(wp.get("chart"))
+                    faction = wp.get("faction", {}).get("symbol")
+                    cur.execute(
+                        """
+                        UPDATE "waypoints"
+                        SET "traits" = %s,
+                            "chart" = %s,
+                            "faction" = %s,
+                            "isUnderConstruction" = %s
+                        WHERE "symbol" = %s
+                        """,
+                        (
+                            traits,
+                            chart,
+                            faction,
+                            wp["isUnderConstruction"],
+                            symbol,
+                        ),
+                    )
+
+                    if traits in [["UNCHARTED"], []]:
+                        continue
+
+                    if wp["type"] == "JUMP_GATE":
+                        _get_gate(symbol, system_symbol, request, priority, token, cur)
+                    if "MARKETPLACE" in traits:
+                        _get_market(
+                            symbol, system_symbol, request, priority, token, cur
+                        )
+                    if "SHIPYARD" in traits:
+                        _get_shipyard(
+                            symbol, system_symbol, request, priority, token, cur
                         )
 
-                        if traits in [["UNCHARTED"], []]:
-                            continue
-
-                        if wp["type"] == "JUMP_GATE":
-                            _get_gate(
-                                symbol, system_symbol, request, priority, token, cur
-                            )
-                        if "MARKETPLACE" in traits:
-                            _get_market(
-                                symbol, system_symbol, request, priority, token, cur
-                            )
-                        if "SHIPYARD" in traits:
-                            _get_shipyard(
-                                symbol, system_symbol, request, priority, token, cur
-                            )
-
-                        # store unknown traits
-                        for trait in traits:
-                            t = [t for t in wp["traits"] if t["symbol"] == trait][0]
-                            # description = t["description"].replace("'", "''")
-                            cur.execute(
-                                """
-                                INSERT INTO traits_waypoint
-                                (symbol, name, description) 
-                                VALUES (%s, %s, %s)
-                                ON CONFLICT ("symbol") DO NOTHING
-                                """,
-                                (t["symbol"], t["name"], t["description"]),
-                            )
-                current += 1
-                # log progress
-                cur.execute(
-                    """
-                    UPDATE cartographer
-                    SET current = %s
-                    WHERE index = %s
-                    """,
-                    (current, index),
-                )
-                conn.commit()
+                    # store unknown traits
+                    for trait in traits:
+                        t = [t for t in wp["traits"] if t["symbol"] == trait][0]
+                        # description = t["description"].replace("'", "''")
+                        cur.execute(
+                            """
+                            INSERT INTO traits_waypoint
+                            (symbol, name, description) 
+                            VALUES (%s, %s, %s)
+                            ON CONFLICT ("symbol") DO NOTHING
+                            """,
+                            (t["symbol"], t["name"], t["description"]),
+                        )
+            current += 1
+            # log progress
+            cur.execute(
+                """
+                UPDATE cartographer
+                SET current = %s
+                WHERE index = %s
+                """,
+                (current, index),
+            )
+            conn.commit()
+            await sleep(0)  # give other processes a turn
         return True
 
 

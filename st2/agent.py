@@ -15,35 +15,33 @@ def api_agent(request=None, priority=1):
     This is to notice server resets immediately.
     """
     role = "reset detection"
-    with connect("dbname=st2 user=postgres") as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT symbol, token, role FROM agents WHERE role = %s",
-                (role,),
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        ret = cur.execute(
+            "SELECT symbol, token FROM agents WHERE role = %s",
+            (role,),
+        ).fetchone()
+        if ret:
+            symbol, token = ret
+        else:
+            if request is None:
+                raise ValueError(
+                    "Argument request is required when no api_agent exists!"
+                )
+            data = register_random_agent(
+                request,
+                priority,
+                insert_ships=False,
             )
-            ret = cur.fetchone()
-            if ret is None:
-                if request is None:
-                    raise ValueError(
-                        "Argument request is required when no api_agent exists!"
-                    )
-                data = register_random_agent(
-                    request,
-                    priority,
-                    insert_ships=False,
-                )
-                symbol = data["agent"]["symbol"]
-                token = data["token"]
-                cur.execute(
-                    """
-                    UPDATE agents
-                    SET role = %s
-                    WHERE symbol = %s
-                    """,
-                    (role, symbol),
-                )
-            else:
-                symbol, token, role = ret
+            symbol = data["agent"]["symbol"]
+            token = data["token"]
+            cur.execute(
+                """
+                UPDATE agents
+                SET role = %s
+                WHERE symbol = %s
+                """,
+                (role, symbol),
+            )
     return symbol, token
 
 
@@ -98,91 +96,90 @@ def register_agent(
     # data keys: ['token', 'agent', 'contract', 'faction', 'ships']
     account_token = os.environ["ST_ACCOUNT_TOKEN"]
     data = request.post("register", priority, account_token, payload)["data"]
-    with connect("dbname=st2 user=postgres") as conn:
-        with conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO agents
+            (symbol, token, role, faction, other)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (symbol, data["token"], None, faction, None),
+        )
+
+        if insert_agent:
+            agent = data["agent"]
             cur.execute(
                 """
-                INSERT INTO agents
-                (symbol, token, role, faction, other)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO agents_public
+                ("accountId", "symbol", "headquarters", "credits",
+                 "startingFaction", "shipCount", "timestamp")
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
-                (symbol, data["token"], None, faction, None),
+                (
+                    agent["accountId"],
+                    agent["symbol"],
+                    agent["headquarters"],
+                    agent["credits"],
+                    agent["startingFaction"],
+                    agent["shipCount"],
+                    time.now(),
+                ),
             )
 
-            if insert_agent:
-                agent = data["agent"]
+        if insert_contract:
+            contract = data["contract"]
+            cur.execute(
+                """
+                INSERT INTO contracts
+                ("id", "agentSymbol", "factionSymbol", "type", "terms",
+                 "accepted", "fulfilled", "deadlineToAccept")
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    contract["id"],
+                    symbol,
+                    contract["factionSymbol"],
+                    contract["type"],
+                    Jsonb(contract["terms"]),
+                    contract["accepted"],
+                    contract["fulfilled"],
+                    time.read(contract["deadlineToAccept"]),
+                ),
+            )
+
+        if insert_ships:
+            for ship in data["ships"]:
+                ship["cooldown"]["expiration"] = time.write()
                 cur.execute(
                     """
-                    INSERT INTO agents_public
-                    ("accountId", "symbol", "headquarters", "credits",
-                     "startingFaction", "shipCount", "timestamp")
+                    INSERT INTO ships
+                    ("symbol", "agentSymbol", "nav", "crew", "fuel", "cooldown", "frame",
+                     "reactor", "engine", "modules", "mounts", "registration", "cargo")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        ship["symbol"],
+                        symbol,
+                        Jsonb(ship["nav"]),
+                        Jsonb(ship["crew"]),
+                        Jsonb(ship["fuel"]),
+                        Jsonb(ship["cooldown"]),
+                        Jsonb(ship["frame"]),
+                        Jsonb(ship["reactor"]),
+                        Jsonb(ship["engine"]),
+                        Jsonb(ship["modules"]),
+                        Jsonb(ship["mounts"]),
+                        Jsonb(ship["registration"]),
+                        Jsonb(ship["cargo"]),
+                    ),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (
-                        agent["accountId"],
-                        agent["symbol"],
-                        agent["headquarters"],
-                        agent["credits"],
-                        agent["startingFaction"],
-                        agent["shipCount"],
-                        time.now(),
-                    ),
+                    (ship["symbol"], symbol, None, None, False, None, None),
                 )
-
-            if insert_contract:
-                contract = data["contract"]
-                cur.execute(
-                    """
-                    INSERT INTO contracts
-                    ("id", "agentSymbol", "factionSymbol", "type", "terms",
-                     "accepted", "fulfilled", "deadlineToAccept")
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        contract["id"],
-                        symbol,
-                        contract["factionSymbol"],
-                        contract["type"],
-                        Jsonb(contract["terms"]),
-                        contract["accepted"],
-                        contract["fulfilled"],
-                        time.read(contract["deadlineToAccept"]),
-                    ),
-                )
-
-            if insert_ships:
-                for ship in data["ships"]:
-                    ship["cooldown"]["expiration"] = time.write()
-                    cur.execute(
-                        """
-                        INSERT INTO ships
-                        ("symbol", "agentSymbol", "nav", "crew", "fuel", "cooldown", "frame",
-                         "reactor", "engine", "modules", "mounts", "registration", "cargo")
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (
-                            ship["symbol"],
-                            symbol,
-                            Jsonb(ship["nav"]),
-                            Jsonb(ship["crew"]),
-                            Jsonb(ship["fuel"]),
-                            Jsonb(ship["cooldown"]),
-                            Jsonb(ship["frame"]),
-                            Jsonb(ship["reactor"]),
-                            Jsonb(ship["engine"]),
-                            Jsonb(ship["modules"]),
-                            Jsonb(ship["mounts"]),
-                            Jsonb(ship["registration"]),
-                            Jsonb(ship["cargo"]),
-                        ),
-                    )
-                    cur.execute(
-                        """
-                        INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (ship["symbol"], symbol, None, None, False, None, None),
-                    )
     return data
 
 

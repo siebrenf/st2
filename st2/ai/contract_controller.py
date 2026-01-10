@@ -9,7 +9,7 @@ from st2.contract import Contract, get_active_contract
 from st2.logging import logger
 from st2.request import RequestMp
 from st2.ship import Ship
-from st2.system import System
+from st2.system import System, get_start_systems
 
 DEBUG = True
 
@@ -22,6 +22,7 @@ async def ai_contract_controller(
     interval=60,
     verbose=False,
 ):
+    # TODO: track contract expenses and payments
     token = get_agent(agent_symbol)["token"]
     request = RequestMp(qa_pairs, priority=priority, token=token)
     while True:
@@ -109,6 +110,8 @@ async def ai_contract_controller(
             # currently active tasks in this system
             ship_tasks = _get_active_traders(agent_symbol, system_symbol)
             available_traders = set()
+            current = 0
+            queued = 0
             for tasks in ship_tasks:
                 ship = tasks["symbol"]
                 if (
@@ -118,21 +121,22 @@ async def ai_contract_controller(
                 ):
                     available_traders.add(ship)
 
-                for task_string in [tasks["current"], tasks["queued"]]:
-                    if str(task_string).startswith("deliver "):
-                        task_split = task_string.split(" ")
+                for key in ["current", "queued"]:
+                    if str(tasks[key]).startswith("deliver "):
+                        task_split = tasks[key].split(" ")
                         if task_split[1] == good and task_split[4] == deliver_wp:
-                            units -= int(task_split[2])
+                            u = int(task_split[2])
+                            units -= u
+                            if key == "current":
+                                current += u
+                            else:
+                                queued += u
 
             if units <= 0:
                 continue  # remaining units are already tasked
             if DEBUG:
                 logger.debug(
                     f"{len(available_traders)} ships available to deliver {good} to {deliver_wp}"
-                )
-                logger.debug(
-                    f"Contract delivery: {units} remaining/{units-term["unitsFulfilled"]} underway/"
-                    f"{term["unitsFulfilled"]} fulfilled/{term["unitsRequired"]} total {good}"
                 )
             if len(available_traders) == 0:
                 break  # try again later
@@ -142,6 +146,8 @@ async def ai_contract_controller(
             best = None, float("inf")
             for wp, md in system.markets_with(good, "sells").items():
                 price = md["purchasePrice"]
+                # if price > 1.25 * reward_per_unit[good]:  # TODO: ?
+                #     continue
                 if price < best[-1]:
                     best = wp, price
             purchase_wp = best[0]
@@ -150,6 +156,19 @@ async def ai_contract_controller(
             ship, units = _get_trader(available_traders, units)
             task = f"deliver {good} {units} {purchase_wp} {deliver_wp}"
             _queue_task(ship, task)
+            queued += units
+            if DEBUG:
+                remaining = (
+                    term["unitsRequired"] - term["unitsFulfilled"] - current - queued
+                )
+                logger.debug(
+                    "Contract delivery: "
+                    f"{remaining} remaining/"
+                    f"{current} currently underway/"
+                    f"{queued} queued underway/"
+                    f"{term["unitsFulfilled"]} fulfilled/"
+                    f"{term["unitsRequired"]} total {good}"
+                )
             break
 
         if fulfill_contract:
@@ -216,7 +235,7 @@ def _get_trader(available_traders, units):
             ).fetchone()
         cargo_capacity = ship["cargo"]["capacity"]
         speed = ship["engine"]["speed"]
-        if cargo_capacity > units:
+        if cargo_capacity >= units:
             score = 1 + units / cargo_capacity + speed / 1000
             deliver_units = units
         else:
@@ -293,7 +312,7 @@ def _get_start_system_with_most_traders(agent_symbol):
 
 def _get_start_systems_traders(agent_symbol):
     faction = get_agent_public(agent_symbol)["startingFaction"]
-    start_systems = _get_start_systems(faction)
+    start_systems = get_start_systems(faction)
     with connect(
         "dbname=st2 user=postgres", row_factory=dict_row
     ) as conn, conn.cursor() as cur:
@@ -311,26 +330,6 @@ def _get_start_systems_traders(agent_symbol):
             [agent_symbol, start_systems, agent_symbol, "traders"],
         ).fetchall()
     return traders
-
-
-def _get_start_systems(faction):
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        ret = cur.execute(
-            """
-            SELECT "systemSymbol"
-            FROM "waypoints"
-            WHERE "faction" = %s 
-              AND "type" = %s
-              AND "systemSymbol" NOT IN (
-                  SELECT "systemSymbol"
-                    FROM "shipyards"
-                   WHERE %s = ANY("shipTypes")
-              )
-            """,
-            [faction, "ENGINEERED_ASTEROID", "SHIP_EXPLORER"],
-        ).fetchall()
-    start_systems = [row[0] for row in ret]
-    return start_systems
 
 
 def _get_probe_for_negotiations(agent_symbol, system_symbol):
