@@ -1,4 +1,4 @@
-# SpaceTraders v2.3.0. Last update: 2025-12-28_2026-01-04
+# SpaceTraders v2.3.0. Last update: 2026-01-05_2026-01-11
 TRAITS_WAYPOINT = {
     "ASH_CLOUDS": {
         "symbol": "ASH_CLOUDS",
