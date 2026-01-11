@@ -91,16 +91,17 @@ if __name__ == "__main__":
             """,
             (symbol, agent_symbol, symbol, None, False, "traders", None),
         )
-        symbol = "spymaster_controller"
-        cur.execute(
-            """
-            INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT ("symbol") DO UPDATE
-            SET "current" = EXCLUDED."current"
-            """,
-            (symbol, agent_symbol, symbol, None, False, "probes", None),
-        )
+        # too many API requests!
+        # symbol = "spymaster_controller"
+        # cur.execute(
+        #     """
+        #     INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+        #     VALUES (%s, %s, %s, %s, %s, %s, %s)
+        #     ON CONFLICT ("symbol") DO UPDATE
+        #     SET "current" = EXCLUDED."current"
+        #     """,
+        #     (symbol, agent_symbol, symbol, None, False, "probes", None),
+        # )
         symbol = "advisor_controller"
         cur.execute(
             """

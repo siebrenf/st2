@@ -5,7 +5,7 @@ from uuid import uuid1
 
 from psycopg import connect
 
-from st2.ai.advisor_controller import ai_advisor_controller, ai_spymaster_controller
+from st2.ai.advisor_controller import ai_advisor_controller
 from st2.ai.contract_controller import ai_contract_controller
 from st2.ai.deliver import ai_deliver_system
 from st2.ai.probe import ai_probe_purchase, ai_probe_waypoint
@@ -263,12 +263,13 @@ class TaskMaster:
                     qa_pairs=self.qa_pairs,
                 )
 
-            case "spymaster_controller":
-                coro = ai_spymaster_controller(
-                    agent_symbol=agent_symbol,
-                    qa_pairs=self.qa_pairs,
-                    verbose=True,  # TODO: remove
-                )
+            # too many API requests!
+            # case "spymaster_controller":
+            #     coro = ai_spymaster_controller(
+            #         agent_symbol=agent_symbol,
+            #         qa_pairs=self.qa_pairs,
+            #         verbose=True,  # TODO: remove
+            #     )
 
             case "test":
                 coro = _test_coroutine(*task[1:])
