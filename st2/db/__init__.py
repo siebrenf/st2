@@ -456,7 +456,7 @@ def db_tables_init(status=None):
                     "shipType" text,
                     "price" integer,
                     "timestamp" timestamptz,
-                    PRIMARY KEY ("waypointSymbol", "shipSymbol", "timestamp")
+                    PRIMARY KEY ("waypointSymbol", "timestamp")
                 )
                 """
             )
