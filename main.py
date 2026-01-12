@@ -12,7 +12,6 @@ Example:
 """
 
 if __name__ == "__main__":
-    # TODO: check if System().markets works straight after a reset
     # load the backend
     from st2.startup import game_server, api_server
     from st2.request import RequestMp

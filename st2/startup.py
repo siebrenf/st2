@@ -19,7 +19,7 @@ def game_server():
         "ST_AGENT_SYMBOL",
         "ST_RESET_WINDOW",
     ]:
-        if not os.getenv(key):
+        if key not in os.environ:
             raise EnvironmentError(
                 f"Missing environmental variable '{key}'. " "Did you populate st2/.env?"
             )
