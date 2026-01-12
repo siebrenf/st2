@@ -1,4 +1,5 @@
 import os
+import math
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -136,7 +137,13 @@ optimal_goods = {
     'VIRAL_AGENTS': ['/home/siebrenf/.local/share/spacepyrates/2024-03-24_2024-04-07/market_inflation/VIRAL_AGENTS_X1-B9-A4_EXPORT.tsv'],
 }
 
-
+# estimates: at these values, all purchases have their supply level in the correct bin.
+baseprices = {
+    "AMMUNITION": 1397,  # seems exact
+    "BIOCOMPOSITES": 4790,
+    "FOOD": 1795,
+    "FIREARMS": 3190,
+}
 s2c = {
     "SCARCE": "red",
     "LIMITED": "orange",
@@ -145,10 +152,8 @@ s2c = {
     "ABUNDANT": "blue",
 }
 t2m = {"EXPORT": "^", "EXCHANGE": ".", "IMPORT": "v"}
-# params = {}
-x2 = np.linspace(-7, 5, 240)
 for good, files in optimal_goods.items():
-    if good not in ["AMMUNITION", "BIOCOMPOSITES", "FOOD", "FIREARMS"]:
+    if good not in ["FIREARMS"]:  # "AMMUNITION", "BIOCOMPOSITES", "FOOD",
         continue
     if len(files) <= 1:
         continue
@@ -157,6 +162,9 @@ for good, files in optimal_goods.items():
     fig = plt.figure(figsize=(15, 10))
     ax = fig.add_subplot(111)
 
+    # AMMUNITION
+    y_bp = baseprices[good]
+    y_lims = [float("inf"), -float("inf")]
     for fname in files:
         f = os.path.basename(fname)
         df, keep = process_df(fname)
@@ -165,58 +173,40 @@ for good, files in optimal_goods.items():
         else:
             continue
 
-        # TODO: the supply levels change BETWEEN transactions,
-        #   thus the baseprice is found BETWEEN transactions too!
+        assert units == 1
+        idx_min = df[df["supply"] == "MODERATE"].index[0] + 3 * tv
+        y_min = df.at[idx_min, "purchasePrice"]
+        idx_max = idx_min + 1
+        y_max = df.at[idx_max, "purchasePrice"]
+        dy = (y_max - y_min) / 1  # slope
+        # y_bp = y_min + dy*dx
+        dx = (y_bp - y_min)/dy
+        idx_origin = idx_min + dx
 
-        o_p = df[df["supply"] == "MODERATE"].index[0] + 3 * tv / units
-        pp = df.at[o_p, "purchasePrice"] / (2 if port == "IMPORT" else 1)
-        o_s = df[df["supply"] == "LIMITED"].index[0]
-        sp = df.at[o_s, "sellPrice"] * (2 if port == "EXPORT" else 1)
-        # TODO: how to convert from purchase to sell price?
-        yb = [i / (2 if port == "IMPORT" else 1) for i in df["purchasePrice"]]
-        ys = [i * (2 if port == "EXPORT" else 1) for i in df["sellPrice"]]
-
+        y = df["purchasePrice"].to_list()  # [i/y_bp for i in df["purchasePrice"]]
         x = []
         for i in range(len(df)):
-            x.append((i - o_p) * units / tv)
+            x.append((i - idx_origin) * units / tv)
         c = [s2c[supply] for supply in df["supply"]]
-        if -7 in x:
-            c = c[x.index(-7) :]  # noqa
-            yb = yb[x.index(-7) :]  # noqa
-            ys = ys[x.index(-7) :]  # noqa
-            x = x[x.index(-7) :]  # noqa
-        if 5 in x:
-            c = c[: x.index(5) + 1]  # noqa
-            yb = yb[: x.index(5) + 1]  # noqa
-            ys = ys[: x.index(5) + 1]  # noqa
-            x = x[: x.index(5) + 1]  # noqa
-        ax.scatter(
-            x,
-            yb,
-            c=c,
-            zorder=-1,
-            marker=t2m.get(port, "o"),
-            s=18,
-            alpha=0.25,
-        )
-        ax.plot(x, yb, zorder=-2, alpha=0.05, c="green", label=f"{pp=}")
-        ax.scatter(
-            x,
-            ys,
-            c=c,
-            zorder=-1,
-            marker=t2m.get(port, "o"),
-            s=18,
-            alpha=0.25,
-        )
-        ax.plot(x, ys, zorder=-2, alpha=0.05, c="red", label=f"{sp=}")
 
-        for baseprice, y, xd, name in zip([pp, sp], [yb, ys], [0, 1], ["buy", "sell"]):
+        ax.scatter(
+            x,
+            y,
+            c=c,
+            marker=t2m.get(port, "o"),
+            s=18,
+            # alpha=0.25,
+            zorder=5,
+        )
+        ax.plot(x, y, zorder=-2, alpha=0.4, c="green")
+
+        # infer trend
+        if True:
 
             def func(x, a):
-                return baseprice * (a * 2 ** (0.3 * (x - xd)) - a + 1)
+                return y_bp * (a * 2 ** (0.3 * x) - a + 1)
 
-            popt, pcov = curve_fit(func, x, y, p0=[0.3], bounds=((0, 1)))  # noqa
+            popt, pcov = curve_fit(func, x, y, p0=[0.35], bounds=((0, 1)))  # noqa
             a = round(popt[0] * 20) / 20  # round to nearest 0.05
             y2 = [round(i) for i in func(np.array(x), a)]  # noqa
             r_squared = r2_score(y, y2)
@@ -224,11 +214,24 @@ for good, files in optimal_goods.items():
                 x,
                 y2,  # [i / baseprice for i in y2],
                 ls="--",
-                alpha=0.25,
-                label=f"{a=:.02f} r^2={round(r_squared, 2)} {name}",
+                zorder=-1,
+                alpha=0.5,
+                label=f"{a=:.02f} r^2={round(r_squared, 4)}",
             )
 
+        # for plotting only
+        x_lims = [i for i in x if 5.5 >= i >= -7.5]
+        y0 = y[x.index(min(x_lims))]
+        if y0 < y_lims[0]:
+            y_lims[0] = y0
+        y1 = y[x.index(max(x_lims))]
+        if y1 > y_lims[1]:
+            y_lims[1] = y1
+
     plt.title(good)
+    ax.set_xlim(-7.5, 5.5)
+    ax.set_ylim(y_lims[0]*0.95, y_lims[1]*1.05)
+    ax.axhline(y_bp, zorder=-5)
     ax.axvline(-5, zorder=-5)
     ax.axvline(-3, zorder=-5)
     ax.axvline(1, zorder=-5)
