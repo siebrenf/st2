@@ -1,4 +1,3 @@
-from copy import deepcopy
 from json import dumps
 from time import sleep
 from uuid import uuid1
@@ -42,7 +41,7 @@ class Request:
         )
 
     def __copy__(self):
-        return deepcopy(self)
+        return Request()
 
     def copy(self):
         return self.__copy__()
@@ -117,8 +116,11 @@ class Request:
                 resp_json = response.json()
             except JSONDecodeError:
                 resp_json = {}
+            error = resp_json.get("error", {})
+            if not isinstance(error, dict):
+                raise GameError(resp_json)
+            error_code = error.get("code")
             status_code = response.status_code
-            error_code = resp_json.get("error", {}).get("code")
             if status_code in self.rate_limit_codes:
                 logger.debug(resp_json.get("error", {}).get("message", resp_json))
                 sleep(resp_json.get("error", {}).get("data", {}).get("retryAfter", 1))

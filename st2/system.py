@@ -37,11 +37,7 @@ class System:
         """
         Add the system and all its waypoints to the database
         """
-        data = self.request.get(
-            endpoint=f"system/{self.symbol}",
-            priority=self.priority,
-            token=self.token,
-        )["data"]
+        data = self.request.get(f"systems/{self.symbol}")["data"]
         cur.execute(
             """
             INSERT INTO systems 
@@ -87,11 +83,7 @@ class System:
                 f"System {self.symbol} is uncatalogued and "
                 "requires a Request instance to proceed!"
             )
-        for ret in self.request.get_all(
-            endpoint=f"systems/{self.symbol}/waypoints",
-            priority=self.priority,
-            token=self.token,
-        ):
+        for ret in self.request.get_all(f"systems/{self.symbol}/waypoints"):
             for wp in ret["data"]:
                 symbol = wp["symbol"]
                 traits = [t["symbol"] for t in wp["traits"]]
@@ -141,9 +133,7 @@ class System:
 
     def _get_gate(self, waypoint_symbol, cur):
         connections = self.request.get(
-            endpoint=f"systems/{self.symbol}/waypoints/{waypoint_symbol}/jump-gate",
-            priority=self.priority,
-            token=self.token,
+            f"systems/{self.symbol}/waypoints/{waypoint_symbol}/jump-gate"
         )["data"]["connections"]
         cur.execute(
             """
@@ -161,9 +151,7 @@ class System:
 
     def _get_market(self, waypoint_symbol, cur):
         ret = self.request.get(
-            endpoint=f"systems/{self.symbol}/waypoints/{waypoint_symbol}/market",
-            priority=self.priority,
-            token=self.token,
+            f"systems/{self.symbol}/waypoints/{waypoint_symbol}/market"
         )["data"]
         cur.execute(
             """
@@ -183,9 +171,7 @@ class System:
 
     def _get_shipyard(self, waypoint_symbol, cur):
         ret = self.request.get(
-            endpoint=f"systems/{self.symbol}/waypoints/{waypoint_symbol}/shipyard",
-            priority=self.priority,
-            token=self.token,
+            f"systems/{self.symbol}/waypoints/{waypoint_symbol}/shipyard"
         )["data"]
         cur.execute(
             """
