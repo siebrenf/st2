@@ -139,10 +139,10 @@ optimal_goods = {
 
 # estimates: at these values, all purchases have their supply level in the correct bin.
 baseprices = {
-    "AMMUNITION": 1397,  # seems exact
-    "BIOCOMPOSITES": 4790,
-    "FOOD": 1795,
-    "FIREARMS": 3190,
+    "AMMUNITION": 1400,  # seems exact
+    "BIOCOMPOSITES": 4800,
+    "FOOD": 1794,
+    "FIREARMS": 3200,
 }
 s2c = {
     "SCARCE": "red",
@@ -153,7 +153,7 @@ s2c = {
 }
 t2m = {"EXPORT": "^", "EXCHANGE": ".", "IMPORT": "v"}
 for good, files in optimal_goods.items():
-    if good not in ["FIREARMS"]:  # "AMMUNITION", "BIOCOMPOSITES", "FOOD",
+    if good not in ["AMMUNITION", "BIOCOMPOSITES", "FOOD", "FIREARMS"]:
         continue
     if len(files) <= 1:
         continue
@@ -175,13 +175,18 @@ for good, files in optimal_goods.items():
 
         assert units == 1
         idx_min = df[df["supply"] == "MODERATE"].index[0] + 3 * tv
-        y_min = df.at[idx_min, "purchasePrice"]
         idx_max = idx_min + 1
+        y_min = df.at[idx_min, "purchasePrice"]
         y_max = df.at[idx_max, "purchasePrice"]
+        ax.axhline(y_min, zorder=-5, color="pink")  # highest
+        ax.axhline(y_max, zorder=-5, color="purple")  # lowest
         dy = (y_max - y_min) / 1  # slope
         # y_bp = y_min + dy*dx
         dx = (y_bp - y_min)/dy
+        print(dx)
         idx_origin = idx_min + dx
+        ax.axvline((idx_min-idx_origin) * units / tv, zorder=-5, color="pink")  # highest
+        ax.axvline((idx_max-idx_origin) * units / tv, zorder=-5, color="purple")  # lowest
 
         y = df["purchasePrice"].to_list()  # [i/y_bp for i in df["purchasePrice"]]
         x = []
@@ -231,7 +236,7 @@ for good, files in optimal_goods.items():
     plt.title(good)
     ax.set_xlim(-7.5, 5.5)
     ax.set_ylim(y_lims[0]*0.95, y_lims[1]*1.05)
-    ax.axhline(y_bp, zorder=-5)
+    ax.axhline(y_bp, zorder=-15)
     ax.axvline(-5, zorder=-5)
     ax.axvline(-3, zorder=-5)
     ax.axvline(1, zorder=-5)
