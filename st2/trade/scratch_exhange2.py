@@ -108,7 +108,7 @@ for good, fnames in g2fs2.items():
         #     print("LIM", i_lim_0, i_lim_1)
         # print()
 
-        origin = df[df["supply"] == "MODERATE"].index[0] + 3 * tv / units
+        origin = df[df["supply"] == "MODERATE"].index[0] + 2 * tv / units
         # pp = df.at[origin, "purchasePrice"] / (2 if port == "IMPORT" else 1)
         # sp = df.at[origin, "sellPrice"] * (2 if port == "EXPORT" else 1)
 
@@ -141,81 +141,89 @@ for good, fnames in g2fs2.items():
 
         infer = True
         if infer:
-
-            # def func(x, a, b, c):
-            #     # return a * np.tan(b * x) + c
-            #     return (a * x**b) / 20 + c  # TODO: EXCHANGE FUNCTION
-            #
-            # # popt, pcov = curve_fit(func, x, y, p0=[0.03, 3, 1], maxfev=60000)  # noqa
-            # popt = [0.03, 3, 1]
-            # # if popt[0] < 0.1:
-            # #     a = round(popt[0] * 200) / 200  # round to nearest 0.005
-            # # else:
-            # #     a = round(popt[0] * 20) / 20  # round to nearest 0.05
-            # key = tuple(round(p, 2) for p in popt)
-            # if key not in seen:
-            #     seen.add(key)
-            #
-            #     y2 = [i for i in func(x2, *key)]  # noqa
-            #     ax.plot(x2, y2, ls="--", alpha=0.5, label=f"{key=}")
-
             # def func_purchase(x, a, b):
             #     return y_bp * (-a / 1000 * (x-1)**3 - b/100*x**2 + 1) + max(2, round(y_bp/100))
 
             # def func_purchase(x, a, b):
             #     return y_bp * (-a / 1000 * (x-1)**3 + b/100*x + 1) + max(2, round(y_bp/100))
 
-            def func_purchase(x, a, b, c):
-                return y_bp * (
-                    -a / 1000 * (x - 1) ** 3 - b / 100 * x**2 + c / 100 * x + 1
-                ) + max(2, round(y_bp / 100))
+            def func_purchase(x, a, dx=0):
+                # b = 0
+                # c = 0
+                x = x - 1 + dx
+                # return y_bp * (-a / 1000 * x ** 3 - b / 1000 * x**2 - c / 1000 * x + 1) + max(2, round(y_bp / 100))
+                return y_bp * (-a / 1000 * x ** 3 + 1) + max(2, round(y_bp / 100))
 
-            popt, pcov = curve_fit(
-                func_purchase, x, yp, p0=[0.35, 0, 0], bounds=((0, 0, 0), (1, 1, 1))
-            )  # noqa
-            a, b, c = popt
-            # def func_purchase(x, a):
-            #     return y_bp * (-a / 1000 * (x-1)**3 + 1) + max(2, round(y_bp/100))
-            #
-            # popt, pcov = curve_fit(func_purchase, x, yp, p0=[0.35], bounds=((0, 1)))  # noqa
-            # a = popt[0]  # round(popt[0] * 20) / 20  # round to nearest 0.05
-            yp2 = [round(i) for i in func_purchase(np.array(x), a, b, c)]
+            popt, pcov = curve_fit(  # noqa
+                func_purchase, x, yp, p0=[0.35, 0], bounds=((0, -1), (1, 1))
+            )
+            a, dx = popt
+            # popt, pcov = curve_fit(  # noqa
+            #     func_purchase, x, yp, p0=[0.35, dx], bounds=((0, dx-1e-9), (1, dx))
+            # )
+            a = round(popt[0] * 20) / 20  # round to nearest 0.05
+            # a, dx = popt
+            # a = round(a, 2)
+            # b = round(b, 2)
+            # c = round(c, 2)
+            # dx = round(dx, 2)
+            # print(dx)
+            # a = round(popt[0] * 20) / 20  # round to nearest 0.05
+            # a = round(popt[0] * 20) / 20
+            # b = round(popt[1] * 20) / 20
+            # c = round(popt[2] * 20) / 20
+            yp2 = [round(i) for i in func_purchase(np.array(x), a, dx)]
             r_squared = r2_score(yp, yp2)
             ax.plot(
                 x,
                 yp2,  # [i / bp for i in y2],
                 ls="--",
                 zorder=10,
-                label=f"{a=:.02f} b={round(b, 3)} c={round(c, 3)} r^2={round(r_squared, 4)} {wp=}",
+                label=f"{a=:.02f} {dx=} r^2={round(r_squared, 4)} {wp=}",  #  {b=:.02f}  {c=:.02f}
             )
 
             # def func_sell(x, a):
             #     return y_bp * (-a / 1000 * (x+1)**3 + 1) - max(2, round(y_bp/100))
 
-            def func_sell(x, a, b, c):
-                return y_bp * (
-                    -a / 1000 * (x + 1) ** 3 - b / 100 * x**2 + c / 100 * x + 1
-                ) - max(2, round(y_bp / 100))
+            def func_sell(x, a, dx=0):
+                # b = 0
+                # c = 0
+                x = x + 1 + dx
+                # return y_bp * (-a / 1000 * x ** 3 - b / 1000 * x**2 - c / 1000 * x + 1) - max(2, round(y_bp / 100))
+                return y_bp * (-a / 1000 * x ** 3 + 1) - max(2, round(y_bp / 100))
 
-            popt, pcov = curve_fit(
-                func_sell, x, ys, p0=[0.35, 0, 0], bounds=((0, 0, 0), (1, 1, 1))
-            )  # noqa
-            a, b, c = popt
-            ys2 = [round(i) for i in func_sell(np.array(x), a, b, c)]
+            popt, pcov = curve_fit(  # noqa
+                func_sell, x, ys, p0=[0.35, 0], bounds=((0, -1), (1, 1))
+            )
+            a, dx = popt
+            # popt, pcov = curve_fit(  # noqa
+            #     func_sell, x, ys, p0=[0.35, dx], bounds=((0, dx-1e-9), (1, dx))
+            # )
+            # a, dx = popt
+            # print(dx)
+            # a = round(popt[0] * 20) / 20
+            # b = round(popt[1] * 20) / 20
+            # c = round(popt[2] * 20) / 20
+            # a = round(a, 2)
+            a = round(popt[0] * 20) / 20  # round to nearest 0.05
+            # b = round(b, 2)
+            # c = round(c, 2)
+            # dx = round(dx, 4)
+            ys2 = [round(i) for i in func_sell(np.array(x), a, dx)]
             r_squared = r2_score(ys, ys2)
             ax.plot(
                 x,
                 ys2,  # [i / bp for i in y2],
                 ls="--",
                 zorder=10,
-                label=f"{a=:.02f} b={round(b, 3)} c={round(c, 3)} r^2={round(r_squared, 4)} {wp=}",
+                label=f"{a=:.02f} {dx=} r^2={round(r_squared, 4)} {wp=}",  # {b=:.02f} {c=:.02f}
             )
 
     plt.title(f"{good} bp={y_bp}")
-    ax.axvline(-5, zorder=-5)
-    ax.axvline(-3, zorder=-5)
-    ax.axvline(1, zorder=-5)
-    ax.axvline(3, zorder=-5)
+    ax.axvline(-4, zorder=-5)
+    ax.axvline(-2, zorder=-5)
+    ax.axvline(2, zorder=-5)
+    ax.axvline(4, zorder=-5)
     plt.grid(which="major")
     # https://stackoverflow.com/questions/4700614/how-to-put-the-legend-outside-the-plot
     handles, labels = ax.get_legend_handles_labels()
