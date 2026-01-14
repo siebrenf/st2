@@ -377,9 +377,9 @@ for good, files in optimal_goods.items():
         dx = (y_bp - y_min) / dy
         if dx > 1 or dx < 0:
             print("bad dx:", dx)
-        idx_origin = idx_min + dx
-        ax.axvline((idx_min - idx_origin) * units / tv, zorder=-5, color="pink")
-        ax.axvline((idx_max - idx_origin) * units / tv, zorder=-5, color="purple")
+        idx_bp = idx_min + dx
+        ax.axvline((idx_min - idx_bp) * units / tv + 1, zorder=-5, color="pink")
+        ax.axvline((idx_max - idx_bp) * units / tv + 1, zorder=-5, color="purple")
 
         if div_by_bp:
             y = [i / y_bp for i in df["purchasePrice"]]
@@ -391,28 +391,33 @@ for good, files in optimal_goods.items():
             ax.axhline(y_max, zorder=-5, color="purple")  # lowest
         x = []
         for i in range(len(df)):
-            x.append((i - idx_origin) * units / tv)
+            x.append((i - idx_bp) * units / tv - 1)
+        x = [-i for i in x]
         c = [s2c[supply] for supply in df["supply"]]
 
         ax.scatter(x, y, c=c, s=18, zorder=5)
         ax.plot(x, y, zorder=-2, alpha=0.4, c="green", label=f"tv={int(tv)}")
+        if not div_by_bp:
+            ax.axhline(y_bp, zorder=-15)
 
-        # infer trend
-        if True:
+        infer = True
+        if infer:
 
             if div_by_bp:
 
                 def func(x, a):
-                    return 1 * (a * 2 ** (0.3 * x) - a + 1)
+                    x = x - 1
+                    return 1 * (a * 2 ** (-0.3 * x) - a + 1)
 
             else:
 
                 def func(x, a):
-                    return y_bp * (a * 2 ** (0.3 * x) - a + 1)
+                    x = x - 1
+                    return y_bp * (a * 2 ** (-0.3 * x) - a + 1)
 
             popt, pcov = curve_fit(func, x, y, p0=[0.35], bounds=((0, 1)))  # noqa
             a = popt[0]
-            y2 = func(np.array(x), a)
+            y2 = func(np.array(x), a)  # [-i for i in x]
             r_squared = r2_score(y, y2)
             ax.plot(
                 x,
@@ -424,22 +429,21 @@ for good, files in optimal_goods.items():
             )
 
         # for plotting only
-        x_lims = [i for i in x if 5.5 >= i >= -7.5]
-        y0 = y[x.index(min(x_lims))]
+        x_lims = [i for i in x if 7.5 >= i >= -5.5]
+        y0 = y[x.index(max(x_lims))]
         if y0 < y_lims[0]:
             y_lims[0] = y0
-        y1 = y[x.index(max(x_lims))]
+        y1 = y[x.index(min(x_lims))]
         if y1 > y_lims[1]:
             y_lims[1] = y1
 
     plt.title(f"{good} bp={y_bp}")
-    ax.set_xlim(-7.5, 5.5)
+    ax.set_xlim(-5.5, 7.5)
     ax.set_ylim(y_lims[0] * 0.95, y_lims[1] * 1.05)
-    ax.axhline(y_bp, zorder=-15)
-    ax.axvline(-5, zorder=-5)
-    ax.axvline(-3, zorder=-5)
-    ax.axvline(1, zorder=-5)
-    ax.axvline(3, zorder=-5)
+    ax.axvline(-4, zorder=-5)
+    ax.axvline(-2, zorder=-5)
+    ax.axvline(2, zorder=-5)
+    ax.axvline(4, zorder=-5)
     plt.grid(which="major")
     # https://stackoverflow.com/questions/4700614/how-to-put-the-legend-outside-the-plot
     handles, labels = ax.get_legend_handles_labels()

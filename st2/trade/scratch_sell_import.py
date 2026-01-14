@@ -112,9 +112,9 @@ for good, fnames in optimal_goods.items():
         dx = (y_bp - y_min) / dy
         if dx > 1 or dx < 0:
             print("bad dx:", dx)
-        idx_origin = idx_max - dx
-        ax.axvline((idx_min - idx_origin) * units / tv, zorder=-5, color="pink")
-        ax.axvline((idx_max - idx_origin) * units / tv, zorder=-5, color="purple")
+        idx_bp = idx_max - dx
+        ax.axvline((idx_min - idx_bp) * units / tv + 1, zorder=-5, color="pink")
+        ax.axvline((idx_max - idx_bp) * units / tv + 1, zorder=-5, color="purple")
 
         if div_by_bp:
             y = [i / y_bp for i in df["sellPrice"].to_list()]
@@ -127,7 +127,7 @@ for good, fnames in optimal_goods.items():
 
         x = []
         for i in range(len(df)):
-            x.append((i - idx_origin) * units / tv)
+            x.append((i - idx_bp) * units / tv + 1)
         c = [s2c[supply] for supply in df["supply"]]
         # remove the lowest value (in case we reached the minimum price)
         y_min = min(y)
@@ -146,11 +146,13 @@ for good, fnames in optimal_goods.items():
             if div_by_bp:
 
                 def func(x, a):
+                    x = x - 1
                     return 1 * (-a * 2 ** (0.3 * x) + a + 1)
 
             else:
 
                 def func(x, a):
+                    x = x - 1
                     return y_bp * (-a * 2 ** (0.3 * x) + a + 1)
 
             popt, pcov = curve_fit(func, x, y, p0=[0.35], bounds=((0, 1)))  # noqa
@@ -177,10 +179,10 @@ for good, fnames in optimal_goods.items():
 
     plt.title(f"{good} bp={y_bp}")
     ax.axhline(y_bp, zorder=-15)
-    ax.axvline(-5, zorder=-5)
-    ax.axvline(-3, zorder=-5)
-    ax.axvline(1, zorder=-5)
-    ax.axvline(3, zorder=-5)
+    ax.axvline(-4, zorder=-5)
+    ax.axvline(-2, zorder=-5)
+    ax.axvline(2, zorder=-5)
+    ax.axvline(4, zorder=-5)
     ax.set_xlim(-7.5, 5.5)
     ax.set_ylim(y_lims[0] * 0.95, y_lims[1] * 1.05)
     plt.grid(which="major")

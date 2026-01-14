@@ -79,24 +79,45 @@ def x2y_export(x, a, base_price):
     return max(round(y), 1)
 
 
+# def y2x_export(y, a, base_price):
+#     """
+#     y = base_price * (a * 2 ** (0.3 * x) - a + 1)
+#     y / base_price = a * 2 ** (0.3 * x) - a + 1
+#     y / base_price + a - 1 = a * 2 ** (0.3 * x)
+#     y / (a * base_price) + 1 - 1/a = 2 ** (0.3 * x)
+#     np.log2(y / (a * base_price) - 1/a + 1) = 0.3 * x
+#     np.log2(y / (a * base_price) - 1/a + 1) / 0.3 = x
+#
+#     note: error if np.log2(<=0)
+#     y / (a * base_price) - 1/a + 1 > 0
+#     y / (a * base_price) > 1/a -1
+#     y / base_price > 1 - a
+#     y > base_price * (1 - a)
+#     """
+#     if y <= base_price * (1 - a):
+#         y = base_price * (1 - a) + 0.1
+#     x = np.log2(y / (a * base_price) - 1 / a + 1) / 0.3
+#     return x
+
+
 def y2x_export(y, a, base_price):
     """
     y = base_price * (a * 2 ** (0.3 * x) - a + 1)
     y / base_price = a * 2 ** (0.3 * x) - a + 1
     y / base_price + a - 1 = a * 2 ** (0.3 * x)
-    y / (a * base_price) + 1 - 1/a = 2 ** (0.3 * x)
-    np.log2(y / (a * base_price) - 1/a + 1) = 0.3 * x
-    np.log2(y / (a * base_price) - 1/a + 1) / 0.3 = x
+    (y / base_price + a - 1) / a = 2 ** (0.3 * x)
+    np.log2((y / base_price + a - 1) / a) = 0.3 * x
+    (1 / 0.3) * np.log2((y / base_price + a - 1) / a) = x
+    (10 / 3) * np.log2((y / base_price + a - 1) / a) = x
 
     note: error if np.log2(<=0)
-    y / (a * base_price) - 1/a + 1 > 0
-    y / (a * base_price) > 1/a -1
-    y / base_price > 1 - a
-    y > base_price * (1 - a)
+    (y / base_price + a - 1) / a > 0
     """
-    if y <= base_price * (1 - a):
-        y = base_price * (1 - a) + 0.1
-    x = np.log2(y / (a * base_price) - 1 / a + 1) / 0.3
+    asd = (y / base_price + a - 1) / a
+    if asd > 0:
+        x = (10 / 3) * np.log2(asd)
+    else:
+        x = -10
     return x
 
 
