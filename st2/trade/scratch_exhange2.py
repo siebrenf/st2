@@ -80,7 +80,7 @@ for good, fnames in g2fs2.items():
     y_bp = baseprices[good]
     for fname in fnames:
         df = pd.read_table(fname)
-        wp = fname.split("_")[-2]
+        wp = fname.split("_")[-2][3:]
         # df.at[0, "supply"] = "SCARCE", df.at[-1, "supply"] = "ABUNDANT"
         df = df[df["units"] == 1].iloc[::-1].reset_index()
         if "action" in df.columns:
@@ -89,32 +89,28 @@ for good, fnames in g2fs2.items():
         tv = int(df.at[0, "tradeVolume"])
         units = df.at[0, "units"]
 
-        i_high_0 = i_high_1 = None
-        if "HIGH" in df["supply"].unique():
-            i_high_0 = df[df["supply"] == "HIGH"].index[0]
-            i_high_1 = df[df["supply"] == "HIGH"].index[-1]
-        else:
-            continue
-            # print("HIGH", i_high_0, i_high_1)
-        i_mod_0 = df[df["supply"] == "MODERATE"].index[0]
-        i_mod_1 = df[df["supply"] == "MODERATE"].index[-1]
-        # print("MOD", i_mod_0, i_mod_1)
-        i_lim_0 = i_lim_1 = None
-        if "LIMITED" in df["supply"].unique():
-            i_lim_0 = df[df["supply"] == "LIMITED"].index[0]
-            i_lim_1 = df[df["supply"] == "LIMITED"].index[-1]
-        else:
-            continue
-        #     print("LIM", i_lim_0, i_lim_1)
-        # print()
+        # i_high_0 = i_high_1 = None
+        # if "HIGH" in df["supply"].unique():
+        #     i_high_0 = df[df["supply"] == "HIGH"].index[0]
+        #     i_high_1 = df[df["supply"] == "HIGH"].index[-1]
+        # else:
+        #     continue
+        #     # print("HIGH", i_high_0, i_high_1)
+        # i_mod_0 = df[df["supply"] == "MODERATE"].index[0]
+        # i_mod_1 = df[df["supply"] == "MODERATE"].index[-1]
+        # # print("MOD", i_mod_0, i_mod_1)
+        # i_lim_0 = i_lim_1 = None
+        # if "LIMITED" in df["supply"].unique():
+        #     i_lim_0 = df[df["supply"] == "LIMITED"].index[0]
+        #     i_lim_1 = df[df["supply"] == "LIMITED"].index[-1]
+        # else:
+        #     continue
+        # #     print("LIM", i_lim_0, i_lim_1)
+        # # print()
 
         origin = df[df["supply"] == "MODERATE"].index[0] + 2 * tv / units
-        # pp = df.at[origin, "purchasePrice"] / (2 if port == "IMPORT" else 1)
-        # sp = df.at[origin, "sellPrice"] * (2 if port == "EXPORT" else 1)
-
         yp = df["purchasePrice"].to_list()
         ys = df["sellPrice"].to_list()
-        # y = df["purchasePrice"]
         x = []
         for i in range(len(df)):
             x.append((i - origin) * (units / tv))
@@ -148,30 +144,15 @@ for good, fnames in g2fs2.items():
             #     return y_bp * (-a / 1000 * (x-1)**3 + b/100*x + 1) + max(2, round(y_bp/100))
 
             def func_purchase(x, a, dx=0):
-                # b = 0
-                # c = 0
                 x = x - 1 + dx
                 # return y_bp * (-a / 1000 * x ** 3 - b / 1000 * x**2 - c / 1000 * x + 1) + max(2, round(y_bp / 100))
-                return y_bp * (-a / 1000 * x ** 3 + 1) + max(2, round(y_bp / 100))
+                return y_bp * (-a / 1000 * x**3 + 1) + max(2, round(y_bp / 100))
 
             popt, pcov = curve_fit(  # noqa
                 func_purchase, x, yp, p0=[0.35, 0], bounds=((0, -1), (1, 1))
             )
             a, dx = popt
-            # popt, pcov = curve_fit(  # noqa
-            #     func_purchase, x, yp, p0=[0.35, dx], bounds=((0, dx-1e-9), (1, dx))
-            # )
-            a = round(popt[0] * 20) / 20  # round to nearest 0.05
-            # a, dx = popt
-            # a = round(a, 2)
-            # b = round(b, 2)
-            # c = round(c, 2)
-            # dx = round(dx, 2)
-            # print(dx)
-            # a = round(popt[0] * 20) / 20  # round to nearest 0.05
-            # a = round(popt[0] * 20) / 20
-            # b = round(popt[1] * 20) / 20
-            # c = round(popt[2] * 20) / 20
+            a = round(a * 20) / 20  # round to nearest 0.05
             yp2 = [round(i) for i in func_purchase(np.array(x), a, dx)]
             r_squared = r2_score(yp, yp2)
             ax.plot(
@@ -179,36 +160,22 @@ for good, fnames in g2fs2.items():
                 yp2,  # [i / bp for i in y2],
                 ls="--",
                 zorder=10,
-                label=f"{a=:.02f} {dx=} r^2={round(r_squared, 4)} {wp=}",  #  {b=:.02f}  {c=:.02f}
+                label=f"{a=:.02f} {dx=} r^2={round(r_squared, 4)} {wp=}",
             )
 
             # def func_sell(x, a):
             #     return y_bp * (-a / 1000 * (x+1)**3 + 1) - max(2, round(y_bp/100))
 
             def func_sell(x, a, dx=0):
-                # b = 0
-                # c = 0
                 x = x + 1 + dx
                 # return y_bp * (-a / 1000 * x ** 3 - b / 1000 * x**2 - c / 1000 * x + 1) - max(2, round(y_bp / 100))
-                return y_bp * (-a / 1000 * x ** 3 + 1) - max(2, round(y_bp / 100))
+                return y_bp * (-a / 1000 * x**3 + 1) - max(2, round(y_bp / 100))
 
             popt, pcov = curve_fit(  # noqa
                 func_sell, x, ys, p0=[0.35, 0], bounds=((0, -1), (1, 1))
             )
             a, dx = popt
-            # popt, pcov = curve_fit(  # noqa
-            #     func_sell, x, ys, p0=[0.35, dx], bounds=((0, dx-1e-9), (1, dx))
-            # )
-            # a, dx = popt
-            # print(dx)
-            # a = round(popt[0] * 20) / 20
-            # b = round(popt[1] * 20) / 20
-            # c = round(popt[2] * 20) / 20
-            # a = round(a, 2)
-            a = round(popt[0] * 20) / 20  # round to nearest 0.05
-            # b = round(b, 2)
-            # c = round(c, 2)
-            # dx = round(dx, 4)
+            a = round(a * 20) / 20  # round to nearest 0.05
             ys2 = [round(i) for i in func_sell(np.array(x), a, dx)]
             r_squared = r2_score(ys, ys2)
             ax.plot(
@@ -216,7 +183,7 @@ for good, fnames in g2fs2.items():
                 ys2,  # [i / bp for i in y2],
                 ls="--",
                 zorder=10,
-                label=f"{a=:.02f} {dx=} r^2={round(r_squared, 4)} {wp=}",  # {b=:.02f} {c=:.02f}
+                label=f"{a=:.02f} {dx=} r^2={round(r_squared, 4)} {wp=}",
             )
 
     plt.title(f"{good} bp={y_bp}")
