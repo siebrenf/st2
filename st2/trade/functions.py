@@ -1,5 +1,3 @@
-import math
-
 import numpy as np
 
 
@@ -12,7 +10,7 @@ def x2y(x, a, base_price, port, action):
         y = x2y_exchange(x, a, base_price, action)
     else:
         raise ValueError
-    return max(round(y), 1)
+    return y  # TODO: max(round(y), 1)
 
 
 def y2x(y, a, base_price, port, action):
@@ -90,16 +88,14 @@ def y2x_import(y, a, base_price, action):
 
 
 def x2y_exchange(x, a, base_price, action):
-    if action == "sell":
-        x = x + 1
-    else:
-        x = x - 1
-    y = base_price * (-a / 1000 * x**3 + 1)
     value = max(2, round(base_price / 100))
     if action == "sell":
-        y = y - value
+        x = x + 1
+        base_price = base_price - value
     else:
-        y = y + value
+        x = x - 1
+        base_price = base_price + value
+    y = base_price * (-a / 1000 * x**3 + 1)
     return y
 
 
@@ -116,9 +112,9 @@ def y2x_exchange(y, a, base_price, action):
     """
     value = max(2, round(base_price / 100))
     if action == "sell":
-        y = y + value
+        base_price = base_price - value
     else:
-        y = y - value
+        base_price = base_price + value
     x = np.cbrt(1000 / a * (1 - y / base_price))
     if action == "sell":
         x = x - 1
@@ -139,86 +135,86 @@ def x2supply(x):
     return "ABUNDANT"
 
 
-def supply2x_minmax(supply, tv=180):
-    """returns the range of x based on the supply level of one transaction."""
+def supply2x(supply):
+    if supply == "SCARCE":
+        return -float("inf"), -4
+    if supply == "LIMITED":
+        return -4, -2
+    if supply == "MODERATE":
+        return -2, 2
+    if supply == "HIGH":
+        return 2, 4
     if supply == "ABUNDANT":
-        x_min = -float("inf")
-        x_max = -4 - 1 / tv
-    elif supply == "HIGH":
-        x_min = -4
-        x_max = -2 - 1 / tv
-    elif supply == "MODERATE":
-        x_min = -2
-        x_max = 2 - 1 / tv
-    elif supply == "LIMITED":
-        x_min = 2
-        x_max = 4 - 1 / tv
-    elif supply == "SCARCE":
-        x_min = 4
-        x_max = float("inf")
-    else:
-        raise NotImplementedError
-    return x_min, x_max
+        return 4, float("inf")
+    raise NotImplementedError
 
 
-def supply2x_minmax2(s0, s1, units, tv, action):
-    """return the range of x based on the supply levels of two transaction
-    with a known number of units between."""
+def supply2x_x2(s0, s1, units, tv, action):
+    """return the current range of x after a transaction"""
     dx = units / tv
-    if action == "sell":
-        if s0 == s1:
-            x_min, x_max = supply2x_minmax(s0, tv)
-            x_max -= dx
-        else:
-            x_min0, x_max0 = supply2x_minmax(s0, tv)
-            x_min1, x_max1 = supply2x_minmax(s1, tv)
-            x_min = x_min0 - dx
-            x_max = x_max1
-    else:
-        if s0 == s1:
-            x_min, x_max = supply2x_minmax(s0, tv)
+    x_min, x_max = supply2x(s1)
+    if s0 == s1:
+        if action == "sell":
             x_min += dx
         else:
-            x_min0, x_max0 = supply2x_minmax(s0, tv)
-            x_min1, x_max1 = supply2x_minmax(s1, tv)
-            x_min = x_min1
-            x_max = x_max0 + dx
+            x_max -= dx
+    else:
+        s2i = {"ABUNDANT": 4, "HIGH": 3, "MODERATE": 2, "LIMITED": 1, "SCARCE": 0}
+        if abs(s2i[s0] - s2i[s1]) > 1:
+            raise NotImplementedError("Supply levels must be adjacent")
+
+        if action == "sell":
+            # the supply level increased between transactions
+            # range = (x_min, x_min + dx)
+            x_max = x_min + dx
+        else:
+            # the supply level decreased between transactions:
+            # range = (x_max - dx, x_max)
+            x_min = x_max - dx
     return x_min, x_max
 
 
-def a_prior(y, supply, tv, port, base_price, action):
-    """returns the highest value of a that can yield the given price (y)
-    within the supply level, and the matching value of x."""
-    best = 0.4, float("inf")
-    y_min, y_max = -float("inf"), float("inf")
-    x_min, x_max = supply2x_minmax(supply, tv)
-    for a in [0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2]:
-        if x_min != -float("inf"):
-            y_min = x2y(x_min, a, base_price, port, action)
-        if x_max != float("inf"):
-            y_max = x2y(x_max, a, base_price, port, action)
-        diff = min(abs(y_min - y), abs(y_max - y))
-        if diff < best[1]:
-            best = a, diff
+def a_prior(y, supply, base_price, port, action):
+    """
+    Returns the highest value of the waypoint modifier (a) that can yield the
+    given price (y) within the supply level, and the matching value of x.
+    """
+    x_min, x_max = supply2x(supply)
+    for a in [0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2]:  # TODO: all possible values?
+        x = y2x(y, a, base_price, port, action)
+        if x_max >= x >= x_min:
+            return a
+        # y_vals = [
+        #     x2y(x_min, a, base_price, port, action),
+        #     x2y(x_max, a, base_price, port, action),
+        # ]
+        # if max(y_vals) >= y >= min(y_vals):
+        #     return a
+    raise ValueError(
+        f"{y=} not found within {supply=} (based on {base_price=} and {action=})"
+    )
 
-    return best[0]
 
-
-def a_posterior(y0, s0, y1, s1, tv, port, units, action, base_price, x=False):
+def a_posterior(y0, s0, y1, s1, units, tv, port, action, base_price):
     """Find the value of a that best matches the difference in price (y)"""
-    best = "a", "x", float("inf")
-    dx = units / tv
-    if action == "sell":
-        dx *= -1
-    for a in [0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2]:
+    # best = "a", "x", float("inf")
+    # dx = units / tv
+    x_min0, x_max0 = supply2x_x2(s1, s0, -units, tv, action)
+    x_min1, x_max1 = supply2x_x2(s0, s1, units, tv, action)
+    for a in [0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2]:
+        x0 = y2x(y0, a, base_price, port, action)
         x1 = y2x(y1, a, base_price, port, action)
-        x0 = x1 - dx
-        y0_inf = x2y(x0, a, base_price, port, action)
-        diff = abs(y0 - y0_inf)
-        if diff < best[2]:
-            best = a, x1, diff
-
-    a, x1 = best[:2]
-    if x:
-        return a, x1
-    return a
+        if x_max0 >= x0 >= x_min0 and x_max1 >= x1 >= x_min1:  # TODO: fix
+            return a
+    #     x1 = y2x(y1, a, base_price, port, action)
+    #     y1_inf = x2y(x1, a, base_price, port, action)
+    #     print(port, action, x_min, x1, x_max, y1, y1_inf)
+    #     x0 = x1 - dx
+    #     y0_inf = x2y(x0, a, base_price, port, action)
+    #     diff = abs(y0 - y0_inf)
+    #     if diff < best[2]:
+    #         best = a, x1, diff
+    #
+    # a, x1 = best[:2]
+    # return a
+    raise ValueError
