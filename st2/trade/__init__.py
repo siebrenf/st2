@@ -35,14 +35,7 @@ def price_estimate(trade_good, units, action):
         _set_a(trade_good["waypointSymbol"], trade_good["symbol"], a)
 
     price_total = 0
-    x_min, x_max = supply2x_minmax(trade_good["supply"], trade_good["tradeVolume"])
-    if x_min == -float("inf"):
-        x_guess = x_max - 1
-    elif x_max == float("inf"):
-        x_guess = x_min + 1
-    else:
-        x_guess = (x_min + x_max) / 2
-    x = y2x(price, a, base_price, trade_good["type"], action, x_guess)
+    x = y2x(price, a, base_price, trade_good["type"], action)
     while n_transactions > 0:
         transaction = min(1, n_transactions)
         price_total += price * transaction * trade_good["tradeVolume"]
