@@ -378,8 +378,8 @@ for good, files in optimal_goods.items():
         if dx > 1 or dx < 0:
             print("bad dx:", dx)
         idx_bp = idx_min + dx
-        ax.axvline((idx_min - idx_bp) * units / tv + 1, zorder=-5, color="pink")
-        ax.axvline((idx_max - idx_bp) * units / tv + 1, zorder=-5, color="purple")
+        ax.axvline((idx_min - idx_bp) * units / tv - 1, zorder=-5, color="pink")
+        ax.axvline((idx_max - idx_bp) * units / tv - 1, zorder=-5, color="purple")
 
         if div_by_bp:
             y = [i / y_bp for i in df["purchasePrice"]]
@@ -391,7 +391,7 @@ for good, files in optimal_goods.items():
             ax.axhline(y_max, zorder=-5, color="purple")  # lowest
         x = []
         for i in range(len(df)):
-            x.append((i - idx_bp) * units / tv - 1)
+            x.append((i - idx_bp) * units / tv + 1)
         x = [-i for i in x]
         c = [s2c[supply] for supply in df["supply"]]
 
@@ -406,13 +406,13 @@ for good, files in optimal_goods.items():
             if div_by_bp:
 
                 def func(x, a):
-                    x = x - 1
+                    x = x + 1
                     return 1 * (a * 2 ** (-0.3 * x) - a + 1)
 
             else:
 
                 def func(x, a):
-                    x = x - 1
+                    x = x + 1
                     return y_bp * (a * 2 ** (-0.3 * x) - a + 1)
 
             popt, pcov = curve_fit(func, x, y, p0=[0.35], bounds=((0, 1)))  # noqa

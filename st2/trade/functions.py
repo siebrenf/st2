@@ -1,44 +1,21 @@
 import math
 
 import numpy as np
-from scipy.optimize import newton
 
 
 def x2y(x, a, base_price, port, action):
     if port == "EXPORT":
-        if action == "sell":
-            x -= 2
-        else:
-            x -= 1
-        y = x2y_export(x, a, base_price)
-        if action == "sell":
-            y /= 2
-
+        y = x2y_export(x, a, base_price, action)
     elif port == "IMPORT":
-        if action == "sell":
-            x += 1
-        else:
-            x += 2
-        y = x2y_import(x, a, base_price)
-        if action != "sell":
-            y *= 2
-
+        y = x2y_import(x, a, base_price, action)
     elif port == "EXCHANGE":
-        if action == "sell":
-            x -= 1
-            base_price -= max(2, 0.01 * base_price)
-        else:
-            x += 1
-            base_price += max(2, 0.01 * base_price)
-        y = x2y_exchange(x, a, base_price)
-
+        y = x2y_exchange(x, a, base_price, action)
     else:
         raise ValueError
-
     return max(round(y), 1)
 
 
-def y2x(y, a, base_price, port, action, x_guess=0):
+def y2x(y, a, base_price, port, action, x_guess=0):  # TODO
     if port == "EXPORT":
         if action == "sell":
             y *= 2
@@ -74,10 +51,12 @@ def y2x(y, a, base_price, port, action, x_guess=0):
     return x
 
 
-def x2y_export(x, a, base_price):
-    x = x - 1
+def x2y_export(x, a, base_price, action):
+    if action == "sell":
+        raise NotImplementedError
+    x = x + 1
     y = base_price * (a * 2 ** (-0.3 * x) - a + 1)
-    return max(round(y), 1)
+    return y
 
 
 def y2x_export(y, a, base_price):
@@ -95,75 +74,120 @@ def y2x_export(y, a, base_price):
     """
     value = (y / base_price + a - 1) / a
     if value > 0:
-        x = (-10 / 3) * np.log2(value) + 1
+        x = (-10 / 3) * np.log2(value) - 1
     else:
-        x = 11
+        x = 10 - 1
     return x
 
 
-def x2y_import(x, a, base_price):
-    """imperfect approximation of the IMPORT price"""
-    # the 0.2 adjusts the step size of the hidden variable to 0.05
-    x = 0.2 * x
-
-    a = a + 0.175
-    b = -0.5 * a
-    c = 0.12 * a
-    d = -0.009 * a
-    y = base_price * (d * x**4 + c * x**3 + b * x**2 + a * x + 1)
-    return max(round(y), 1)
+def x2y_import(x, a, base_price, action):
+    if action != "sell":
+        raise NotImplementedError
+    x = x - 1
+    y = base_price * (-a * 2 ** (0.3 * x) + a + 1)
+    return y
 
 
-def y2x_import(y, a, base_price, x_guess=0):
-    a = a + 0.175
-    b = -0.5 * a
-    c = 0.12 * a
-    d = -0.009 * a
+def y2x_import(y, a, base_price):
+    """
+    y = base_price * (-a * 2 ** (0.3 * x) + a + 1)
+    y / base_price = -a * 2 ** (0.3 * x) + a + 1
+    y / base_price - a - 1 = -a * 2 ** (0.3 * x)
+    (y / base_price - a - 1) / -a = 2 ** (0.3 * x)
+    np.log2((y / base_price - a - 1) / -a) = 0.3 * x
+    (1 / 0.3) * np.log2((y / base_price - a - 1) / -a) = x
+    (10 / 3) * np.log2((y / base_price - a - 1) / -a) = x
 
-    def polynomial(x):
-        """x2y_import() - y"""
-        return base_price * (d * x**4 + c * x**3 + b * x**2 + a * x + 1) - y
-
-    def fprime(x):
-        return base_price * (4 * d * x**3 + 3 * c * x**2 + 2 * b * x + a)
-
-    def fprime2(x):
-        return base_price * (12 * d * x**2 + 6 * c * x + 2 * b)
-
-    x = newton(polynomial, x0=x_guess, fprime=fprime, fprime2=fprime2)
-    x = 5 * x
+    note: error if np.log2(<=0)
+    (y / base_price - a + 1) / -a > 0
+    """
+    value = (y / base_price - a - 1) / -a
+    if value > 0:
+        x = (10 / 3) * np.log2(value) + 1
+    else:
+        x = -10 + 1
     return x
 
 
-def x2y_exchange(x, a, base_price):
-    """imperfect approximation of the EXCHANGE price"""
-    x = x - 2
+def x2y_exchange(x, a, base_price, action):
+    if action == "sell":
+        x = x + 1
+    else:
+        x = x - 1
+    y = base_price * (-a / 1000 * x**3 + 1)
+    value = max(2, round(base_price / 100))
+    if action == "sell":
+        y = y - value
+    else:
+        y = y + value
+    return y
 
-    a = a / 100
-    b = a / 2
-    c = a / 12.5
-    y = base_price * (c * x**3 + b * x**2 + a * x + 1)
-    return max(round(y), 1)
 
+def y2x_exchange(y, a, base_price, action):
+    """
+    y = base_price * (-a / 1000 * x ** 3 + 1)
+    y / base_price = -a / 1000 * x ** 3 + 1
+    y / base_price - 1 = -a / 1000 * x ** 3
 
-def y2x_exchange(y, a, base_price, x_guess=0):
-    a = a / 100
-    b = a / 2
-    c = a / 12.5
+    # TODO: breaks
+    (1 / -a / 1000) * (y / base_price - 1) = x ** 3
+    ((1 / -a / 1000) * (y / base_price - 1)) ** (1/3) = x
 
-    def polynomial(x):
-        """x2y_exchange() - y"""
-        return base_price * (c * x**3 + b * x**2 + a * x + 1) - y
+    # TODO: this one breaks at x<=0
+    (1000 / -a) * (y / base_price - 1) = x ** 3
+    ((1000 / -a) * (y / base_price - 1)) ** (1/3) = x
 
-    def fprime(x):
-        return base_price * (3 * c * x**2 + 2 * b * x + a)
-
-    def fprime2(x):
-        return base_price * (6 * c * x + 2 * b)
-
-    x = newton(polynomial, x0=x_guess, fprime=fprime, fprime2=fprime2)
-    x = x + 2
+    # TODO: this one breaks at x<-2
+    y = base_price * (-a / 1000 * x ** 3 + 1)
+    y / base_price = -a / 1000 * x ** 3 + 1
+    a / 1000 * x ** 3 = 1 - y / base_price
+    x ** 3 = 1000 / a * (1 - y / base_price)
+    x = (1000 / a * (1 - y / base_price)) ** (1/3)
+    """
+    value = max(2, round(base_price / 100))
+    if action == "sell":
+        y = y + value
+    else:
+        y = y - value
+    # x = ((1 / -a / 1000) * (y / base_price - 1)) ** (1/3)
+    # x = ((1000 / -a) * (y / base_price - 1)) ** (1/3)
+    x = (1000 / a * (1 - y / base_price)) ** (1 / 3)
+    if action == "sell":
+        x = x - 1
+    else:
+        x = x + 1
     return x
+
+
+# def x2y_exchange(x, a, base_price):
+#     """imperfect approximation of the EXCHANGE price"""
+#     x = x - 2
+#
+#     a = a / 100
+#     b = a / 2
+#     c = a / 12.5
+#     y = base_price * (c * x**3 + b * x**2 + a * x + 1)
+#     return max(round(y), 1)
+#
+#
+# def y2x_exchange(y, a, base_price, x_guess=0):
+#     a = a / 100
+#     b = a / 2
+#     c = a / 12.5
+#
+#     def polynomial(x):
+#         """x2y_exchange() - y"""
+#         return base_price * (c * x**3 + b * x**2 + a * x + 1) - y
+#
+#     def fprime(x):
+#         return base_price * (3 * c * x**2 + 2 * b * x + a)
+#
+#     def fprime2(x):
+#         return base_price * (6 * c * x + 2 * b)
+#
+#     x = newton(polynomial, x0=x_guess, fprime=fprime, fprime2=fprime2)
+#     x = x + 2
+#     return x
 
 
 def x2supply(x):
