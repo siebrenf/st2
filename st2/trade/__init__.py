@@ -8,9 +8,7 @@ from st2.trade.price_ranges import PRICE_RANGES
 
 def price_estimate(trade_good, units, action):
     """Approximate the purchase/sell price for a batch of tradeGoods"""
-    if action == "buy":
-        action = "purchase"
-    elif action not in ["purchase", "sell"]:
+    if action not in ["purchase", "sell"]:
         raise ValueError
     price = trade_good[f"{action}Price"]
 
@@ -42,7 +40,8 @@ def price_estimate(trade_good, units, action):
 
         n_transactions -= transaction
         x += -transaction if action == "sell" else transaction
-        price = x2y(x, a, base_price, trade_good["type"], action)
+        y = x2y(x, a, base_price, trade_good["type"], action)
+        price = max(y, 1)
     return round(price_total)
 
 

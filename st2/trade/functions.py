@@ -10,7 +10,7 @@ def x2y(x, a, base_price, port, action):
         y = x2y_exchange(x, a, base_price, action)
     else:
         raise ValueError
-    return y  # TODO: max(round(y), 1)
+    return y
 
 
 def y2x(y, a, base_price, port, action):
@@ -150,14 +150,17 @@ def supply2x(supply):
 
 
 def supply2x_x2(s0, s1, units, tv, action):
-    """return the current range of x after a transaction"""
+    """return the possible ranges of x before and after a transaction"""
     dx = units / tv
-    x_min, x_max = supply2x(s1)
+    x_min0, x_max0 = supply2x(s0)
+    x_min1, x_max1 = supply2x(s1)
     if s0 == s1:
         if action == "sell":
-            x_min += dx
+            x_max0 -= dx
+            x_min1 += dx
         else:
-            x_max -= dx
+            x_min0 += dx
+            x_max1 -= dx
     else:
         s2i = {"ABUNDANT": 4, "HIGH": 3, "MODERATE": 2, "LIMITED": 1, "SCARCE": 0}
         if abs(s2i[s0] - s2i[s1]) > 1:
@@ -165,13 +168,15 @@ def supply2x_x2(s0, s1, units, tv, action):
 
         if action == "sell":
             # the supply level increased between transactions
-            # range = (x_min, x_min + dx)
-            x_max = x_min + dx
+            # range = (x_min1, x_min1 + dx)
+            x_min0 = x_max0 - dx
+            x_max1 = x_min1 + dx
         else:
             # the supply level decreased between transactions:
-            # range = (x_max - dx, x_max)
-            x_min = x_max - dx
-    return x_min, x_max
+            # range = (x_max1 - dx, x_max1)
+            x_max0 = x_min0 + dx
+            x_min1 = x_max1 - dx
+    return x_min0, x_max0, x_min1, x_max1
 
 
 def a_prior(y, supply, base_price, port, action):
@@ -180,16 +185,12 @@ def a_prior(y, supply, base_price, port, action):
     given price (y) within the supply level, and the matching value of x.
     """
     x_min, x_max = supply2x(supply)
-    for a in [0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2]:  # TODO: all possible values?
+    # TODO: are these all possible values of a?
+    for a in [0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2]:
         x = y2x(y, a, base_price, port, action)
-        if x_max >= x >= x_min:
+        if x_max >= round(x, 4) >= x_min:
             return a
-        # y_vals = [
-        #     x2y(x_min, a, base_price, port, action),
-        #     x2y(x_max, a, base_price, port, action),
-        # ]
-        # if max(y_vals) >= y >= min(y_vals):
-        #     return a
+    # this function might break when meeting real world values
     raise ValueError(
         f"{y=} not found within {supply=} (based on {base_price=} and {action=})"
     )
@@ -197,24 +198,13 @@ def a_prior(y, supply, base_price, port, action):
 
 def a_posterior(y0, s0, y1, s1, units, tv, port, action, base_price):
     """Find the value of a that best matches the difference in price (y)"""
-    # best = "a", "x", float("inf")
-    # dx = units / tv
-    x_min0, x_max0 = supply2x_x2(s1, s0, -units, tv, action)
-    x_min1, x_max1 = supply2x_x2(s0, s1, units, tv, action)
+    x_min0, x_max0, x_min1, x_max1 = supply2x_x2(s0, s1, units, tv, action)
     for a in [0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2]:
         x0 = y2x(y0, a, base_price, port, action)
         x1 = y2x(y1, a, base_price, port, action)
-        if x_max0 >= x0 >= x_min0 and x_max1 >= x1 >= x_min1:  # TODO: fix
+        if x_max0 >= round(x0, 4) >= x_min0 and x_max1 >= round(x1, 4) >= x_min1:
             return a
-    #     x1 = y2x(y1, a, base_price, port, action)
-    #     y1_inf = x2y(x1, a, base_price, port, action)
-    #     print(port, action, x_min, x1, x_max, y1, y1_inf)
-    #     x0 = x1 - dx
-    #     y0_inf = x2y(x0, a, base_price, port, action)
-    #     diff = abs(y0 - y0_inf)
-    #     if diff < best[2]:
-    #         best = a, x1, diff
-    #
-    # a, x1 = best[:2]
-    # return a
-    raise ValueError
+    # this function might break when meeting real world values
+    raise ValueError(
+        f"y={y1} not found within supply={s1} (based on {base_price=} and {action=})"
+    )
