@@ -113,7 +113,7 @@ def test_a_prior():
                         ]
                     )
                     for i, y in enumerate(y_vals):
-                        a_inf = a_prior(y, supply, base_price, port, action)
+                        a_inf = a_prior(y, supply, base_price, port, action)[0]
                         # print(f"{port=} {supply=} {action=} {x_min=} {x_max=} {a_obs=} {a_inf=} {y=} {y_vals=}")
                         assert a_inf >= a_obs, (a_inf, a_obs)
 
@@ -140,10 +140,10 @@ def test_a_posterior():
                 s1 = x2supply(x1)
                 y1 = x2y(x1, a_obs, base_price, port, action)
                 # print("start", s0, s1, port, action)
-                a_inf_prior = a_prior(y1, s1, base_price, port, action)
+                a_inf_prior = a_prior(y1, s1, base_price, port, action)[0]
                 a_inf_posterior = a_posterior(
                     y0, s0, y1, s1, units, tv, port, action, base_price
-                )
+                )[0]
                 # print("end", a_obs, a_inf_prior, a_inf_post)
                 assert a_obs <= a_inf_posterior <= a_inf_prior, (
                     a_obs,

@@ -1,5 +1,9 @@
 import numpy as np
 
+from st2.logging import logger
+
+DEBUG = True
+
 
 def x2y(x, a, base_price, port, action):
     if port == "EXPORT":
@@ -136,17 +140,23 @@ def x2supply(x):
 
 
 def supply2x(supply):
-    if supply == "SCARCE":
-        return -float("inf"), -4
-    if supply == "LIMITED":
-        return -4, -2
-    if supply == "MODERATE":
-        return -2, 2
-    if supply == "HIGH":
-        return 2, 4
-    if supply == "ABUNDANT":
-        return 4, float("inf")
-    raise NotImplementedError
+    return {
+        "SCARCE": (-float("inf"), -4),
+        "LIMITED": (-4, -2),
+        "MODERATE": (-2, 2),
+        "HIGH": (2, 4),
+        "ABUNDANT": (4, float("inf")),
+    }[supply]
+
+
+def supply2x_avg(supply):
+    return {
+        "SCARCE": -5,
+        "LIMITED": -3,
+        "MODERATE": 0,
+        "HIGH": 3,
+        "ABUNDANT": 5,
+    }[supply]
 
 
 def supply2x_x2(s0, s1, units, tv, action):
@@ -179,32 +189,57 @@ def supply2x_x2(s0, s1, units, tv, action):
     return x_min0, x_max0, x_min1, x_max1
 
 
+# all known values for 'a'. Values seem to occur on a distribution.
+A_VALUES = [0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2]
+
+
 def a_prior(y, supply, base_price, port, action):
     """
     Returns the highest value of the waypoint modifier (a) that can yield the
     given price (y) within the supply level, and the matching value of x.
     """
+    best = None, float("inf")
     x_min, x_max = supply2x(supply)
-    # TODO: are these all possible values of a?
-    for a in [0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2]:
+    for a in A_VALUES:
         x = y2x(y, a, base_price, port, action)
         if x_max >= round(x, 4) >= x_min:
-            return a
-    # this function might break when meeting real world values
-    raise ValueError(
-        f"{y=} not found within {supply=} (based on {base_price=} and {action=})"
-    )
+            return a, 0.1
+
+        # approximation in case the exact calculations are off
+        x_avg = supply2x_avg(supply)
+        diff = abs(x_avg - x)
+        if diff < best[1]:
+            best = a, diff
+    if DEBUG:
+        logger.debug(
+            f"Returning approximation. {y=}, {base_price=}, "
+            f"{supply=}, {port=}, {action=}, a={best[0]}, diff={best[1]}"
+        )
+    return best[0], 0.01  # worst score
 
 
 def a_posterior(y0, s0, y1, s1, units, tv, port, action, base_price):
     """Find the value of a that best matches the difference in price (y)"""
+    best = None, float("inf")
+    dx = units / tv
     x_min0, x_max0, x_min1, x_max1 = supply2x_x2(s0, s1, units, tv, action)
-    for a in [0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2]:
+    for a in A_VALUES:
         x0 = y2x(y0, a, base_price, port, action)
         x1 = y2x(y1, a, base_price, port, action)
-        if x_max0 >= round(x0, 4) >= x_min0 and x_max1 >= round(x1, 4) >= x_min1:
-            return a
-    # this function might break when meeting real world values
-    raise ValueError(
-        f"y={y1} not found within supply={s1} (based on {base_price=} and {action=})"
-    )
+        diff = abs(abs(x1 - x0) - dx)
+        if (
+            (x_max0 >= round(x0, 4) >= x_min0)
+            and (x_max1 >= round(x1, 4) >= x_min1)
+            and (diff < 1 / tv)
+        ):
+            return a, 1  # best score
+
+        # approximation in case the exact calculations are off
+        if diff < best[1]:
+            best = a, diff
+    if DEBUG:
+        logger.debug(
+            f"Returning approximation. {y0=}, {y1=}, {base_price=}, {s0=}, {s1=}, "
+            f"{units=}, {tv=}, {port=}, {action=}, a={best[0]}, diff={best[1]}"
+        )
+    return best[0], 1 - best[1]

@@ -20,17 +20,16 @@ def price_estimate(trade_good, units, action):
 
     # complex scenario
     base_price = get_base_price(trade_good["symbol"], action)
-    a = _get_a(trade_good["waypointSymbol"], trade_good["symbol"])
+    a, score = _get_a(trade_good["waypointSymbol"], trade_good["symbol"])
     if a is None:
-        a = a_prior(
+        a, score = a_prior(
             price,
             trade_good["supply"],
-            trade_good["tradeVolume"],
             trade_good["type"],
             base_price,
             action,
         )
-        _set_a(trade_good["waypointSymbol"], trade_good["symbol"], a)
+        _set_a(trade_good["waypointSymbol"], trade_good["symbol"], a, score)
 
     price_total = 0
     x = y2x(price, a, base_price, trade_good["type"], action)
@@ -54,29 +53,29 @@ def get_base_price(good, *args, **kwargs):
 
 def _get_a(waypoint_symbol, symbol):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        a = cur.execute(
+        ret = cur.execute(
             """
-            SELECT "a" FROM market_a
+            SELECT "a", "score" FROM market_a
             WHERE "waypointSymbol" = %s AND "symbol" = %s
             """,
             (waypoint_symbol, symbol),
         ).fetchone()
-    if a:
-        a = a[0]
-    return a
+    if ret is None:
+        ret = None, None
+    return ret
 
 
-def _set_a(waypoint_symbol, symbol, a):
+def _set_a(waypoint_symbol, symbol, a, score):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO market_a
-            ("waypointSymbol", "symbol", "a")
+            ("waypointSymbol", "symbol", "a", "score")
             VALUES (%s, %s, %s)
             ON CONFLICT ("waypointSymbol", "symbol") DO UPDATE
             SET "a" = EXCLUDED."a"
             """,
-            (waypoint_symbol, symbol, a),
+            (waypoint_symbol, symbol, a, score),
         )
 
 

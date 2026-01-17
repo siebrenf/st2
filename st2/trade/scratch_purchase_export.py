@@ -331,6 +331,7 @@ optimal_goods = {
 }
 
 div_by_bp = True
+a_vals = {}
 # estimates: at these values, all purchases have their supply level in the correct bin.
 baseprices = {
     "AMMUNITION": 1400,  # seems exact
@@ -338,6 +339,7 @@ baseprices = {
     "FOOD": 1794,
     "FIREARMS": 3200,
 }
+# from st2.trade.base_prices import BASE_PRICES as baseprices
 s2c = {
     "SCARCE": "red",
     "LIMITED": "orange",
@@ -374,7 +376,9 @@ for good, files in optimal_goods.items():
         y_max = df.at[idx_max, "purchasePrice"]
         dy = (y_max - y_min) / 1  # slope
         # y_bp = y_min + dy*dx
-        dx = (y_bp - y_min) / dy
+        dx = 0
+        if y_bp != y_min and dy != 0:
+            dx = (y_bp - y_min) / dy
         if dx > 1 or dx < 0:
             print("bad dx:", dx)
         idx_bp = idx_min + dx
@@ -417,6 +421,10 @@ for good, files in optimal_goods.items():
 
             popt, pcov = curve_fit(func, x, y, p0=[0.35], bounds=((0, 1)))  # noqa
             a = popt[0]
+            a2 = round(a * 20) / 20  # round to nearest 0.05
+            if a2 not in a_vals:
+                a_vals[a2] = 0
+            a_vals[a2] += 1
             y2 = func(np.array(x), a)  # [-i for i in x]
             r_squared = r2_score(y, y2)
             ax.plot(
@@ -453,3 +461,21 @@ for good, files in optimal_goods.items():
         ax.legend(handles, labels, loc="center left", bbox_to_anchor=(1, 0.5))
         plt.subplots_adjust(right=0.7)
     plt.show()
+
+# x = []
+# y = []
+# for k in sorted(a_vals):
+#     x.append(k)
+#     y.append(a_vals[k])
+#     print(k, a_vals[k])
+# plt.bar(x, y)
+# plt.show()
+
+# output:
+# 0.25 1
+# 0.3 7
+# 0.35 32
+# 0.4 51
+# 0.45 28
+# 0.5 11
+# 0.55 5
