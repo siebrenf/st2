@@ -74,17 +74,31 @@ def market(self, symbol=None, units=None):
                     time.read(t["timestamp"]),
                 ),
             )
-            if symbol and t["symbol"] == symbol and t["shipSymbol"] == self["symbol"]:
+            if symbol and t["symbol"] == symbol:
                 ta.append(t)
         if symbol:
-            print(tg)
-            print(ta)
-            # TODO: compute `a` from
-            #   - initial price per unit
-            #   - current price per unit
-            #   - current supply level
-            #   - total units
-            a = None
-            score = 0
-            _set_a(tg["waypointSymbol"], symbol, a, score)
+            y0 = None
+            action = None
+            remaining_units = units
+            total_units = 0
+            for t in ta:
+                total_units += t["units"]
+                if t["shipSymbol"] != self["symbol"]:
+                    continue
+                remaining_units -= t["units"]
+                if action is None:
+                    action = t["type"].lower()
+                if action != t["type"].lower():
+                    raise NotImplementedError("Mixed buying and selling of goods")
+                if remaining_units < 0:
+                    # TODO: check the order of transactions (asc/desc)
+                    raise NotImplementedError
+                if remaining_units == 0:
+                    y0 = t["pricePerUnit"]
+                    break
+            y1 = tg[f"{action}Price"]
+            s1 = tg["supply"]
+            base_price = get_base_price(symbol, action)
+            a, score = a_posterior2(y0, y1, s1, total_units, tg["tradeVolume"], tg["type"], action, base_price)
+            _set_a(waypoint_symbol, symbol, a, score)
     return data

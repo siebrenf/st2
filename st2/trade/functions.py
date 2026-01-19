@@ -245,3 +245,28 @@ def a_posterior(y0, s0, y1, s1, units, tv, port, action, base_price):
     # always better than a_prior, always worse than exact calculations
     score = min(0.99, max(0.11, 1 - best[1]))
     return best[0], score
+
+
+def a_posterior2(y0, y1, s1, units, tv, port, action, base_price):
+    """Find the value of a that best matches the difference in price (y)"""
+    best = None, float("inf")
+    dx = units / tv
+    x_min1, x_max1 = supply2x(s1)
+    for a in A_VALUES:
+        x0 = y2x(y0, a, base_price, port, action)
+        x1 = y2x(y1, a, base_price, port, action)
+        diff = abs(abs(x1 - x0) - dx)
+        if (x_max1 >= round(x1, 4) >= x_min1) and (diff < 1 / tv):
+            return a, 1  # best score
+
+        # approximation in case the exact calculations are off
+        if diff < best[1]:
+            best = a, diff
+    if DEBUG:
+        logger.debug(
+            f"Returning approximation. {y0=}, {y1=}, {base_price=}, {s1=}, "
+            f"{units=}, {tv=}, {port=}, {action=}, a={best[0]}, diff={best[1]}"
+        )
+    # always better than a_prior, always worse than exact calculations
+    score = min(0.99, max(0.11, 1 - best[1]))
+    return best[0], score
