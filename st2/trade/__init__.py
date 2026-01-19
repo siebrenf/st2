@@ -21,7 +21,7 @@ def price_estimate(trade_good, units, action):
     # complex scenario
     base_price = get_base_price(trade_good["symbol"], action)
     a, score = _get_a(trade_good["waypointSymbol"], trade_good["symbol"])
-    if a is None:
+    if score < 0.1:
         a, score = a_prior(
             price,
             trade_good["supply"],
@@ -61,7 +61,7 @@ def _get_a(waypoint_symbol, symbol):
             (waypoint_symbol, symbol),
         ).fetchone()
     if ret is None:
-        ret = None, None
+        ret = None, 0
     return ret
 
 

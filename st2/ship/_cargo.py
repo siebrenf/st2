@@ -14,13 +14,14 @@ def buy(self, symbol, units, verbose=True):
 
     # split the purchase order by trade volume
     price = 0
+    remaining_units = units
     trade_volume = _get_trade_volume(self, symbol)
-    while units > 0:
-        u = min(trade_volume, units)
-        price += _buy_sell(self, symbol, u, "purchase", verbose)
-        units -= u
+    while remaining_units > 0:
+        transaction_units = min(trade_volume, units)
+        price += _buy_sell(self, symbol, transaction_units, "purchase", verbose)
+        remaining_units -= transaction_units
 
-    self.market()
+    self.market(symbol, units)
     return price
 
 
@@ -29,13 +30,14 @@ def sell(self, symbol, units, verbose=True):
 
     # split the sell order by trade volume
     price = 0
+    remaining_units = units
     trade_volume = _get_trade_volume(self, symbol)
-    while units > 0:
-        u = min(trade_volume, units)
-        price += _buy_sell(self, symbol, u, "sell", verbose)
-        units -= u
+    while remaining_units > 0:
+        transaction_units = min(trade_volume, units)
+        price += _buy_sell(self, symbol, transaction_units, "sell", verbose)
+        remaining_units -= transaction_units
 
-    self.market()
+    self.market(symbol, units)
     return price
 
 

@@ -96,6 +96,7 @@ def test_supply2x_x2():
 
 
 def test_a_prior():
+    print("test_a_prior:")  # shown with `pytest -s`
     base_price = 1000
     for port in ["IMPORT", "EXPORT", "EXCHANGE"]:
         for action in ["purchase", "sell"]:
@@ -114,11 +115,16 @@ def test_a_prior():
                     )
                     for i, y in enumerate(y_vals):
                         a_inf = a_prior(y, supply, base_price, port, action)[0]
-                        # print(f"{port=} {supply=} {action=} {x_min=} {x_max=} {a_obs=} {a_inf=} {y=} {y_vals=}")
+                        print(
+                            f"{port=} {action=} {supply=} {x_min=} {x_max=} "
+                            f"{a_obs=} {a_inf=} y={str(y).split('.')[0]} y_vals={y_vals}"
+                        )
                         assert a_inf >= a_obs, (a_inf, a_obs)
+    print()
 
 
 def test_a_posterior():
+    print("test_a_posterior:")  # shown with `pytest -s`
     base_price = 1000
     units = 2
     tv = 6
@@ -139,14 +145,17 @@ def test_a_posterior():
                 x1 = x0 + dx
                 s1 = x2supply(x1)
                 y1 = x2y(x1, a_obs, base_price, port, action)
-                # print("start", s0, s1, port, action)
                 a_inf_prior = a_prior(y1, s1, base_price, port, action)[0]
                 a_inf_posterior = a_posterior(
                     y0, s0, y1, s1, units, tv, port, action, base_price
                 )[0]
-                # print("end", a_obs, a_inf_prior, a_inf_post)
+                print(
+                    f"{port=} {action=} {s0=} {s1=} y0={round(y0)} y1={round(y1)} "
+                    f"{a_obs=} {a_inf_prior=} {a_inf_posterior=}"
+                )
                 assert a_obs <= a_inf_posterior <= a_inf_prior, (
                     a_obs,
                     a_inf_prior,
                     a_inf_posterior,
                 )
+    print()

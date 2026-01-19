@@ -242,4 +242,6 @@ def a_posterior(y0, s0, y1, s1, units, tv, port, action, base_price):
             f"Returning approximation. {y0=}, {y1=}, {base_price=}, {s0=}, {s1=}, "
             f"{units=}, {tv=}, {port=}, {action=}, a={best[0]}, diff={best[1]}"
         )
-    return best[0], 1 - best[1]
+    # always better than a_prior, always worse than exact calculations
+    score = min(0.99, max(0.11, 1 - best[1]))
+    return best[0], score
