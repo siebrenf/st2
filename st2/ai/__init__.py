@@ -290,7 +290,6 @@ class TaskMaster:
                     system_symbol=task[1],
                     agent_symbol=agent_symbol,
                     qa_pairs=self.qa_pairs,
-                    restart=True,
                 )
 
             case _:

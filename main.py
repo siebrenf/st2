@@ -126,6 +126,10 @@ if __name__ == "__main__":
     import atexit
     import multiprocessing as mp
     from st2.ai import taskmaster
+    from st2.ai.reset_controller import ai_reset_controller
+
+    # clear all previous time-sensitive tasks
+    ai_reset_controller()
 
     pname = "probes"
     probe_taskmaster = mp.Process(

@@ -5,6 +5,7 @@ from psycopg.rows import dict_row
 
 from st2 import time
 from st2.agent import get_agent, get_agent_public
+from st2.ai.utils import cancel_task, dequeue_task, queue_task
 from st2.contract import Contract, get_active_contract
 from st2.logging import logger
 from st2.request import RequestMp
@@ -38,9 +39,9 @@ async def ai_contract_controller(
                 if n:
                     logger.warning(f"{n} ships with outdated deliver tasks found!")
             for ship in queued_tasks_to_clear:
-                _dequeue_task(ship, reason="contract expired")
+                dequeue_task(ship, reason="contract expired")
             for ship in current_tasks_to_cancel:
-                _cancel_task(ship, reason="contract expired")
+                cancel_task(ship, reason="contract expired")
 
             # negotiate a new contract
             system_symbol = _get_start_system_with_most_traders(agent_symbol)
@@ -163,7 +164,7 @@ async def ai_contract_controller(
             # select a ship to deliver the goods
             ship, units = _get_trader(available_traders, units)
             task = f"deliver {good} {units} {purchase_wp} {deliver_wp}"
-            _queue_task(ship, task)
+            queue_task(ship, task)
             queued += units
             if DEBUG:
                 remaining = (
@@ -174,8 +175,8 @@ async def ai_contract_controller(
                     f"{remaining} remaining/"
                     f"{current} currently underway/"
                     f"{queued} queued underway/"
-                    f"{term["unitsFulfilled"]} fulfilled/"
-                    f"{term["unitsRequired"]} total {good}"
+                    f"{term['unitsFulfilled']} fulfilled/"
+                    f"{term['unitsRequired']} total {good}"
                 )
             break
 
@@ -253,54 +254,6 @@ def _get_trader(available_traders, units):
             best = ship_symbol, deliver_units, score
     ship_symbol, deliver_units, score = best
     return ship_symbol, deliver_units
-
-
-def _queue_task(ship, task):
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE tasks
-            SET "queued" = %s
-            WHERE "symbol" = %s
-            """,
-            (task, ship),
-        )
-    if DEBUG:
-        logger.debug(f"Queueing {task=} to {ship}")
-
-
-def _cancel_task(ship, reason=None, task=None):
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE tasks
-            SET "cancel" = %s
-            WHERE "symbol" = %s
-            """,
-            (True, ship),
-        )
-    if DEBUG:
-        msg = "Cancelled " + (f"{task=}" if task else "task") + f" for {ship}"
-        if reason:
-            msg += f" {reason=}"
-        logger.debug(msg)
-
-
-def _dequeue_task(ship, reason=None, task=None):
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE tasks
-            SET "queued" = %s
-            WHERE "symbol" = %s
-            """,
-            (None, ship),
-        )
-    if DEBUG:
-        msg = "Unqueued " + (f"{task=}" if task else "task") + f" for {ship}"
-        if reason:
-            msg += f" {reason=}"
-        logger.debug(msg)
 
 
 def _get_start_system_with_most_traders(agent_symbol):

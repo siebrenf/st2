@@ -4,6 +4,7 @@ from psycopg import connect
 from psycopg.rows import dict_row
 
 from st2 import time
+from st2.ai.utils import queue_task
 from st2.logging import logger
 from st2.request import RequestMp
 from st2.system import System
@@ -17,7 +18,6 @@ async def ai_trade_controller(
     system_symbol,
     agent_symbol,
     qa_pairs,
-    restart=True,
     interval=60,
 ):
     """
@@ -35,30 +35,46 @@ async def ai_trade_controller(
             await sleep(interval)
             continue
 
-        # currently queued tasks per ship (that can be overwritten) & blacklisted goods
-        queued_tasks, blacklisted_goods = _get_queued_tasks(
-            assigned_ships, ships, restart
-        )
+        queued_tasks = {}  # queued tasks that can be overwritten
+        blacklisted_goods = set()  # max one trader per good
+        for task in assigned_ships:
+            ship = task["symbol"]
+            if task["current"] is not None:
+                args = task["current"].split(" ")
+                if args[0] in ["trade", "supply", "deliver"]:
+                    good = args[1]
+                    blacklisted_goods.add(good)
+            if task["queued"] is None:
+                queued_tasks[ship] = None
+            else:
+                # ignore ships with deliver/supply tasks, or selling leftover cargo
+                args = task["queued"].split(" ")
+                if args[0] == "trade" and args[3] != "None":
+                    queued_tasks[ship] = task["queued"]
+            if ship not in ships:
+                _set_ship_metadata(ship, ships)
 
-        while len(queued_tasks) and len(uncharted_waypoints):
+        while len(uncharted_waypoints) and len(queued_tasks):
             if DEBUG:
                 logger.debug(
                     f"{len(uncharted_waypoints)} uncharted waypoints found in {system_symbol}"
                 )
             ship = _get_scout_ship(queued_tasks, ships)
             wp = uncharted_waypoints.pop(0)
-            _queue_task(ship, f"scout {wp}")
+            queue_task(ship, f"scout {wp}")
             await sleep(interval)
+            continue
 
-        while len(queued_tasks) and len(unscouted_markets):
+        while len(unscouted_markets) and len(queued_tasks):
             if DEBUG:
                 logger.debug(
                     f"{len(unscouted_markets)} unscouted markets found in {system_symbol}"
                 )
             ship = _get_scout_ship(queued_tasks, ships)
             wp = unscouted_markets.pop(0)
-            _queue_task(ship, f"scout {wp}")
+            queue_task(ship, f"scout {wp}")
             await sleep(interval)
+            continue
 
         if len(queued_tasks) == 0:
             await sleep(interval)
@@ -95,22 +111,18 @@ async def ai_trade_controller(
             ship, units, estimated_profit, task_old = _get_trade_ship(
                 queued_tasks, ships, max_units, seller, buyer
             )
-            task = f"trade {good} {units} {seller["waypointSymbol"]} {buyer["waypointSymbol"]}"
+            task = f"trade {good} {units} {seller['waypointSymbol']} {buyer['waypointSymbol']}"
             if task != task_old:
-                _queue_task(ship, task, estimated_profit)
+                queue_task(ship, task, estimated_profit=estimated_profit)
             if len(queued_tasks) == 0:
                 break
 
         while len(queued_tasks) and len(outdated_markets):
             ship = _get_scout_ship(queued_tasks, ships)
             wp = _get_scout_waypoint(outdated_markets)
-            _queue_task(ship, f"scout {wp}")
+            queue_task(ship, f"scout {wp}")
 
-        if restart:
-            restart = False
-            await sleep(10)
-        else:
-            await sleep(interval)
+        await sleep(interval)
 
 
 def _uncharted_waypoints(system, get_all=False):
@@ -187,52 +199,6 @@ def _get_assigned_ships(system_symbol, pname, agent_symbol):
             f"{len(assigned_ships)} ships assigned to trade in {system_symbol}"
         )
     return assigned_ships
-
-
-def _get_queued_tasks(assigned_ships, ship_dict, restart=False):
-    queued_tasks = {}
-    blacklisted_goods = set()
-    for task in assigned_ships:
-        ship = task["symbol"]
-        if task["current"] is not None:
-            args = task["current"].split(" ")
-            if args[0] in ["trade", "supply", "deliver"]:
-                good = args[1]
-                seller_wp = args[3]
-                cargo, ship_wp, ship_status = _get_ship_cargo_and_location(ship)
-                # Too late, goods already purchased when the cancellation goes through
-                ship_at_seller = ship_wp == seller_wp and ship_status != "IN_TRANSIT"
-                if restart and not (good in cargo or ship_at_seller):
-                    # TODO: this can cancel supply and deliver tasks. is that OK?
-                    _cancel_task(ship, reason="script restart", task=task["current"])
-                else:
-                    blacklisted_goods.add(good)
-        # ignore ships working on a supply/contract task, or selling leftover cargo
-        if task["queued"] is None or (
-            task["queued"].startswith("trade ")
-            and task["queued"].split(" ")[3] != "None"
-        ):
-            queued_tasks[ship] = task["queued"]
-        if ship not in ship_dict:
-            _set_ship_metadata(ship, ship_dict)
-    return queued_tasks, blacklisted_goods
-
-
-def _get_ship_cargo_and_location(ship_symbol):
-    with connect(
-        "dbname=st2 user=postgres", row_factory=dict_row
-    ) as conn, conn.cursor() as cur:
-        ship = cur.execute(
-            """
-            SELECT cargo, nav FROM "ships" 
-            WHERE "symbol" = %s 
-            """,
-            (ship_symbol,),
-        ).fetchone()
-    cargo = [tg["symbol"] for tg in ship["cargo"]["inventory"]]
-    ship_wp = ship["nav"]["waypointSymbol"]
-    ship_status = ship["nav"]["status"]
-    return cargo, ship_wp, ship_status
 
 
 def _set_ship_metadata(ship_symbol, ships_dict):
@@ -400,37 +366,3 @@ def _get_scout_waypoint(outdated_markets):
     wp = best[0]
     outdated_markets.pop(wp)
     return wp
-
-
-def _queue_task(ship, task, estimated_profit=None):
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE tasks
-            SET "queued" = %s
-            WHERE "symbol" = %s
-            """,
-            (task, ship),
-        )
-    if DEBUG:
-        msg = f"Queueing {task=} to {ship}"
-        if estimated_profit:
-            msg += f" for {estimated_profit=:_}"
-        logger.debug(msg)
-
-
-def _cancel_task(ship, reason=None, task=None):
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE tasks
-            SET "cancel" = %s
-            WHERE "symbol" = %s
-            """,
-            (True, ship),
-        )
-    if DEBUG:
-        msg = "Cancelled " + (f"{task=}" if task else "task") + f" for {ship}"
-        if reason:
-            msg += f" {reason=}"
-        logger.debug(msg)

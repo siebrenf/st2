@@ -4,6 +4,7 @@ from psycopg import connect
 from psycopg.rows import dict_row
 
 from st2.agent import get_agent, get_agent_public
+from st2.ai.utils import queue_task
 from st2.logging import logger
 from st2.request import RequestMp
 from st2.ship import Ship, buy_ship
@@ -64,7 +65,7 @@ async def ai_probe_controller(
         else:
             break
         task = f"probe {wp_type} {waypoint_symbol}"
-        _queue_task(ship, task, pname)
+        queue_task(ship, task, pname=pname)
         _cancel_external_probe_task(task, agent_symbol)
 
     # assign an available ship to buy the first probe
@@ -72,7 +73,7 @@ async def ai_probe_controller(
         ship = await _get_trader(system_symbol, agent_symbol, pname="traders")
         waypoint_symbol = unprobed_shipyards_selling_probes.pop()
         task = f"probe_purchase {waypoint_symbol}"
-        _queue_task(ship, task, pname="traders")
+        queue_task(ship, task, pname="traders")
         while len(probes2shipyards_selling_probes) == 0:
             await sleep(60)
             (
@@ -139,7 +140,7 @@ async def _buy_and_assign_probe(
     waypoint_symbol = waypoints_to_probe.pop()
     wp_type = "shipyard" if waypoint_symbol in system.shipyards else "market"
     task = f"probe {wp_type} {waypoint_symbol}"
-    _queue_task(probe_symbol, task, pname)
+    queue_task(probe_symbol, task, pname=pname)
     _cancel_external_probe_task(task, agent_symbol)
     unprobed_shipyards_selling_probes.discard(waypoint_symbol)
     unprobed_shipyards.discard(waypoint_symbol)
@@ -158,21 +159,6 @@ def _get_shipyard(system, unprobed_shipyards_selling_probes):
             best = price, shipyards_symbol
     shipyard_symbol = best[1]
     return shipyard_symbol
-
-
-def _queue_task(ship, task, pname):
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE tasks
-            SET "queued" = %s,
-                "pname" = %s
-            WHERE "symbol" = %s
-            """,
-            (task, pname, ship),
-        )
-    if DEBUG:
-        logger.debug(f"Queueing {task=} to {ship}")
 
 
 def _cancel_external_probe_task(task, agent_symbol):
