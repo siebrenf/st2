@@ -79,7 +79,9 @@ async def ai_contract_controller(
                         reason.append(good)
                         sleep_timer = time.remaining(contract["deadlineToAccept"])
                 if not doable:
-                    reason = "No" + ", ".join(reason) + f" for sale in {system_symbol}."
+                    reason = (
+                        "No " + ", ".join(reason) + f" for sale in {system_symbol}."
+                    )
                     break
             if doable:
                 Contract(contract["id"], request).accept(verbose)
@@ -148,9 +150,15 @@ async def ai_contract_controller(
                 price = md["purchasePrice"]
                 # if price > 1.25 * reward_per_unit[good]:  # TODO: ?
                 #     continue
-                if price < best[-1]:
+                if price and price < best[1]:
                     best = wp, price
             purchase_wp = best[0]
+            if purchase_wp is None:
+                if DEBUG:
+                    logger.debug(
+                        f"Marketplaces selling {good} have not been scouted yet"
+                    )
+                break  # markets have not been scouted yet
 
             # select a ship to deliver the goods
             ship, units = _get_trader(available_traders, units)
