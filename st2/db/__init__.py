@@ -390,6 +390,7 @@ def db_tables_init(status=None):
                     "waypointSymbol" text,
                     "symbol" text,
                     "a" float4,
+                    "score" float4,
                     PRIMARY KEY ("waypointSymbol", "symbol")
                 )
                 """
@@ -610,7 +611,7 @@ def get_table(table, n=None, ascending=True, header=True, as_dict=False):
             (table,),
         )
         columns = [row["column_name" if as_dict else 3] for row in cur.fetchall()]
-        if header:
+        if header and not as_dict:
             yield columns
 
         # get a table's rows

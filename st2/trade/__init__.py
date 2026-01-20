@@ -2,7 +2,7 @@ from psycopg import connect
 
 from st2.db.static import GOODS, SHIPS
 from st2.trade.base_prices import BASE_PRICES
-from st2.trade.functions import a_prior, x2y, y2x
+from st2.trade.functions import a_posterior, a_prior, x2y, y2x
 from st2.trade.price_ranges import PRICE_RANGES
 
 
@@ -20,16 +20,16 @@ def price_estimate(trade_good, units, action):
 
     # complex scenario
     base_price = get_base_price(trade_good["symbol"], action)
-    a, score = _get_a(trade_good["waypointSymbol"], trade_good["symbol"])
-    if score < 0.1:
+    a, score = get_a(trade_good["waypointSymbol"], trade_good["symbol"])
+    if score >= 10:
         a, score = a_prior(
             price,
             trade_good["supply"],
-            trade_good["type"],
             base_price,
+            trade_good["type"],
             action,
         )
-        _set_a(trade_good["waypointSymbol"], trade_good["symbol"], a, score)
+        set_a(trade_good["waypointSymbol"], trade_good["symbol"], a, score)
 
     price_total = 0
     x = y2x(price, a, base_price, trade_good["type"], action)
@@ -51,7 +51,7 @@ def get_base_price(good, *args, **kwargs):
     return bp
 
 
-def _get_a(waypoint_symbol, symbol):
+def get_a(waypoint_symbol, symbol):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         ret = cur.execute(
             """
@@ -61,19 +61,20 @@ def _get_a(waypoint_symbol, symbol):
             (waypoint_symbol, symbol),
         ).fetchone()
     if ret is None:
-        ret = None, 0
+        ret = None, 10.0
     return ret
 
 
-def _set_a(waypoint_symbol, symbol, a, score):
+def set_a(waypoint_symbol, symbol, a, score):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO market_a
             ("waypointSymbol", "symbol", "a", "score")
-            VALUES (%s, %s, %s)
+            VALUES (%s, %s, %s, %s)
             ON CONFLICT ("waypointSymbol", "symbol") DO UPDATE
-            SET "a" = EXCLUDED."a"
+            SET "a" = EXCLUDED."a",
+            "score" = EXCLUDED."score"
             """,
             (waypoint_symbol, symbol, a, score),
         )

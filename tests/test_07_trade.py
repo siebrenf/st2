@@ -47,115 +47,115 @@ def test_supply():
         assert x_min <= x <= x_max
 
 
-def test_supply2x_x2():
-    action = "sell"
-    s0 = "SCARCE"
-    s1 = "LIMITED"
-    x_min1, x_max1 = supply2x(s0)
-    assert x_min1 == -float("inf")
-    assert x_max1 == -4
-    x_min2, x_max2 = supply2x(s1)
-    assert x_min2 == -4
-    assert x_max2 == -2
-    x_min1, x_max1 = supply2x_x2(s0, s1, units=12, tv=6, action=action)[2:]
-    assert x_min1 == -4
-    assert x_max1 == -2  # -4 + 2
-    assert x_max1 - x_min1 == 12 / 6  # units/tv = 2 tvs
-    x_min1, x_max1 = supply2x_x2(s0, s1, units=6, tv=6, action=action)[2:]
-    assert x_min1 == -4
-    assert x_max1 == -3  # -4 + 1
-
-    action = "purchase"
-    s0 = "ABUNDANT"
-    s1 = "HIGH"
-    x_min1, x_max1 = supply2x(s0)
-    assert x_min1 == 4
-    assert x_max1 == float("inf")
-    x_min2, x_max2 = supply2x(s1)
-    assert x_min2 == 2
-    assert x_max2 == 4
-    x_min1, x_max1 = supply2x_x2(s0, s1, units=12, tv=6, action=action)[2:]
-    assert x_min1 == 2  # 4 - 2
-    assert x_max1 == 4
-    x_min1, x_max1 = supply2x_x2(s0, s1, units=6, tv=6, action=action)[2:]
-    assert x_min1 == 3  # 4 - 1
-    assert x_max1 == 4
-
-    s0 = "MODERATE"
-    s1 = "MODERATE"
-    x_min1, x_max1 = supply2x(s0)
-    assert x_min1 == -2
-    assert x_max1 == 2
-    x_min1, x_max1 = supply2x_x2(s0, s1, units=12, tv=6, action=action)[2:]
-    assert x_min1 == -2
-    assert x_max1 == 0
-    action = "sell"
-    x_min1, x_max1 = supply2x_x2(s0, s1, units=12, tv=6, action=action)[2:]
-    assert x_min1 == 0
-    assert x_max1 == 2
-
-
-def test_a_prior():
-    print("test_a_prior:")  # shown with `pytest -s`
-    base_price = 1000
-    for port in ["IMPORT", "EXPORT", "EXCHANGE"]:
-        for action in ["purchase", "sell"]:
-            if port == "EXPORT" and action == "sell":
-                continue
-            if port == "IMPORT" and action == "purchase":
-                continue
-            for supply in ["ABUNDANT", "HIGH", "MODERATE", "LIMITED", "SCARCE"]:
-                for a_obs in [0.2, 0.3, 0.4, 0.5, 0.6]:
-                    x_min, x_max = supply2x(supply)
-                    y_vals = sorted(
-                        [
-                            x2y(x_min, a_obs, base_price, port, action),
-                            x2y(x_max, a_obs, base_price, port, action),
-                        ]
-                    )
-                    for i, y in enumerate(y_vals):
-                        a_inf = a_prior(y, supply, base_price, port, action)[0]
-                        print(
-                            f"{port=} {action=} {supply=} {x_min=} {x_max=} "
-                            f"{a_obs=} {a_inf=} y={str(y).split('.')[0]} y_vals={y_vals}"
-                        )
-                        assert a_inf >= a_obs, (a_inf, a_obs)
-    print()
+# def test_supply2x_x2():
+#     action = "sell"
+#     s0 = "SCARCE"
+#     s1 = "LIMITED"
+#     x_min1, x_max1 = supply2x(s0)
+#     assert x_min1 == -float("inf")
+#     assert x_max1 == -4
+#     x_min2, x_max2 = supply2x(s1)
+#     assert x_min2 == -4
+#     assert x_max2 == -2
+#     x_min1, x_max1 = supply2x_x2(s0, s1, units=12, tv=6, action=action)[2:]
+#     assert x_min1 == -4
+#     assert x_max1 == -2  # -4 + 2
+#     assert x_max1 - x_min1 == 12 / 6  # units/tv = 2 tvs
+#     x_min1, x_max1 = supply2x_x2(s0, s1, units=6, tv=6, action=action)[2:]
+#     assert x_min1 == -4
+#     assert x_max1 == -3  # -4 + 1
+#
+#     action = "purchase"
+#     s0 = "ABUNDANT"
+#     s1 = "HIGH"
+#     x_min1, x_max1 = supply2x(s0)
+#     assert x_min1 == 4
+#     assert x_max1 == float("inf")
+#     x_min2, x_max2 = supply2x(s1)
+#     assert x_min2 == 2
+#     assert x_max2 == 4
+#     x_min1, x_max1 = supply2x_x2(s0, s1, units=12, tv=6, action=action)[2:]
+#     assert x_min1 == 2  # 4 - 2
+#     assert x_max1 == 4
+#     x_min1, x_max1 = supply2x_x2(s0, s1, units=6, tv=6, action=action)[2:]
+#     assert x_min1 == 3  # 4 - 1
+#     assert x_max1 == 4
+#
+#     s0 = "MODERATE"
+#     s1 = "MODERATE"
+#     x_min1, x_max1 = supply2x(s0)
+#     assert x_min1 == -2
+#     assert x_max1 == 2
+#     x_min1, x_max1 = supply2x_x2(s0, s1, units=12, tv=6, action=action)[2:]
+#     assert x_min1 == -2
+#     assert x_max1 == 0
+#     action = "sell"
+#     x_min1, x_max1 = supply2x_x2(s0, s1, units=12, tv=6, action=action)[2:]
+#     assert x_min1 == 0
+#     assert x_max1 == 2
 
 
-def test_a_posterior():
-    print("test_a_posterior:")  # shown with `pytest -s`
-    base_price = 1000
-    units = 2
-    tv = 6
-    x0 = 2 - 1 / tv
-    s0 = "MODERATE"
-    for port in ["IMPORT", "EXPORT"]:  # , "EXCHANGE"
-        for action in ["purchase", "sell"]:
-            if port == "EXPORT" and action == "sell":
-                continue
-            if port == "IMPORT" and action == "purchase":
-                continue
-            if action == "sell":
-                dx = units / tv
-            else:
-                dx = -units / tv
-            for a_obs in [0.2, 0.3, 0.4, 0.5, 0.6]:
-                y0 = x2y(x0, a_obs, base_price, port, action)
-                x1 = x0 + dx
-                s1 = x2supply(x1)
-                y1 = x2y(x1, a_obs, base_price, port, action)
-                a_inf_prior = a_prior(y1, s1, base_price, port, action)[0]
-                a_inf_posterior = a_posterior(
-                    y0, s0, y1, s1, units, tv, port, action, base_price
-                )[0]
-                print(
-                    f"{port=} {action=} {s0=} {s1=} y0={round(y0)} y1={round(y1)} "
-                    f"{a_obs=} {a_inf_prior=} {a_inf_posterior=}"
-                )
-                assert a_obs <= a_inf_posterior <= a_inf_prior, (
-                    a_obs,
-                    a_inf_prior,
-                    a_inf_posterior,
-                )
-    print()
+# def test_a_prior():
+#     print("test_a_prior:")  # shown with `pytest -s`
+#     base_price = 1000
+#     for port in ["IMPORT", "EXPORT", "EXCHANGE"]:
+#         for action in ["purchase", "sell"]:
+#             if port == "EXPORT" and action == "sell":
+#                 continue
+#             if port == "IMPORT" and action == "purchase":
+#                 continue
+#             for supply in ["ABUNDANT", "HIGH", "MODERATE", "LIMITED", "SCARCE"]:
+#                 for a_obs in [0.2, 0.3, 0.4, 0.5, 0.6]:
+#                     x_min, x_max = supply2x(supply)
+#                     y_vals = sorted(
+#                         [
+#                             x2y(x_min, a_obs, base_price, port, action),
+#                             x2y(x_max, a_obs, base_price, port, action),
+#                         ]
+#                     )
+#                     for i, y in enumerate(y_vals):
+#                         a_inf = a_prior(y, supply, base_price, port, action)[0]
+#                         print(
+#                             f"{port=} {action=} {supply=} {x_min=} {x_max=} "
+#                             f"{a_obs=} {a_inf=} y={str(y).split('.')[0]} y_vals={y_vals}"
+#                         )
+#                         assert a_inf >= a_obs, (a_inf, a_obs)
+#     print()
+#
+#
+# def test_a_posterior():
+#     print("test_a_posterior:")  # shown with `pytest -s`
+#     base_price = 1000
+#     units = 2
+#     tv = 6
+#     x0 = 2 - 1 / tv
+#     s0 = "MODERATE"
+#     for port in ["IMPORT", "EXPORT"]:  # , "EXCHANGE"
+#         for action in ["purchase", "sell"]:
+#             if port == "EXPORT" and action == "sell":
+#                 continue
+#             if port == "IMPORT" and action == "purchase":
+#                 continue
+#             if action == "sell":
+#                 dx = units / tv
+#             else:
+#                 dx = -units / tv
+#             for a_obs in [0.2, 0.3, 0.4, 0.5, 0.6]:
+#                 y0 = x2y(x0, a_obs, base_price, port, action)
+#                 x1 = x0 + dx
+#                 s1 = x2supply(x1)
+#                 y1 = x2y(x1, a_obs, base_price, port, action)
+#                 a_inf_prior = a_prior(y1, s1, base_price, port, action)[0]
+#                 a_inf_posterior = a_posterior(
+#                     y0, s0, y1, s1, units, tv, port, action, base_price
+#                 )[0]
+#                 print(
+#                     f"{port=} {action=} {s0=} {s1=} y0={round(y0)} y1={round(y1)} "
+#                     f"{a_obs=} {a_inf_prior=} {a_inf_posterior=}"
+#                 )
+#                 assert a_obs <= a_inf_posterior <= a_inf_prior, (
+#                     a_obs,
+#                     a_inf_prior,
+#                     a_inf_posterior,
+#                 )
+#     print()

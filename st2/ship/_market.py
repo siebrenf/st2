@@ -1,6 +1,10 @@
 from psycopg import connect
 
 from st2 import time
+from st2.logging import logger
+from st2.trade import a_posterior, get_a, get_base_price, set_a
+
+DEBUG = True
 
 
 def market(self, symbol=None, units=None):
@@ -74,7 +78,7 @@ def market(self, symbol=None, units=None):
                     time.read(t["timestamp"]),
                 ),
             )
-            if symbol and t["symbol"] == symbol:
+            if symbol and t["tradeSymbol"] == symbol:
                 ta.append(t)
         if symbol:
             y0 = None
@@ -99,6 +103,21 @@ def market(self, symbol=None, units=None):
             y1 = tg[f"{action}Price"]
             s1 = tg["supply"]
             base_price = get_base_price(symbol, action)
-            a, score = a_posterior2(y0, y1, s1, total_units, tg["tradeVolume"], tg["type"], action, base_price)
-            _set_a(waypoint_symbol, symbol, a, score)
+            a_old, score_old = get_a(waypoint_symbol, symbol)
+            a_new, score_new = a_posterior(
+                y0,
+                y1,
+                s1,
+                total_units,
+                tg["tradeVolume"],
+                tg["type"],
+                action,
+                base_price,
+            )
+            if score_new < score_old:
+                if DEBUG:
+                    logger.debug(
+                        f"Updated `a` at {waypoint_symbol} for {symbol} from {a_old} to {a_new}"
+                    )
+                set_a(waypoint_symbol, symbol, a_new, score_new)
     return data
