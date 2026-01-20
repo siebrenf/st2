@@ -1,6 +1,10 @@
 from psycopg import connect
 from psycopg.rows import dict_row
 
+from st2.logging import logger
+
+DEBUG = True
+
 
 def ai_reset_controller():
     """
@@ -8,6 +12,7 @@ def ai_reset_controller():
     in order to clear all time-sensitive tasks.
     """
     tasks_to_clear = ["trade", "supply", "deliver"]
+    reason = "script reset"
     with connect(
         "dbname=st2 user=postgres", row_factory=dict_row
     ) as conn, conn.cursor() as cur:
@@ -47,20 +52,28 @@ def ai_reset_controller():
                             """,
                             (current_task, ship_symbol),
                         )
+                        if DEBUG:
+                            task = " ".join(args)
+                            logger.debug(
+                                f"Cleared current {task=} for {ship_symbol} {reason=}"
+                            )
 
             if queued_task:
                 args = queued_task.split(" ")
                 if args[0] in tasks_to_clear:
-                    good = args[1]
-                    if good not in _ship_cargo(ship_symbol, cur):
-                        queued_task = None
-                        cur.execute(
-                            """
-                            UPDATE tasks
-                            SET queued = %s
-                            WHERE symbol = %s
-                            """,
-                            (queued_task, ship_symbol),
+                    queued_task = None
+                    cur.execute(
+                        """
+                        UPDATE tasks
+                        SET queued = %s
+                        WHERE symbol = %s
+                        """,
+                        (queued_task, ship_symbol),
+                    )
+                    if DEBUG:
+                        task = " ".join(args)
+                        logger.debug(
+                            f"Cleared queued {task=} for {ship_symbol} {reason=}"
                         )
 
 

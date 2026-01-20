@@ -18,7 +18,7 @@ async def ai_probe_controller(
     system_symbol,
     agent_symbol,
     qa_pairs,
-    probe_markets=False,
+    probe_markets=True,
     priority=2,
     verbose=False,
 ):

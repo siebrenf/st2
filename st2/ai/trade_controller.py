@@ -62,8 +62,6 @@ async def ai_trade_controller(
             ship = _get_scout_ship(queued_tasks, ships)
             wp = uncharted_waypoints.pop(0)
             queue_task(ship, f"scout {wp}")
-            await sleep(interval)
-            continue
 
         while len(unscouted_markets) and len(queued_tasks):
             if DEBUG:
@@ -73,8 +71,6 @@ async def ai_trade_controller(
             ship = _get_scout_ship(queued_tasks, ships)
             wp = unscouted_markets.pop(0)
             queue_task(ship, f"scout {wp}")
-            await sleep(interval)
-            continue
 
         if len(queued_tasks) == 0:
             await sleep(interval)
