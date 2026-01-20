@@ -11,3 +11,6 @@ async def ai_scout_waypoint(
         logger.info(f"{ship_symbol} will scout {waypoint_symbol}")
     ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     await travel(ship, waypoint_symbol, explore=True, verbose=False)
+    if verbose:
+        wp = ship["nav"]["waypointSymbol"]
+        logger.info(f"{ship.name()} scouted {wp}")

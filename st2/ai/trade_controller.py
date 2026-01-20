@@ -5,6 +5,8 @@ from psycopg.rows import dict_row
 
 from st2 import time
 from st2.logging import logger
+from st2.request import RequestMp
+from st2.system import System
 from st2.trade import price_estimate
 
 DEBUG = True
@@ -14,6 +16,7 @@ DEBUG = True
 async def ai_trade_controller(
     system_symbol,
     agent_symbol,
+    qa_pairs,
     restart=True,
     interval=60,
 ):
@@ -22,6 +25,10 @@ async def ai_trade_controller(
     """
     pname = "traders"
     ships = {}  # cargo, fuel and speed per ship
+    uncharted_waypoints = _uncharted_waypoints(
+        System(system_symbol, RequestMp(qa_pairs))
+    )
+    unscouted_markets = _unscouted_markets(system_symbol)
     while True:
         assigned_ships = _get_assigned_ships(system_symbol, pname, agent_symbol)
         if len(assigned_ships) == 0:
@@ -36,13 +43,32 @@ async def ai_trade_controller(
             await sleep(interval)
             continue
 
+        if len(uncharted_waypoints) != 0:
+            if DEBUG:
+                logger.debug(
+                    f"{system_symbol} has {len(uncharted_waypoints)} uncharted waypoints"
+                )
+            ship = _get_scout_ship(queued_tasks, ships)
+            wp = uncharted_waypoints.pop()
+            _queue_task(ship, f"scout {wp}")
+            await sleep(interval)
+            continue
+
+        if len(unscouted_markets) != 0:
+            if DEBUG:
+                logger.debug(
+                    f"{system_symbol} has {len(unscouted_markets)} unscouted markets"
+                )
+
         # identify trade opportunities
         trades, outdated_markets = _get_trade_goods(system_symbol, blacklisted_goods)
-        # if DEBUG:
-        #     logger.debug(f"{len(trades)} trades found in {system_symbol}")
-        #     logger.debug(
-        #         f"{len(outdated_markets)} outdated markets found in {system_symbol}"
-        #     )
+        for wp in sorted(unscouted_markets):
+            outdated_markets[wp] = float("inf")
+        if DEBUG:
+            logger.debug(f"{len(trades)} trades found in {system_symbol}")
+            logger.debug(
+                f"{len(outdated_markets)} outdated markets found in {system_symbol}"
+            )
         cargo_capacity_max = max([v["cargo"] for v in ships.values()])
         for good, (_, seller, buyer) in trades.items():
             max_units, purchase_price, sell_price = _get_trade_units(
@@ -75,7 +101,7 @@ async def ai_trade_controller(
 
         while len(queued_tasks) and len(outdated_markets):
             ship = _get_scout_ship(queued_tasks, ships)
-            wp = _get_scout_waypoint(outdated_markets)
+            wp = _get_scout_waypoint(outdated_markets, unscouted_markets)
             _queue_task(ship, f"scout {wp}")
 
         if restart:
@@ -83,6 +109,56 @@ async def ai_trade_controller(
             await sleep(10)
         else:
             await sleep(interval)
+
+
+def _uncharted_waypoints(system, get_all=False):
+    """Return uncharted waypoints with a good chance of containing a marketplace"""
+    # https://github.com/SpaceTradersAPI/api-docs/blob/main/models/WaypointType.json
+    wps = set()
+    for wp, md in system.waypoints.items():
+        if len(md["traits"]) != 1:
+            continue
+        if md["traits"][0] != "UNCHARTED":
+            continue
+        if not get_all and md["type"] in {
+            "ASTEROID",
+            "ASTEROID_FIELD",
+            "DEBRIS_FIELD",
+            "GAS_GIANT",
+            "GRAVITY_WELL",
+            "NEBULA",
+        }:
+            continue
+        wps.add(wp)
+    return wps
+
+
+def _unscouted_markets(system_symbol):
+    with connect(
+        "dbname=st2 user=postgres", row_factory=dict_row
+    ) as conn, conn.cursor() as cur:
+        # contains charted marketplaces
+        ret1 = cur.execute(
+            """
+            SELECT "symbol" FROM markets
+            WHERE "systemSymbol" = %s
+            """,
+            (system_symbol,),
+        ).fetchall()
+        # contains scouted marketplaces
+        ret2 = cur.execute(
+            """
+            SELECT DISTINCT ON ("waypointSymbol") * FROM market_tradegoods
+            WHERE "systemSymbol" = %s
+            ORDER BY "waypointSymbol", "timestamp" DESC;
+            """,
+            (system_symbol,),
+        ).fetchall()
+
+        unscouted_markets = {row["symbol"] for row in ret1} - {
+            row["waypointSymbol"] for row in ret2
+        }
+        return unscouted_markets
 
 
 def _get_assigned_ships(system_symbol, pname, agent_symbol):
@@ -305,13 +381,14 @@ def _get_scout_ship(queued_tasks, ships):
     return ship
 
 
-def _get_scout_waypoint(outdated_markets):
+def _get_scout_waypoint(outdated_markets, unscouted_markets):
     best = None, -float("inf")
     for wp, age in outdated_markets.items():
-        if age > best[-1]:
+        if age > best[1]:
             best = wp, age
     wp = best[0]
     outdated_markets.pop(wp)
+    unscouted_markets.discard(wp)
     return wp
 
 
