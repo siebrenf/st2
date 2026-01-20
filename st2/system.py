@@ -435,6 +435,7 @@ class System:
         :param type: "IMPORTS", "EXPORTS", "EXCHANGE", "BUYS", "SELLS", None
         :return: dict with waypoints as key and their latest tradeGood as values
         """
+        # TODO: will return nothing if the system was not loaded and charted
         query = """SELECT * FROM markets WHERE "systemSymbol" = %s """
         params = [self.symbol, symbol]
         if isinstance(type, str):
@@ -535,6 +536,7 @@ class System:
         :param type: shipTypes (e.g. "SHIP_PROBE")
         :return: dict with waypoints as key and their latest ship as values
         """
+        # TODO: will return nothing if the system was not loaded and charted
         with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 # this dict is complete
