@@ -17,7 +17,7 @@ def buy(self, symbol, units, verbose=True):
     remaining_units = units
     trade_volume = _get_trade_volume(self, symbol)
     while remaining_units > 0:
-        transaction_units = min(trade_volume, units)
+        transaction_units = min(trade_volume, remaining_units)
         price += _buy_sell(self, symbol, transaction_units, "purchase", verbose)
         remaining_units -= transaction_units
 
@@ -33,7 +33,7 @@ def sell(self, symbol, units, verbose=True):
     remaining_units = units
     trade_volume = _get_trade_volume(self, symbol)
     while remaining_units > 0:
-        transaction_units = min(trade_volume, units)
+        transaction_units = min(trade_volume, remaining_units)
         price += _buy_sell(self, symbol, transaction_units, "sell", verbose)
         remaining_units -= transaction_units
 
