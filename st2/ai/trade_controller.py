@@ -4,8 +4,9 @@ from psycopg import connect
 from psycopg.rows import dict_row
 
 from st2 import time
-from st2.ai.utils import queue_task
+from st2.ai.utils import dequeue_task, queue_task
 from st2.logging import logger
+from st2.pathing.utils import FUEL_WEIGHT, TIME_WEIGHT, nav_fuel, nav_time
 from st2.request import RequestMp
 from st2.system import System
 from st2.trade import price_estimate
@@ -28,7 +29,7 @@ async def ai_trade_controller(
     system = System(system_symbol, RequestMp(qa_pairs))
     uncharted_waypoints = _uncharted_waypoints(system)
     unscouted_markets = _unscouted_markets(system)
-    del system
+    reload = False
     while True:
         assigned_ships = _get_assigned_ships(system_symbol, pname, agent_symbol)
         if len(assigned_ships) == 0:
@@ -55,6 +56,7 @@ async def ai_trade_controller(
                 _set_ship_metadata(ship, ships)
 
         while len(uncharted_waypoints) and len(queued_tasks):
+            reload = True
             if DEBUG:
                 logger.debug(
                     f"{len(uncharted_waypoints)} uncharted waypoints found in {system_symbol}"
@@ -64,6 +66,7 @@ async def ai_trade_controller(
             queue_task(ship, f"scout {wp}")
 
         while len(unscouted_markets) and len(queued_tasks):
+            reload = True
             if DEBUG:
                 logger.debug(
                     f"{len(unscouted_markets)} unscouted markets found in {system_symbol}"
@@ -72,6 +75,9 @@ async def ai_trade_controller(
             wp = unscouted_markets.pop(0)
             queue_task(ship, f"scout {wp}")
 
+        if reload:
+            reload = False
+            system = System(system_symbol, RequestMp(qa_pairs))
         if len(queued_tasks) == 0:
             await sleep(interval)
             continue
@@ -91,8 +97,14 @@ async def ai_trade_controller(
             if sell_price - purchase_price < 1000:
                 break  # no worthwhile trades left
 
-            estimated_time_cost = 0  # TODO
-            estimated_fuel_cost = 0  # TODO
+            # beeline distance * 3 to account for
+            #  - trader traveling to the seller first
+            #  - detours due to fuel limitations
+            seller_wp = seller["waypointSymbol"]
+            buyer_wp = buyer["waypointSymbol"]
+            distance = system.graph[seller_wp][buyer_wp]["distance"] * 3  # noqa
+            estimated_time_cost = nav_time(distance) * TIME_WEIGHT
+            estimated_fuel_cost = nav_fuel(distance) * FUEL_WEIGHT
             estimated_max_profit = (
                 sell_price - purchase_price - estimated_fuel_cost - estimated_time_cost
             )
@@ -107,9 +119,11 @@ async def ai_trade_controller(
             ship, units, estimated_profit, task_old = _get_trade_ship(
                 queued_tasks, ships, max_units, seller, buyer
             )
-            task = f"trade {good} {units} {seller['waypointSymbol']} {buyer['waypointSymbol']}"
+            task = f"trade {good} {units} {seller_wp} {buyer_wp}"
             if task != task_old:
-                queue_task(ship, task, estimated_profit=estimated_profit)
+                queue_task(
+                    ship, task, estimated_profit=estimated_profit - estimated_fuel_cost
+                )
             if len(queued_tasks) == 0:
                 break
 
@@ -117,6 +131,13 @@ async def ai_trade_controller(
             ship = _get_scout_ship(queued_tasks, ships)
             wp = _get_scout_waypoint(outdated_markets)
             queue_task(ship, f"scout {wp}")
+
+        # assumption: goods in previously queued tasks have either been
+        #   - reassigned to another ship
+        #   - bought by another player
+        while len(queued_tasks):
+            ship, task = queued_tasks.popitem()
+            dequeue_task(ship, reason="outdated", task=task)
 
         await sleep(interval)
 
@@ -327,15 +348,18 @@ def _get_trade_ship(
     #     - for goods with small tradeVolumes/short distances
     #   - SHIP_LIGHT_HAULER: 80 cargo, 15 speed, 600 fuel, 400k
     #     - for large tradeVolumes/long distances
-    best = None, 0, -float("inf")
+    best = None, 0, 0, -float("inf")
     for ship, task in queued_tasks.items():
+        speed = ship_dict[ship]["speed"]
         units = min(max_units, ship_dict[ship]["cargo"])
         purchase_price = price_estimate(tradegood_at_seller, units, action="purchase")
         sell_price = price_estimate(tradegood_at_buyer, units, action="sell")
         estimated_profit = sell_price - purchase_price
-        if estimated_profit > best[-1]:
-            best = ship, units, estimated_profit
-    ship, units, estimated_profit = best
+        if estimated_profit > best[3] or (
+            estimated_profit == best[3] and speed > best[2]
+        ):
+            best = ship, units, speed, estimated_profit
+    ship, units, speed, estimated_profit = best
     task_old = queued_tasks.pop(ship)
     return ship, units, estimated_profit, task_old
 

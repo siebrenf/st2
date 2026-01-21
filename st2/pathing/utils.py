@@ -1,7 +1,7 @@
 import math
 
 FUEL_WEIGHT = 0.65  # average FUEL purchase price/100
-TIME_WEIGHT = 1  # credits/sec
+TIME_WEIGHT = 10  # credits/sec
 
 
 def nav_score(
@@ -59,7 +59,7 @@ def nav_fuel_inv(
 
 def nav_time(
     distance,
-    speed: int = 2,
+    speed: int = 9,
     mode="CRUISE",
     reactor="REACTOR_FISSION_I",
 ):
