@@ -33,6 +33,156 @@ class System:
         if priority:
             self.request.priority = priority
 
+    # lazy attributes
+    def __getattribute__(self, name):
+        val = super(System, self).__getattribute__(name)
+        if val is not None:
+            return val
+
+        # if the attribute is None/empty, check if it is a lazy attribute
+        match name:
+            case "waypoints":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+                    with conn.cursor() as cur:
+                        # ensure waypoints are in the database
+                        query = "SELECT * FROM systems WHERE symbol = %s"
+                        params = [self.symbol]
+                        data = cur.execute(query, params).fetchone()
+                        if data is None:
+                            self._get_system(cur)
+
+                        # ensure waypoint details are in the database
+                        query = 'SELECT * FROM waypoints WHERE "systemSymbol" = %s  ORDER BY symbol'
+                        data = cur.execute(query, params).fetchall()
+                        if None in [wp.get("traits") for wp in data]:
+                            self._get_waypoints(cur)
+                            data = cur.execute(query, params).fetchall()
+                val = {}
+                for wp in data:
+                    val[wp["symbol"]] = wp
+                setattr(self, name, val)
+
+            case "gate":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                _ = self.waypoints  # load waypoints into DB
+                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+                    with conn.cursor() as cur:
+                        ret = cur.execute(
+                            """
+                            SELECT * 
+                            FROM "waypoints"
+                            WHERE "systemSymbol" = %s 
+                            AND "type" = %s
+                            ORDER BY "symbol"
+                            """,
+                            (self.symbol, "JUMP_GATE"),
+                        ).fetchone()
+                        if ret is None:
+                            val = None
+                            logger.warning(f"System {self.symbol} has no JUMP-GATE!")
+                        elif ret["traits"] == ["UNCHARTED"]:
+                            val = {
+                                "symbol": ret["symbol"],
+                                "systemSymbol": ret["systemSymbol"],
+                                "connections": None,
+                            }
+                            logger.warning(
+                                f"System {self.symbol} JUMP-GATE is UNCHARTED!"
+                            )
+                        else:
+                            val = cur.execute(
+                                """
+                                SELECT * 
+                                FROM "jump_gates"
+                                WHERE "systemSymbol" = %s 
+                                """,
+                                (self.symbol,),
+                            ).fetchone()
+                setattr(self, name, val)
+
+            case "shipyards":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                _ = self.waypoints  # load waypoints into DB
+                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+                    with conn.cursor() as cur:
+                        ret = cur.execute(
+                            """
+                            SELECT * 
+                            FROM "shipyards"
+                            WHERE "systemSymbol" = %s 
+                            ORDER BY "symbol"
+                            """,
+                            (self.symbol,),
+                        ).fetchall()
+                if ret:
+                    val = {wp["symbol"]: wp for wp in ret}
+                else:
+                    val = {}
+                    logger.warning(f"System {self.symbol} has no SHIPYARD!")
+                setattr(self, name, val)
+
+            case "markets":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                _ = self.waypoints  # load waypoints into DB
+                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+                    with conn.cursor() as cur:
+                        ret = cur.execute(
+                            """
+                            SELECT * 
+                            FROM "markets"
+                            WHERE "systemSymbol" = %s 
+                            ORDER BY "symbol"
+                            """,
+                            (self.symbol,),
+                        ).fetchall()
+                if ret:
+                    val = {wp["symbol"]: wp for wp in ret}
+                else:
+                    val = {}
+                    logger.warning(f"System {self.symbol} has no MARKET!")
+                setattr(self, name, val)
+
+            case "uncharted":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                _ = self.waypoints  # load waypoints into DB
+                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
+                    with conn.cursor() as cur:
+                        ret = cur.execute(
+                            """
+                            SELECT * 
+                            FROM "waypoints"
+                            WHERE "systemSymbol" = %s 
+                            AND %s = ANY(traits)
+                            ORDER BY "symbol"
+                            """,
+                            (self.symbol, "UNCHARTED"),
+                        ).fetchone()
+                if ret:
+                    val = {wp["symbol"]: wp for wp in ret}
+                else:
+                    val = {}
+                setattr(self, name, val)
+
+            case "graph":
+                if DEBUG:
+                    logger.debug(f"Loading {name}")
+                _ = self.waypoints  # load waypoints into DB
+                val = self._get_graph()
+                setattr(self, name, val)
+
+        return val
+
+    def refresh(self):
+        for name in ["waypoints", "gate", "shipyards", "markets", "uncharted", "graph"]:
+            setattr(self, name, None)
+        _ = self.waypoints
+
     def _get_system(self, cur):
         """
         Add the system and all its waypoints to the database
@@ -193,7 +343,7 @@ class System:
         # all coordinates must be unique, so that the distances are nonzero
         while len(xy) != len(np.unique(xy, axis=0)):
             xy = xy + np.random.normal(0, 0.0001, xy.shape)
-        g = nx.from_numpy_array(
+        g = nx.from_numpy_array(  # noqa
             A=cdist(xy, xy),
             parallel_edges=False,
             create_using=nx.Graph,
@@ -201,151 +351,6 @@ class System:
             nodelist=self.waypoints,
         )
         return g
-
-    # lazy attributes
-    def __getattribute__(self, name):
-        val = super(System, self).__getattribute__(name)
-        if val is not None:
-            return val
-
-        # if the attribute is None/empty, check if it is a lazy attribute
-        match name:
-            case "waypoints":
-                if DEBUG:
-                    logger.debug(f"Loading {name}")
-                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-                    with conn.cursor() as cur:
-                        # ensure waypoints are in the database
-                        query = "SELECT * FROM systems WHERE symbol = %s"
-                        params = [self.symbol]
-                        data = cur.execute(query, params).fetchone()
-                        if data is None:
-                            self._get_system(cur)
-
-                        # ensure waypoint details are in the database
-                        query = 'SELECT * FROM waypoints WHERE "systemSymbol" = %s  ORDER BY symbol'
-                        data = cur.execute(query, params).fetchall()
-                        if None in [wp.get("traits") for wp in data]:
-                            self._get_waypoints(cur)
-                            data = cur.execute(query, params).fetchall()
-                val = {}
-                for wp in data:
-                    val[wp["symbol"]] = wp
-                setattr(self, name, val)
-
-            case "gate":
-                if DEBUG:
-                    logger.debug(f"Loading {name}")
-                _ = self.waypoints  # load waypoints into DB
-                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-                    with conn.cursor() as cur:
-                        ret = cur.execute(
-                            """
-                            SELECT * 
-                            FROM "waypoints"
-                            WHERE "systemSymbol" = %s 
-                            AND "type" = %s
-                            ORDER BY "symbol"
-                            """,
-                            (self.symbol, "JUMP_GATE"),
-                        ).fetchone()
-                        if ret is None:
-                            val = None
-                            logger.warning(f"System {self.symbol} has no JUMP-GATE!")
-                        elif ret["traits"] == ["UNCHARTED"]:
-                            val = {
-                                "symbol": ret["symbol"],
-                                "systemSymbol": ret["systemSymbol"],
-                                "connections": None,
-                            }
-                            logger.warning(
-                                f"System {self.symbol} JUMP-GATE is UNCHARTED!"
-                            )
-                        else:
-                            val = cur.execute(
-                                """
-                                SELECT * 
-                                FROM "jump_gates"
-                                WHERE "systemSymbol" = %s 
-                                """,
-                                (self.symbol,),
-                            ).fetchone()
-                setattr(self, name, val)
-
-            case "shipyards":
-                if DEBUG:
-                    logger.debug(f"Loading {name}")
-                _ = self.waypoints  # load waypoints into DB
-                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-                    with conn.cursor() as cur:
-                        ret = cur.execute(
-                            """
-                            SELECT * 
-                            FROM "shipyards"
-                            WHERE "systemSymbol" = %s 
-                            ORDER BY "symbol"
-                            """,
-                            (self.symbol,),
-                        ).fetchall()
-                if ret:
-                    val = {wp["symbol"]: wp for wp in ret}
-                else:
-                    val = {}
-                    logger.warning(f"System {self.symbol} has no SHIPYARD!")
-                setattr(self, name, val)
-
-            case "markets":
-                if DEBUG:
-                    logger.debug(f"Loading {name}")
-                _ = self.waypoints  # load waypoints into DB
-                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-                    with conn.cursor() as cur:
-                        ret = cur.execute(
-                            """
-                            SELECT * 
-                            FROM "markets"
-                            WHERE "systemSymbol" = %s 
-                            ORDER BY "symbol"
-                            """,
-                            (self.symbol,),
-                        ).fetchall()
-                if ret:
-                    val = {wp["symbol"]: wp for wp in ret}
-                else:
-                    val = {}
-                    logger.warning(f"System {self.symbol} has no MARKET!")
-                setattr(self, name, val)
-
-            case "uncharted":
-                if DEBUG:
-                    logger.debug(f"Loading {name}")
-                _ = self.waypoints  # load waypoints into DB
-                with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
-                    with conn.cursor() as cur:
-                        ret = cur.execute(
-                            """
-                            SELECT * 
-                            FROM "waypoints"
-                            WHERE "systemSymbol" = %s 
-                            AND %s = ANY(traits)
-                            ORDER BY "symbol"
-                            """,
-                            (self.symbol, "UNCHARTED"),
-                        ).fetchone()
-                if ret:
-                    val = {wp["symbol"]: wp for wp in ret}
-                else:
-                    val = {}
-                setattr(self, name, val)
-
-            case "graph":
-                if DEBUG:
-                    logger.debug(f"Loading {name}")
-                _ = self.waypoints  # load waypoints into DB
-                val = self._get_graph()
-                setattr(self, name, val)
-
-        return val
 
     def waypoints_with(self, type: str = None, traits: list[str] = None):
         query = """SELECT * FROM waypoints WHERE "systemSymbol" = %s """
@@ -435,7 +440,7 @@ class System:
         :param type: "IMPORTS", "EXPORTS", "EXCHANGE", "BUYS", "SELLS", None
         :return: dict with waypoints as key and their latest tradeGood as values
         """
-        # TODO: will return nothing if the system was not loaded and charted
+        # TODO: will return nothing if the system was not loaded, charted and scouted
         query = """SELECT * FROM markets WHERE "systemSymbol" = %s """
         params = [self.symbol, symbol]
         if isinstance(type, str):
@@ -536,7 +541,7 @@ class System:
         :param type: shipTypes (e.g. "SHIP_PROBE")
         :return: dict with waypoints as key and their latest ship as values
         """
-        # TODO: will return nothing if the system was not loaded and charted
+        # TODO: will return nothing if the system was not loaded, charted and scouted
         with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 # this dict is complete
@@ -632,6 +637,56 @@ class System:
             yield wp, math.ceil(md["distance"])
         if reverse is True and source in waypoints:
             yield source, 0
+
+    def uncharted_markets(self):
+        """Return uncharted waypoints with a chance on a marketplace"""
+        # https://github.com/SpaceTradersAPI/api-docs/blob/main/models/WaypointType.json
+        wps = []
+        for wp, md in self.waypoints.items():
+            if len(md["traits"]) != 1:
+                continue
+            if md["traits"][0] != "UNCHARTED":
+                continue
+            if md["type"] in {
+                "ASTEROID",
+                "ASTEROID_FIELD",
+                "DEBRIS_FIELD",
+                "GAS_GIANT",
+                "GRAVITY_WELL",
+                "NEBULA",
+            }:
+                continue
+            wps.append(wp)
+        return wps
+
+    def unscouted_markets(self):
+        """Return charted marketplaces that have not been scouted yet"""
+        _ = self.waypoints
+        with (
+            connect("dbname=st2 user=postgres", row_factory=dict_row) as conn,
+            conn.cursor() as cur,
+        ):
+            # contains charted marketplaces
+            ret1 = cur.execute(
+                """
+                SELECT "symbol" FROM markets
+                WHERE "systemSymbol" = %s
+                """,
+                (self.symbol,),
+            ).fetchall()
+            # contains scouted marketplaces
+            ret2 = cur.execute(
+                """
+                SELECT DISTINCT ON ("waypointSymbol") * FROM market_tradegoods
+                WHERE "systemSymbol" = %s
+                ORDER BY "waypointSymbol", "timestamp" DESC;
+                """,
+                (self.symbol,),
+            ).fetchall()
+        wps = list(
+            {row["symbol"] for row in ret1} - {row["waypointSymbol"] for row in ret2}
+        )
+        return wps
 
 
 def get_start_systems(faction):

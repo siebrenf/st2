@@ -68,21 +68,22 @@ async def ai_contract_controller(
                 ship_tasks = _get_active_traders(agent_symbol, system_symbol)
                 if not ship_tasks:
                     doable = False
-                    reason = f"No traders in {system_symbol}."
+                    reason = f"No traders in {system_symbol}"
                     sleep_timer = interval  # new traders may be assigned to the system
                     break
                 system = System(system_symbol, request)
-                # TODO: use ships to scout all (possible) markets (if not in DB), then refresh system
+                missing = system.uncharted_markets() + system.unscouted_markets()
                 for good in trade_goods:
-                    wps = system.markets_with(good, "sells")
-                    if not wps:
+                    if not system.markets_with(good, "sells"):
                         doable = False
-                        reason.append(good)
-                        sleep_timer = time.remaining(contract["deadlineToAccept"])
+                        reason = f"No {good} for sale in {system_symbol}"
+                        if len(missing) == 0:
+                            sleep_timer = time.remaining(contract["deadlineToAccept"])
+                        else:
+                            reason += " (yet)"
+                            sleep_timer = interval * 5
+                        break
                 if not doable:
-                    reason = (
-                        "No " + ", ".join(reason) + f" for sale in {system_symbol}."
-                    )
                     break
             if doable:
                 Contract(contract["id"], request).accept(verbose)
@@ -91,13 +92,6 @@ async def ai_contract_controller(
                     logger.debug(f"Contract not doable: {reason}")
                 await sleep(sleep_timer)
                 continue
-
-        # TODO: make dependent on contract
-        if get_agent_public(agent_symbol)["credits"] < 150_000:
-            if DEBUG:
-                logger.debug(f"Too poor for contract work")
-            await sleep(interval)
-            continue
 
         # fulfill (part of) a term
         fulfill_contract = True
@@ -147,19 +141,24 @@ async def ai_contract_controller(
             # select the cheapest waypoint to purchase the goods from
             system = System(system_symbol, request)
             best = None, float("inf")
-            for wp, md in system.markets_with(good, "sells").items():
+            for purchase_wp, md in system.markets_with(good, "sells").items():
                 price = md["purchasePrice"]
-                # if price > 1.25 * reward_per_unit[good]:  # TODO: ?
-                #     continue
                 if price and price < best[1]:
-                    best = wp, price
-            purchase_wp = best[0]
+                    best = purchase_wp, price
+            purchase_wp, price = best
             if purchase_wp is None:
                 if DEBUG:
                     logger.debug(
                         f"Marketplaces selling {good} have not been scouted yet"
                     )
                 break  # markets have not been scouted yet
+
+            cost = 2 * price * (term["unitsRequired"] - term["unitsFulfilled"])
+            credits = get_agent_public(agent_symbol)["credits"]  # noqa
+            if credits < max(100_000, cost):
+                if DEBUG:
+                    logger.debug(f"Too poor for contract work")
+                break  # try again later
 
             # select a ship to deliver the goods
             ship, units = _get_trader(available_traders, units)

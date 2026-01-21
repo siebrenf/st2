@@ -27,8 +27,8 @@ async def ai_trade_controller(
     pname = "traders"
     ships = {}  # cargo, fuel and speed per ship
     system = System(system_symbol, RequestMp(qa_pairs))
-    uncharted_waypoints = _uncharted_waypoints(system)
-    unscouted_markets = _unscouted_markets(system)
+    uncharted_waypoints = system.shortest_passing_path(system.uncharted_markets())
+    unscouted_markets = system.shortest_passing_path(system.unscouted_markets())
     reload = False
     while True:
         assigned_ships = _get_assigned_ships(system_symbol, pname, agent_symbol)
@@ -140,58 +140,6 @@ async def ai_trade_controller(
             dequeue_task(ship, reason="outdated", task=task)
 
         await sleep(interval)
-
-
-def _uncharted_waypoints(system, get_all=False):
-    """Return uncharted waypoints with a good chance of containing a marketplace"""
-    # https://github.com/SpaceTradersAPI/api-docs/blob/main/models/WaypointType.json
-    wps = []
-    for wp, md in system.waypoints.items():
-        if len(md["traits"]) != 1:
-            continue
-        if md["traits"][0] != "UNCHARTED":
-            continue
-        if not get_all and md["type"] in {
-            "ASTEROID",
-            "ASTEROID_FIELD",
-            "DEBRIS_FIELD",
-            "GAS_GIANT",
-            "GRAVITY_WELL",
-            "NEBULA",
-        }:
-            continue
-        wps.append(wp)
-    wps = system.shortest_passing_path(wps)
-    return wps
-
-
-def _unscouted_markets(system):
-    _ = system.waypoints
-    with connect(
-        "dbname=st2 user=postgres", row_factory=dict_row
-    ) as conn, conn.cursor() as cur:
-        # contains charted marketplaces
-        ret1 = cur.execute(
-            """
-            SELECT "symbol" FROM markets
-            WHERE "systemSymbol" = %s
-            """,
-            (system.symbol,),
-        ).fetchall()
-        # contains scouted marketplaces
-        ret2 = cur.execute(
-            """
-            SELECT DISTINCT ON ("waypointSymbol") * FROM market_tradegoods
-            WHERE "systemSymbol" = %s
-            ORDER BY "waypointSymbol", "timestamp" DESC;
-            """,
-            (system.symbol,),
-        ).fetchall()
-    unscouted_markets = list(
-        {row["symbol"] for row in ret1} - {row["waypointSymbol"] for row in ret2}
-    )
-    unscouted_markets = system.shortest_passing_path(unscouted_markets)
-    return unscouted_markets
 
 
 def _get_assigned_ships(system_symbol, pname, agent_symbol):
