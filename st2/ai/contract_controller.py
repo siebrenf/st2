@@ -151,7 +151,7 @@ async def ai_contract_controller(
                     logger.debug(
                         f"Marketplaces selling {good} have not been scouted yet"
                     )
-                break  # markets have not been scouted yet
+                break
 
             cost = 2 * price * (term["unitsRequired"] - term["unitsFulfilled"])
             credits = get_agent_public(agent_symbol)["credits"]  # noqa

@@ -86,9 +86,10 @@ async def ai_trade_controller(
         trades, outdated_markets = _get_trade_goods(system_symbol, blacklisted_goods)
         if DEBUG:
             logger.debug(f"{len(trades)} trades found in {system_symbol}")
-            logger.debug(
-                f"{len(outdated_markets)} outdated markets found in {system_symbol}"
-            )
+            if len(outdated_markets):
+                logger.debug(
+                    f"{len(outdated_markets)} outdated markets found in {system_symbol}"
+                )
         cargo_capacity_max = max([v["cargo"] for v in ships.values()])
         for good, (_, seller, buyer) in trades.items():
             max_units, purchase_price, sell_price = _get_trade_units(
@@ -137,7 +138,8 @@ async def ai_trade_controller(
         #   - bought by another player
         while len(queued_tasks):
             ship, task = queued_tasks.popitem()
-            dequeue_task(ship, reason="outdated", task=task)
+            if task:
+                dequeue_task(ship, reason="outdated", task=task)
 
         await sleep(interval)
 

@@ -6,9 +6,12 @@ import pandas as pd
 from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score
 
-from st2.trade.base_prices import BASE_PRICES as baseprices
-
-div_by_bp = True
+div_by_bp = False
+baseprices = {
+    "ANTIMATTER": 14000,
+    "MERITIUM_ORE": 1200,
+    "URANITE_ORE": 320,
+}
 s2c = {
     "SCARCE": "red",
     "LIMITED": "orange",

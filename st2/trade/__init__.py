@@ -13,8 +13,7 @@ def price_estimate(trade_good, units, action):
     price = trade_good[f"{action}Price"]
 
     # simple scenario
-    n_transactions = units / trade_good["tradeVolume"]
-    if n_transactions <= 1:
+    if units / trade_good["tradeVolume"] <= 1:
         price_total = price * units
         return round(price_total)
 
@@ -32,13 +31,15 @@ def price_estimate(trade_good, units, action):
         set_a(trade_good["waypointSymbol"], trade_good["symbol"], a, score)
 
     price_total = 0
+    units_remaining = units
     x = y2x(price, a, base_price, trade_good["type"], action)
-    while n_transactions > 0:
-        transaction = min(1, n_transactions)
-        price_total += price * transaction * trade_good["tradeVolume"]
+    while units_remaining > 0:
+        u = min(units_remaining, trade_good["tradeVolume"])
+        price_total += price * u
 
-        n_transactions -= transaction
-        x += -transaction if action == "sell" else transaction
+        units_remaining -= u
+        dx = u / trade_good["tradeVolume"]
+        x += -dx if action == "sell" else dx
         y = x2y(x, a, base_price, trade_good["type"], action)
         price = max(y, 1)
     return round(price_total)
