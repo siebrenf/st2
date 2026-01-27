@@ -1,4 +1,4 @@
-# SpaceTraders v2.3.0. Last update: 2026-01-05_2026-01-11
+# SpaceTraders v2.3.0. Last update: 2026-01-18_2026-01-25
 ENGINES = {
     "ENGINE_HYPER_DRIVE_I": None,
     "ENGINE_IMPULSE_DRIVE_I": {
