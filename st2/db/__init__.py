@@ -525,6 +525,28 @@ def db_tables_init(status=None):
                 """
             )
 
+        if "trades" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE trades
+                (
+                    "symbol" text, 
+                    "units" integer,
+                    "shipSymbol" text,
+                    "timestamp" timestamptz, 
+                    "purchase_start" JsonB,
+                    "purchase_inf" JsonB,
+                    "purchase_obs" JsonB, 
+                    "sell_start" JsonB, 
+                    "sell_inf" JsonB, 
+                    "sell_obs" JsonB,
+                    "travel_time" integer,
+                    "fuel_cost" integer,
+                    "return_of_investment" float8
+                )
+                """
+            )
+
         if "navigation" not in tables:
             cur.execute(
                 """
