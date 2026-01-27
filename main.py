@@ -127,6 +127,7 @@ if __name__ == "__main__":
     import multiprocessing as mp
     from st2.ai import taskmaster
     from st2.ai.reset_controller import ai_reset_controller
+    from st2 import time
 
     # clear all previous time-sensitive tasks
     ai_reset_controller()
@@ -145,6 +146,8 @@ if __name__ == "__main__":
     atexit.register(stop_probe_taskmaster)
     probe_taskmaster.start()
 
+    time.sleep(15)
+
     pname = "traders"
     trade_taskmaster = mp.Process(
         target=taskmaster,
@@ -159,16 +162,3 @@ if __name__ == "__main__":
 
     atexit.register(stop_trade_taskmaster)
     trade_taskmaster.start()
-
-
-    # # update databases
-    # from st2.spies import spymasters_apprentice
-    # sa = mp.Process(
-    #     target=spymasters_apprentice,
-    #     kwargs={
-    #         "system_symbol": ship["nav"]["systemSymbol"],
-    #         "request": request,
-    #         "priority": 2,
-    #     },
-    # )
-    # sa.start()
