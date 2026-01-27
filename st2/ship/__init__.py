@@ -223,6 +223,9 @@ def buy_ship(ship_type, waypoint_symbol, agent_symbol, request, verbose=True):
     Purchase the specified ship_type at the current waypoint's shipyard.
     Returns the new ship instance.
     """
+    token = get_agent(agent_symbol)["token"]
+    if token != request.token:
+        request = request.copy(token=token)
     system_symbol = waypoint_symbol.rsplit("-", 1)[0]
     data = request.post(
         f"my/ships",

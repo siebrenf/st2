@@ -3,7 +3,7 @@ from time import sleep
 from uuid import uuid1
 
 from requests.exceptions import ConnectionError, JSONDecodeError  # noqa
-from requests_ratelimiter import LimiterSession
+from requests_ratelimiter import LimiterSession  # noqa
 
 from st2.exceptions import GameError
 from st2.logging import logger
@@ -34,16 +34,21 @@ class Request:
     ]
     server_down_sleep = 3
 
-    def __init__(self):
+    def __init__(self, qa_pairs=None, priority=None, token=None):
+        _ = qa_pairs
+        _ = priority
+        _ = token
         self.session = LimiterSession(
             per_second=2,
             limit_statuses=self.rate_limit_codes,
         )
 
-    def __copy__(self):
+    def __copy__(self, priority=None, token=None):
         return Request()
 
-    def copy(self):
+    def copy(self, priority=None, token=None):
+        _ = priority
+        _ = token
         return self.__copy__()
 
     def _request(
@@ -153,7 +158,7 @@ class Request:
         )
 
     def get(self, endpoint, priority=None, token=None, params=None):
-        del priority
+        _ = priority
         if endpoint == "status":
             endpoint = ""
         if params is None:
@@ -174,11 +179,11 @@ class Request:
                 break
 
     def post(self, endpoint, priority=None, token=None, data=None):
-        del priority
+        _ = priority
         return self._request("post", endpoint, token, data)
 
     def patch(self, endpoint, priority=None, token=None, data=None):
-        del priority
+        _ = priority
         return self._request("patch", endpoint, token, data)
 
 
@@ -198,11 +203,15 @@ class RequestMp:
         self.token = token
         self.sleep = 0.01
 
-    def __copy__(self):
-        return RequestMp(tuple(self.queues.values()), self.priority, self.token)
+    def __copy__(self, priority=None, token=None):
+        if priority is None:
+            priority = self.priority
+        if token is None:
+            token = self.token
+        return RequestMp(tuple(self.queues.values()), priority, token)
 
-    def copy(self):
-        return self.__copy__()
+    def copy(self, priority=None, token=None):
+        return self.__copy__(priority, token)
 
     def _request(self, method, endpoint, priority, token, data=None, params=None):
         if priority is None:
