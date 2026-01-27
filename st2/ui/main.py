@@ -39,7 +39,7 @@ from bokeh.plotting import curdoc, figure
 
 pkg = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.extend([pkg])
-from st2.db import db_server_init, db_tables_init
+from st2.startup import game_server
 
 from .utils import (
     connection_df,
@@ -50,8 +50,7 @@ from .utils import (
     trade_dfs,
 )
 
-db_server_init()
-db_tables_init()
+game_server()
 
 
 """
