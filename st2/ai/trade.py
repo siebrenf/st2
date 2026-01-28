@@ -71,7 +71,9 @@ async def ai_trade_system(
     fp += await travel(ship, sell_wp, explore=True, verbose=False)
     if log:
         t = time.now()
-        log_entry["sell_inf"] = log_trade_inference(good, units, "sell", sell_wp, t)
+        log_entry["sell_inf"] = log_trade_inference(
+            good, units, "sell", sell_wp, ship_symbol, t
+        )
     sp = ship.sell(good, units, verbose=False)
     if log:
         log_entry["sell_obs"] = log_trade_observation(
@@ -105,10 +107,17 @@ def log_trade_inference(
     with connect(
         "dbname=st2 user=postgres", row_factory=dict_row
     ) as conn, conn.cursor() as cur:
-        a, score = cur.execute(
-            """SELECT a, score FROM market_a WHERE "waypointSymbol" = %s AND "symbol" = %s""",
-            (waypoint_symbol, good),
-        ).fetchone()
+        a, score = (
+            cur.execute(
+                """
+            SELECT "a", "score" FROM market_a
+            WHERE "waypointSymbol" = %s AND "symbol" = %s
+            """,
+                (waypoint_symbol, good),
+            )
+            .fetchone()
+            .values()
+        )
         trade_good = cur.execute(
             """
             SELECT * FROM market_tradegoods
@@ -117,6 +126,7 @@ def log_trade_inference(
             """,
             (waypoint_symbol, good),
         ).fetchone()
+    trade_good["timestamp"] = trade_good["timestamp"].isoformat()
     y = trade_good[f"{action}Price"]
     base_price = get_base_price(trade_good["symbol"], action)
     if infer:
@@ -140,14 +150,14 @@ def log_trade_inference(
         md["transactions"].append(
             {
                 "waypointSymbol": waypoint_symbol,
-                "systemSymbol": waypoint_symbol.rstrip("-", 1)[0],
+                "systemSymbol": waypoint_symbol.rsplit("-", 1)[0],
                 "shipSymbol": ship_symbol,
                 "tradeSymbol": good,
                 "type": action,
                 "units": u,
                 "pricePerUnit": y,
                 "totalPrice": y * u,
-                "timestamp": timestamp,
+                "timestamp": timestamp.isoformat(),
                 "x": x,
             }
         )
@@ -173,10 +183,17 @@ def log_trade_observation(good, action, waypoint_symbol, ship_symbol, timestamp)
     with connect(
         "dbname=st2 user=postgres", row_factory=dict_row
     ) as conn, conn.cursor() as cur:
-        a, score = cur.execute(
-            """SELECT a, score FROM market_a WHERE "waypointSymbol" = %s AND "symbol" = %s""",
-            (waypoint_symbol, good),
-        ).fetchone()
+        a, score = (
+            cur.execute(
+                """
+            SELECT "a", "score" FROM market_a
+            WHERE "waypointSymbol" = %s AND "symbol" = %s
+            """,
+                (waypoint_symbol, good),
+            )
+            .fetchone()
+            .values()
+        )
         trade_good = cur.execute(
             """
             SELECT * FROM market_tradegoods
@@ -192,7 +209,8 @@ def log_trade_observation(good, action, waypoint_symbol, ship_symbol, timestamp)
             ORDER BY "timestamp" ASC
             """,
             (waypoint_symbol, good, timestamp),
-        ).fetchone()
+        ).fetchall()
+    trade_good["timestamp"] = trade_good["timestamp"].isoformat()
     base_price = get_base_price(trade_good["symbol"], action)
     md["market_a"] = a, score
     md["basePrice"] = base_price
@@ -201,6 +219,7 @@ def log_trade_observation(good, action, waypoint_symbol, ship_symbol, timestamp)
     price_total = 0
     for t in transactions:
         t["x"] = y2x(t["pricePerUnit"], a, base_price, trade_good["type"], action)
+        t["timestamp"] = t["timestamp"].isoformat()
         md["transactions"].append(t)
         if t["shipSymbol"] == ship_symbol:
             price_total += t["totalPrice"]
@@ -213,7 +232,7 @@ def submit_log_entry(log_entry):
         cur.execute(
             """
             INSERT INTO trades
-            (symbol, units, shipSymbol, timestamp, purchase_start, purchase_inf, purchase_obs, sell_start, sell_inf, sell_obs, travel_time, fuel_cost, return_of_investment)
+            (symbol, units, "shipSymbol", timestamp, purchase_start, purchase_inf, purchase_obs, sell_start, sell_inf, sell_obs, travel_time, fuel_cost, return_of_investment)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             [

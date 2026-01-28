@@ -45,10 +45,10 @@ def price_estimate(trade_good, units, action):
     return round(price_total)
 
 
-def get_base_price(good, *args, **kwargs):
+def get_base_price(good, action):
     bp = BASE_PRICES.get(good)
     if bp is None:
-        bp = get_avg_price(good, *args, **kwargs)
+        bp = get_avg_price(good, action)
     return bp
 
 
