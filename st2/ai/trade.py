@@ -163,7 +163,7 @@ def log_trade_inference(
         )
         units_remaining -= u
         dx = u / trade_good["tradeVolume"]
-        x += -dx if action == "sell" else dx
+        x += dx if action == "sell" else -dx
         y = x2y(x, a, base_price, trade_good["type"], action)
     md["market_a"] = a, score
     md["basePrice"] = base_price

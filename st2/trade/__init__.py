@@ -39,7 +39,7 @@ def price_estimate(trade_good, units, action):
 
         units_remaining -= u
         dx = u / trade_good["tradeVolume"]
-        x += -dx if action == "sell" else dx
+        x += dx if action == "sell" else -dx
         y = x2y(x, a, base_price, trade_good["type"], action)
         price = max(y, 1)
     return round(price_total)
