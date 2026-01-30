@@ -14,6 +14,7 @@ async def ai_probe_waypoint(
     is_shipyard,
     qa_pairs,
     priority=2,
+    interval=600,
     verbose=False,
 ):
     ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
@@ -30,7 +31,7 @@ async def ai_probe_waypoint(
         if is_shipyard:
             ship.shipyard()
         ship.market()
-        await sleep(600)
+        await sleep(interval)
 
 
 @logger.catch  # catch errors in a separate thread
