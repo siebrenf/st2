@@ -25,6 +25,7 @@ if __name__ == "__main__":
     from psycopg import connect
     from st2.ship import Ship, ShipNotFoundError
     from st2.agent import register_agent
+    from st2.system import System
 
     agent_symbol = os.environ["ST_AGENT_SYMBOL"]
     try:
@@ -62,10 +63,9 @@ if __name__ == "__main__":
                 ("probes", f"{agent_symbol}-2"),
             )
         ship = Ship(f"{agent_symbol}-1", request)
-        # from st2.system import System
-        #
-        # system = System(ship["nav"]["systemSymbol"], request)
-        # _ = system.waypoints  # make sure all waypoints are loaded intro the DB
+        ship.market()
+        Ship(f"{agent_symbol}-2", request).market()
+    system = System(ship["nav"]["systemSymbol"], request)
 
     # start trading & probing
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
@@ -162,3 +162,6 @@ if __name__ == "__main__":
 
     atexit.register(stop_trade_taskmaster)
     trade_taskmaster.start()
+
+    # run forever
+    time.sleep(1e9)
