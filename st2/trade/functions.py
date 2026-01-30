@@ -249,14 +249,14 @@ def a_prior(y, supply, base_price, port, action):
     """
     best = A_VALUES[0], float("inf")
     x_min, x_max = supply2x(supply)
-    x_max = x_max + 1 / 120  # compensate for floating point rounding errors
-    x_min = x_min - 1 / 120
+    x_max += 0.005  # compensate for floating point rounding errors
+    x_min -= 0.005
     for a in A_VALUES:
         x = y2x(y, a, base_price, port, action)
         if not x_max > x > x_min:
             continue
         x_avg = supply2x_avg(supply)
-        diff = 10.0 + abs(x_avg - x)  # pseudovalue
+        diff = 20.0 + abs(x_avg - x)  # 20 = pseudovalue
         if diff < best[1]:
             best = a, diff
     return best
@@ -270,14 +270,14 @@ def a_posterior(y0, y1, s1, units, tv, port, action, base_price):
     best = A_VALUES[0], float("inf")
     dx = units / tv
     x_min1, x_max1 = supply2x(s1)
-    x_max1 = x_max1 + 1 / 120  # compensate for floating point rounding errors
-    x_min1 = x_min1 - 1 / 120
+    x_max1 += 0.005  # compensate for floating point rounding errors
+    x_min1 -= 0.005
     for a in A_VALUES:
         x0 = y2x(y0, a, base_price, port, action)
         x1 = y2x(y1, a, base_price, port, action)
         if not x_max1 > x1 > x_min1:
             continue
-        diff = abs(abs(x1 - x0) - dx)
+        diff = 10.0 + abs(abs(x1 - x0) - dx) / dx  # 10 = pseudovalue
         if diff < best[1]:
             best = a, diff
     return best
