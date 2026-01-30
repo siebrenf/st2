@@ -1,13 +1,9 @@
 from psycopg import connect
 
 from st2 import time
-from st2.logging import logger
-from st2.trade import a_posterior, get_a, get_base_price, set_a
-
-DEBUG = True
 
 
-def market(self, symbol=None, units=None):
+def market(self):
     """get all marketplace details"""
     waypoint_symbol = self["nav"]["waypointSymbol"]
     system_symbol = self["nav"]["systemSymbol"]
@@ -15,8 +11,6 @@ def market(self, symbol=None, units=None):
         f"systems/{system_symbol}/waypoints/{waypoint_symbol}/market",
     )["data"]
     timestamp = time.now()
-    tg = None
-    ta = []
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -55,8 +49,6 @@ def market(self, symbol=None, units=None):
                     timestamp,
                 ),
             )
-            if symbol and t["symbol"] == symbol:
-                tg = t
         for t in data.get("transactions", []):
             cur.execute(
                 """
@@ -78,46 +70,4 @@ def market(self, symbol=None, units=None):
                     time.read(t["timestamp"]),
                 ),
             )
-            if symbol and t["tradeSymbol"] == symbol:
-                ta.append(t)
-        if symbol:
-            y0 = None
-            action = None
-            remaining_units = units
-            total_units = 0
-            for t in ta:
-                total_units += t["units"]
-                if t["shipSymbol"] != self["symbol"]:
-                    continue
-                remaining_units -= t["units"]
-                if action is None:
-                    action = t["type"].lower()
-                if action != t["type"].lower():
-                    raise NotImplementedError("Mixed buying and selling of goods")
-                if remaining_units < 0:
-                    # TODO: check the order of transactions (asc/desc)
-                    raise NotImplementedError
-                if remaining_units == 0:
-                    y0 = t["pricePerUnit"]
-                    break
-            y1 = tg[f"{action}Price"]
-            s1 = tg["supply"]
-            base_price = get_base_price(symbol, action)
-            a_old, score_old = get_a(waypoint_symbol, symbol)
-            a_new, score_new = a_posterior(
-                y0,
-                y1,
-                s1,
-                total_units,
-                tg["tradeVolume"],
-                tg["type"],
-                action,
-                base_price,
-            )
-            if score_new < score_old:
-                if DEBUG:
-                    logger.debug(
-                        f"Updated `a` at {waypoint_symbol} for {symbol} from {a_old} to {a_new}"
-                    )
-                set_a(waypoint_symbol, symbol, a_new, score_new)
     return data

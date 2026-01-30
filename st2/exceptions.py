@@ -20,3 +20,8 @@ class ContractNotFoundError(Exception):
 class ShipNotFoundError(Exception):
     def __init__(self, *args):
         super().__init__(*args)
+
+
+class ShipInTransitError(Exception):
+    def __init__(self, *args):
+        super().__init__(*args)
