@@ -49,6 +49,8 @@ def _get_trade_volume(self, symbol):
             FROM market_tradegoods 
             WHERE "waypointSymbol" = %s 
             AND symbol = %s
+            ORDER BY timestamp DESC 
+            LIMIT 1
             """,
             (self["nav"]["waypointSymbol"], symbol),
         ).fetchone()
