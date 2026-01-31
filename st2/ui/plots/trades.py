@@ -15,7 +15,7 @@ SUPPLY2COLOR = {
 def plot_trade(log_entry):
     good = log_entry["symbol"]
     units = log_entry["units"]
-    roi = log_entry["return_of_investment"]
+    roi = log_entry["return_on_investment"]
 
     sp_obs = log_entry[f"sell_obs"]["totalPrice"]
     pp_obs = log_entry[f"purchase_obs"]["totalPrice"]

@@ -6,7 +6,7 @@ from st2 import time
 from st2.logging import logger
 from st2.pathing.travel import travel
 from st2.ship import Ship
-from st2.trade import a_prior, get_base_price, x2y, y2x
+from st2.trade import get_a, get_base_price, x2y, y2x
 
 
 @logger.catch  # catch errors in a separate thread
@@ -37,7 +37,6 @@ async def ai_trade_system(
 
     fp = 0
     pp = 0
-    t = None
     t0 = time.now()
     log_entry = {
         "symbol": good,
@@ -45,61 +44,85 @@ async def ai_trade_system(
         "shipSymbol": ship_symbol,
         "timestamp": t0,
     }
+    base_price = None
     if purchase_units != units:
         log = False  # only log complete tasks
     if log:
-        t = time.now()
-        for (
-            action,
-            waypoint_symbol,
-        ) in [("purchase", purchase_wp), ("sell", sell_wp)]:
-            log_entry[f"{action}_start"] = log_trade_inference(
-                good, units, action, waypoint_symbol, ship_symbol, t, False
-            )
+        base_price = get_base_price(good, "purchase")
+        log_entry["purchase_start"] = log_trade_inference(
+            good, units, base_price, "purchase", purchase_wp, ship_symbol, t0
+        )
+        log_entry["sell_start"] = log_trade_inference(
+            good, units, base_price, "sell", sell_wp, ship_symbol, t0
+        )
+
     if purchase_units > 0:
         fp += await travel(ship, purchase_wp, explore=True, verbose=False)
         if log:
-            t = time.now()
             log_entry["purchase_inf"] = log_trade_inference(
-                good, units, "purchase", purchase_wp, ship_symbol, t
+                good,
+                units,
+                base_price,
+                "purchase",
+                purchase_wp,
+                ship_symbol,
+                time.now(),
             )
-        pp = ship.buy(good, purchase_units, verbose=False)
+        pp = ship.buy(good, purchase_units, log, verbose=False)
         if log:
-            log_entry["purchase_obs"] = log_trade_observation(
-                good, "purchase", purchase_wp, ship_symbol, t
-            )
+            pp, tgs, tas = pp
+            log_entry["purchase_obs"] = {
+                "market_a": get_a(purchase_wp, good),
+                "totalPrice": pp,
+                "tradeGoods": tgs,
+                "transactions": tas,
+            }
+
     fp += await travel(ship, sell_wp, explore=True, verbose=False)
     if log:
-        t = time.now()
         log_entry["sell_inf"] = log_trade_inference(
-            good, units, "sell", sell_wp, ship_symbol, t
+            good, units, base_price, "sell", sell_wp, ship_symbol, time.now()
         )
-    sp = ship.sell(good, units, verbose=False)
+    sp = ship.sell(good, units, log, verbose=False)
     if log:
-        log_entry["sell_obs"] = log_trade_observation(
-            good, "sell", sell_wp, ship_symbol, t
-        )
+        sp, tgs, tas = sp
+        log_entry["sell_obs"] = {
+            "market_a": get_a(sell_wp, good),
+            "totalPrice": sp,
+            "tradeGoods": tgs,
+            "transactions": tas,
+        }
 
     travel_time = (time.now() - t0).seconds
     total_profit = sp - pp - fp
-    return_of_investment = round((sp - pp - fp) / max(pp + fp, 1), 2)
+    if purchase_units != units:
+        return_on_investment = None
+    else:
+        return_on_investment = round((sp - pp - fp) / max(pp + fp, 1), 2)
     if verbose:
-        logger.info(
-            f"{ship.name()} traded {units} {good} for {total_profit:_} ({travel_time=}, {return_of_investment=})"
-        )
+        msg = f"{ship.name()} traded {units} {good} for {total_profit:_} ({travel_time=}, {return_on_investment=})"
+        if log:
+            profit_inferred = (
+                log_entry["sell_inf"]["totalPrice"]
+                - log_entry["purchase_inf"]["totalPrice"]
+            )
+            profit_observed = sp - pp
+            inference_accuracy = round(profit_inferred / profit_observed, 2)
+            msg = msg[:-1] + f", {inference_accuracy=})"
+        logger.info(msg)
     if log:
         log_entry["travel_time"] = travel_time
         log_entry["fuel_cost"] = fp
-        log_entry["return_of_investment"] = return_of_investment
+        log_entry["return_on_investment"] = return_on_investment
         submit_log_entry(log_entry)
 
 
 def log_trade_inference(
-    good, units, action, waypoint_symbol, ship_symbol, timestamp, infer=True
+    good, units, base_price, action, waypoint_symbol, ship_symbol, timestamp
 ):
+    a, score = get_a(waypoint_symbol, good)
     md = {
-        "market_a": (0, 0),
-        "basePrice": 0,
+        "market_a": (a, score),
         "totalPrice": 0,
         "tradeGood": {},
         "transactions": [],
@@ -107,17 +130,6 @@ def log_trade_inference(
     with connect(
         "dbname=st2 user=postgres", row_factory=dict_row
     ) as conn, conn.cursor() as cur:
-        a, score = (
-            cur.execute(
-                """
-            SELECT "a", "score" FROM market_a
-            WHERE "waypointSymbol" = %s AND "symbol" = %s
-            """,
-                (waypoint_symbol, good),
-            )
-            .fetchone()
-            .values()
-        )
         trade_good = cur.execute(
             """
             SELECT * FROM market_tradegoods
@@ -127,18 +139,9 @@ def log_trade_inference(
             (waypoint_symbol, good),
         ).fetchone()
     trade_good["timestamp"] = trade_good["timestamp"].isoformat()
+    md["tradeGood"] = trade_good
+
     y = trade_good[f"{action}Price"]
-    base_price = get_base_price(trade_good["symbol"], action)
-    if infer:
-        a_new, score_new = a_prior(
-            y,
-            trade_good["supply"],
-            base_price,
-            trade_good["type"],
-            action,
-        )
-        if score_new < score:
-            a, score = a_new, score_new
     price_total = 0
     units_remaining = units
     x = y2x(y, a, base_price, trade_good["type"], action)
@@ -165,64 +168,6 @@ def log_trade_inference(
         dx = u / trade_good["tradeVolume"]
         x += dx if action == "sell" else -dx
         y = x2y(x, a, base_price, trade_good["type"], action)
-    md["market_a"] = a, score
-    md["basePrice"] = base_price
-    md["tradeGood"] = trade_good
-    md["totalPrice"] = round(price_total)
-    return md
-
-
-def log_trade_observation(good, action, waypoint_symbol, ship_symbol, timestamp):
-    md = {
-        "market_a": (0, 0),
-        "basePrice": 0,
-        "totalPrice": 0,
-        "tradeGood": {},
-        "transactions": [],
-    }
-    with connect(
-        "dbname=st2 user=postgres", row_factory=dict_row
-    ) as conn, conn.cursor() as cur:
-        a, score = (
-            cur.execute(
-                """
-            SELECT "a", "score" FROM market_a
-            WHERE "waypointSymbol" = %s AND "symbol" = %s
-            """,
-                (waypoint_symbol, good),
-            )
-            .fetchone()
-            .values()
-        )
-        trade_good = cur.execute(
-            """
-            SELECT * FROM market_tradegoods
-            WHERE "waypointSymbol" = %s AND "symbol" = %s
-            ORDER BY "timestamp" DESC LIMIT 1
-            """,
-            (waypoint_symbol, good),
-        ).fetchone()
-        transactions = cur.execute(
-            """
-            SELECT * FROM market_transactions
-            WHERE "waypointSymbol" = %s AND "tradeSymbol" = %s AND "timestamp" >= %s
-            ORDER BY "timestamp" ASC
-            """,
-            (waypoint_symbol, good, timestamp),
-        ).fetchall()
-    trade_good["timestamp"] = trade_good["timestamp"].isoformat()
-    base_price = get_base_price(trade_good["symbol"], action)
-    md["market_a"] = a, score
-    md["basePrice"] = base_price
-    md["tradeGood"] = trade_good
-
-    price_total = 0
-    for t in transactions:
-        t["x"] = y2x(t["pricePerUnit"], a, base_price, trade_good["type"], action)
-        t["timestamp"] = t["timestamp"].isoformat()
-        md["transactions"].append(t)
-        if t["shipSymbol"] == ship_symbol:
-            price_total += t["totalPrice"]
     md["totalPrice"] = round(price_total)
     return md
 
@@ -232,7 +177,7 @@ def submit_log_entry(log_entry):
         cur.execute(
             """
             INSERT INTO trades
-            (symbol, units, "shipSymbol", timestamp, purchase_start, purchase_inf, purchase_obs, sell_start, sell_inf, sell_obs, travel_time, fuel_cost, return_of_investment)
+            (symbol, units, "shipSymbol", timestamp, purchase_start, purchase_inf, purchase_obs, sell_start, sell_inf, sell_obs, travel_time, fuel_cost, return_on_investment)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             [
@@ -248,6 +193,6 @@ def submit_log_entry(log_entry):
                 Jsonb(log_entry["sell_obs"]),
                 log_entry["travel_time"],
                 log_entry["fuel_cost"],
-                log_entry["return_of_investment"],
+                log_entry["return_on_investment"],
             ],
         )

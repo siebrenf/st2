@@ -149,7 +149,7 @@ def get_avg_price(good, action):
         price = sell
     else:
         price = buy
-    return price
+    return round(price)
 
 
 def _in_database(good, supply):

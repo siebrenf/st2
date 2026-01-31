@@ -15,43 +15,50 @@ def cargo_yield(self):
         yield d["symbol"], d["units"]
 
 
-def buy(self, symbol, units, verbose=True):
-    price = _buy_sell(self, symbol, units, "purchase", verbose)
-    return price
+def buy(self, symbol, units, log=False, verbose=True):
+    return _buy_sell(self, symbol, units, "purchase", log, verbose)
 
 
-def sell(self, symbol, units, verbose=True):
-    price = _buy_sell(self, symbol, units, "sell", verbose)
-    return price
+def sell(self, symbol, units, log=False, verbose=True):
+    return _buy_sell(self, symbol, units, "sell", log, verbose)
 
 
-def _buy_sell(self, symbol, units, action, verbose):
+def _buy_sell(self, symbol, units, action, log, verbose):
     """
     Split the order by trade volumes, and request them.
     Collect tradeGood and transaction information where needed.
     """
     self.dock()
 
-    total_price = 0
     wp = self["nav"]["waypointSymbol"]
     # If update_a=True, request the TradeGood information between each transaction
     # and use this to calculate the value of `a`.
     # If update_a=False, only request the TradeGood information after the order.
-    update_a = False if get_a(wp, symbol)[1] < 1 / 200 else True
+    update_a = True if log or get_a(wp, symbol)[1] >= 0.005 else False
+    tgs = []
+    tas = []
     if update_a:
-        self.market()
-    tg0 = _get_trade_good(self, symbol)
+        for tg in self.market()["tradeGoods"]:
+            if tg["symbol"] == symbol:
+                tgs.append(tg)
+        tv = tgs[0]["tradeVolume"]
+    else:
+        tv = _get_tradegood(self, symbol)["tradeVolume"]
+    total_price = 0
     remaining_units = units
     while remaining_units > 0:
-        transaction_units = min(tg0["tradeVolume"], remaining_units)
+        transaction_units = min(tv, remaining_units)
 
         data = self.request.post(
             endpoint=f'my/ships/{self["symbol"]}/{action}',
             data={"symbol": symbol, "units": transaction_units},
         )["data"]
         self._update(data)
+        tas.append(data["transaction"])
         if update_a:
-            self.market()
+            for tg in self.market()["tradeGoods"]:
+                if tg["symbol"] == symbol:
+                    tgs.append(tg)
 
         price = data["transaction"]["totalPrice"]
         total_price += price
@@ -63,16 +70,25 @@ def _buy_sell(self, symbol, units, action, verbose):
 
         remaining_units -= transaction_units
     if update_a:
-        tg1 = _get_trade_good(self, symbol)
-        _update_market_a(self["nav"]["waypointSymbol"], tg0, tg1, action)
+        base_price = get_base_price(symbol, action)
+        a_new, score_new = a_posterior(wp, tgs, tas, action, base_price)
+        a_old, score_old = get_a(wp, symbol)
+        if score_new < score_old:
+            set_a(wp, symbol, a_new, score_new)
+            if DEBUG:
+                logger.debug(
+                    f"Updated `a` at {wp} for {symbol} from {a_old} to {a_new}"
+                )
     else:
         self.market()
+    if log:
+        return total_price, tgs, tas
     return total_price
 
 
-def _get_trade_good(self, symbol):
+def _get_tradegood(self, symbol):
     """
-    Return the most recent tradegood. If none is present, request it.
+    Return the most recent tradeGood. If none is present, request it.
     """
     wp = self["nav"]["waypointSymbol"]
     with connect(
@@ -86,55 +102,25 @@ def _get_trade_good(self, symbol):
             """,
             (wp, symbol),
         ).fetchone()
-    if ret is None:  # or (time.now() - ret["timestamp"]).seconds > max_age:
+    if ret is None:
         data = self.market()
         if data is None:
             t = self.nav_remaining()
             if t == 0:
-                raise RecursionError(
-                    "System time and game time desynchronized!"
-                )
+                raise RecursionError("System time and game time desynchronized!")
             else:
                 raise ShipInTransitError(
                     f"{self.name()} in transit {wp} ({t} seconds remaining)."
                 )
-        ret = _get_trade_good(self, symbol)
+        ret = _get_tradegood(self, symbol)
     return ret
 
 
-def _update_market_a(waypoint_symbol, tg0, tg1, action):
-    symbol = tg0["symbol"]
-    base_price = get_base_price(symbol, action)
-    a_new, score_new = a_posterior(waypoint_symbol, tg0, tg1, action, base_price)
-    a_old, score_old = get_a(waypoint_symbol, symbol)
-    if DEBUG:
-        logger.debug(f"{a_old=} {score_old=}, {a_new=} {score_new=}")  # TODO: remove
-    if score_new < score_old:
-        if DEBUG:
-            logger.debug(
-                f"Updated `a` at {waypoint_symbol} for {symbol} from {a_old} to {a_new}"
-            )
-        set_a(waypoint_symbol, symbol, a_new, score_new)
-
-
-def a_posterior(waypoint_symbol, tg0, tg1, action, base_price):
-    # retrieve the tradegood and transaction information from the database
-    symbol = tg0["symbol"]
-    port = tg0["type"]
-    tgs, tas = _get_tradegoods_and_transactions(
-        waypoint_symbol, symbol, tg0["timestamp"], tg1["timestamp"]
-    )
-    if len(tgs) != len(tas) + 1:
-        if DEBUG:
-            logger.debug(f"Another ship influenced the {symbol} transaction")
-            logger.debug(f"    {len(tgs)=} {len(tas)=}")
-            logger.debug(f"    {tgs=}")
-            logger.debug(f"    {tas=}")  # TODO: remove
-            logger.debug("")
-        return None, float("inf")
+def a_posterior(waypoint_symbol, tgs, tas, action, base_price):
+    symbol = tgs[0]["symbol"]
+    port = tgs[0]["type"]
 
     # match the supply levels with the transaction prices
-    units = 0
     ss = []
     ys = []
     dxs = []
@@ -149,15 +135,7 @@ def a_posterior(waypoint_symbol, tg0, tg1, action, base_price):
                     f"tradeGood={tg[f"{action}Price"]:_} "
                     f"transaction={ta["pricePerUnit"]:_})"
                 )
-                # TODO: remove
-                logger.debug(f"    {action=} {port=} {len(tgs)=} {len(tas)=}")
-                logger.debug(f"    {tg=}")
-                logger.debug(f"    {ta=}")
-                logger.debug(f"    {tgs=}")
-                logger.debug(f"    {tas=}")
-                logger.debug("")
             return None, float("inf")
-        units += ta["units"]
         ss.append(tg["supply"])  # supply level before the transaction
         ys.append(ta["pricePerUnit"])  # price at the transaction
         dxs.append(ta["units"] / tg["tradeVolume"])  # supply change of the transaction
@@ -190,69 +168,13 @@ def a_posterior(waypoint_symbol, tg0, tg1, action, base_price):
         for i, dx_obs in enumerate(dxs):
             dx_inf = abs(xs[i + 1] - xs[i])
             diff += abs(dx_obs - dx_inf) / dx_obs
-        logger.debug(
-            f"a_posterior progress: {waypoint_symbol=} {port=} {symbol=} {a=} diff={round(diff, 6)}"
-        )  # TODO: remove
         if diff < best[1]:
             best = a, float(diff)
     if best[1] == float("inf"):
         logger.warning(
             f"The {base_price=:_} for {symbol}, the values for `a`, or the {port} market functions, are incorrect!"
         )
-        logger.warning(
-            f"Source transactions: {waypoint_symbol=} {symbol=} {tg0['timestamp']=}"
-        )
     return best
-
-
-def _get_tradegoods_and_transactions(waypoint_symbol, symbol, t0, t1):
-    with connect(
-        "dbname=st2 user=postgres", row_factory=dict_row
-    ) as conn, conn.cursor() as cur:
-        tgs = cur.execute(
-            """
-            SELECT * FROM market_tradegoods 
-            WHERE "waypointSymbol" = %s AND symbol = %s 
-            AND timestamp >= %s AND timestamp <= %s
-            ORDER BY timestamp ASC
-            """,
-            (waypoint_symbol, symbol, t0, t1),
-        ).fetchall()
-        tas = cur.execute(
-            """
-            SELECT * FROM market_transactions
-            WHERE "waypointSymbol" = %s AND "tradeSymbol" = %s 
-            AND timestamp >= %s AND timestamp <= %s
-            ORDER BY timestamp ASC
-            """,
-            (waypoint_symbol, symbol, t0, t1),
-        ).fetchall()
-
-    # this function assumes exactly 1 tradeGood before and after each transaction
-    if len(tgs) > len(tas) + 1:
-        filtered_tgs = []
-        # take the most recent tradeGood for each transaction
-        i_tgs = 0
-        for ta in tas:
-            last = None
-            for i in range(i_tgs, len(tgs)):
-                tg = tgs[i]
-                if tg["timestamp"] < ta["timestamp"]:
-                    last = tg
-                    i_tgs += 1
-                else:
-                    break
-            if last:
-                filtered_tgs.append(last)
-        # take the first tradeGood after the latest transaction
-        ta = tas[-1]
-        for i in range(i_tgs, len(tgs)):
-            tg = tgs[i]
-            if tg["timestamp"] > ta["timestamp"]:
-                filtered_tgs.append(tg)
-                break
-        tgs = filtered_tgs
-    return tgs, tas
 
 
 def transfer(self, symbol, units, ship, verbose=True):

@@ -111,10 +111,10 @@ async def ai_trade_controller(
             )
             if estimated_max_profit < 1000:
                 continue  # unworthwhile trade
-            estimated_return_of_investment = (
+            estimated_return_on_investment = (
                 sell_price - purchase_price - estimated_fuel_cost - estimated_time_cost
             ) / (purchase_price + estimated_fuel_cost + estimated_time_cost)
-            if estimated_return_of_investment < 0.05:
+            if estimated_return_on_investment < 0.05:
                 continue  # unsafe trade
 
             ship, units, estimated_profit, task_old = _get_trade_ship(
