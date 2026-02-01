@@ -107,8 +107,10 @@ async def ai_trade_system(
                 - log_entry["purchase_inf"]["totalPrice"]
             )
             profit_observed = sp - pp
-            inference_accuracy = round(profit_inferred / profit_observed, 2)
-            msg = msg[:-1] + f", {inference_accuracy=})"
+            inference_accuracy = round(
+                100 * (1 - abs(profit_inferred - profit_observed) / profit_observed), 2
+            )
+            msg = msg[:-1] + f", {inference_accuracy=}%)"
         logger.info(msg)
     if log:
         log_entry["travel_time"] = travel_time
@@ -124,7 +126,7 @@ def log_trade_inference(
     md = {
         "market_a": (a, score),
         "totalPrice": 0,
-        "tradeGood": {},
+        "tradeGood": {},  # TODO: infer tradeGoods
         "transactions": [],
     }
     with connect(
