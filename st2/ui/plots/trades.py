@@ -74,7 +74,7 @@ def plot_trade(log_entry):
             if t["pricePerUnit"] != tg[f"{action}Price"]:
                 print(good, j, t["pricePerUnit"], tg[f"{action}Price"])
         # trailing value (from the final tradeGood)
-        tg = log_entry[f"{action}_obs"]["tradeGoods"][j + 1]
+        tg = log_entry[f"{action}_obs"]["tradeGoods"][-1]
         y = tg[f"{action}Price"]
         x = y2x(y, a_obs, base_price, port, action)
         xs_obs.append(x)
@@ -236,7 +236,6 @@ if __name__ == "__main__":
 
     game_server()
 
-    whitelist = ["JEWELRY"]
     for good, t_min, t_max in [
         # Bug / a / baseprice issue
         (
@@ -245,15 +244,35 @@ if __name__ == "__main__":
             time.read("2026-01-31T01:50:00.000Z"),
         ),
         # Edge case
-        # ("JEWELRY", time.read("2026-01-31T01:50:00.000Z"), time.read("2026-01-31T02:10:00.000Z")),
+        (
+            "JEWELRY",
+            time.read("2026-01-31T01:50:00.000Z"),
+            time.read("2026-01-31T02:10:00.000Z"),
+        ),
         # Edge case
-        # ("MACHINERY", time.read("2026-01-31T02:20:00.000Z"), time.read("2026-01-31T02:40:00.000Z")),
+        (
+            "MACHINERY",
+            time.read("2026-01-31T02:20:00.000Z"),
+            time.read("2026-01-31T02:40:00.000Z"),
+        ),
         # Edge case
-        # ("MACHINERY", time.read("2026-01-31T04:00:00.000Z"), time.read("2026-01-31T06:00:00.000Z")),
+        (
+            "MACHINERY",
+            time.read("2026-01-31T04:00:00.000Z"),
+            time.read("2026-01-31T06:00:00.000Z"),
+        ),
         # Edge case
-        # ("SHIP_PLATING", time.read("2026-01-31T05:00:00.000Z"), time.read("2026-01-31T05:30:00.000Z")),
+        (
+            "SHIP_PLATING",
+            time.read("2026-01-31T05:00:00.000Z"),
+            time.read("2026-01-31T05:30:00.000Z"),
+        ),
         # Edge case
-        # ("MICROPROCESSORS", time.read("2026-01-31T07:00:20.000Z"), time.read("2026-01-31T07:40:00.000Z")),
+        (
+            "MICROPROCESSORS",
+            time.read("2026-01-31T07:00:20.000Z"),
+            time.read("2026-01-31T07:40:00.000Z"),
+        ),
         # Bug / a / baseprice issue
         (
             "POLYNUCLEOTIDES",
@@ -271,25 +290,12 @@ if __name__ == "__main__":
             plot_trade(row)
 
     # t_min = time.read("2026-01-31T01:30:00.000Z")
-    # for row in get_table("trades", as_dict=True, ascending=True):
-    #     if row["timestamp"] < t_min:
-    #         continue  # new log system
-    #     # if (
-    #     #     row["purchase_obs"]["tradeGoods"][0]["tradeVolume"] >= row["units"]
-    #     #     and row["sell_obs"]["tradeGoods"][0]["tradeVolume"] >= row["units"]
-    #     # ):
-    #     #     continue  # not interesting
-    #     if row["symbol"] not in whitelist:
-    #         continue
-    #     # if len(row["purchase_obs"]["transactions"]) != len(
-    #     #     row["purchase_inf"]["transactions"]
-    #     # ) or len(row["sell_obs"]["transactions"]) != len(
-    #     #     row["sell_inf"]["transactions"]
-    #     # ):
-    #     #     continue  # fixed bug: older tradeVolume used in transaction
-    #     # if (
-    #     #     len(row["purchase_obs"]["transactions"]) == 0
-    #     #     or len(row["sell_obs"]["transactions"]) == 0
-    #     # ):
-    #     #     continue  # time desync bug
-    #     plot_trade(row)
+    for row in get_table("trades", as_dict=True, ascending=True):
+        # if row["timestamp"] < t_min:
+        #     continue
+        if (
+            row["purchase_obs"]["tradeGoods"][0]["tradeVolume"] >= row["units"]
+            and row["sell_obs"]["tradeGoods"][0]["tradeVolume"] >= row["units"]
+        ):
+            continue  # not interesting
+        plot_trade(row)
