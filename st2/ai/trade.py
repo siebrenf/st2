@@ -6,7 +6,8 @@ from st2 import time
 from st2.logging import logger
 from st2.pathing.travel import travel
 from st2.ship import Ship
-from st2.trade import get_a, get_base_price, x2y, y2x
+from st2.trade import get_a, get_base_price
+from st2.trade.functions import x2supply, x2y, y2x
 
 
 @logger.catch  # catch errors in a separate thread
@@ -92,9 +93,17 @@ async def ai_trade_system(
             "tradeGoods": tgs,
             "transactions": tas,
         }
+        profit_inferred = (
+                log_entry["sell_inf"]["totalPrice"]
+                - log_entry["purchase_inf"]["totalPrice"]
+        )
+        profit_observed = sp - pp
+        inference_accuracy = round(
+            100 * (1 - abs(profit_inferred - profit_observed) / profit_observed), 2
+        )
 
     travel_time = (time.now() - t0).seconds
-    total_profit = sp - pp - fp
+    total_profit = round(sp - pp - fp)
     if purchase_units != units:
         return_on_investment = None
     else:
@@ -102,20 +111,14 @@ async def ai_trade_system(
     if verbose:
         msg = f"{ship.name()} traded {units} {good} for {total_profit:_} ({travel_time=}, {return_on_investment=})"
         if log:
-            profit_inferred = (
-                log_entry["sell_inf"]["totalPrice"]
-                - log_entry["purchase_inf"]["totalPrice"]
-            )
-            profit_observed = sp - pp
-            inference_accuracy = round(
-                100 * (1 - abs(profit_inferred - profit_observed) / profit_observed), 2
-            )
-            msg = msg[:-1] + f", {inference_accuracy=}%)"
+            msg = msg[:-1] + f", {inference_accuracy=}%)"  # noqa
         logger.info(msg)
     if log:
         log_entry["travel_time"] = travel_time
         log_entry["fuel_cost"] = fp
-        log_entry["return_on_investment"] = return_on_investment
+        log_entry["profit"] = total_profit  # includes fuel
+        log_entry["return_on_investment"] = return_on_investment  # includes fuel
+        log_entry["accuracy"] = inference_accuracy  # excludes fuel
         submit_log_entry(log_entry)
 
 
@@ -126,7 +129,7 @@ def log_trade_inference(
     md = {
         "market_a": (a, score),
         "totalPrice": 0,
-        "tradeGood": {},  # TODO: infer tradeGoods
+        "tradeGoods": [],
         "transactions": [],
     }
     with connect(
@@ -141,7 +144,7 @@ def log_trade_inference(
             (waypoint_symbol, good),
         ).fetchone()
     trade_good["timestamp"] = trade_good["timestamp"].isoformat()
-    md["tradeGood"] = trade_good
+    md["tradeGoods"].append(trade_good)
 
     y = trade_good[f"{action}Price"]
     price_total = 0
@@ -163,13 +166,31 @@ def log_trade_inference(
                 "pricePerUnit": y,
                 "totalPrice": y * u,
                 "timestamp": timestamp.isoformat(),
-                "x": x,
             }
         )
         units_remaining -= u
         dx = u / trade_good["tradeVolume"]
         x += dx if action == "sell" else -dx
         y = x2y(x, a, base_price, trade_good["type"], action)
+        md["tradeGoods"].append(
+            {
+                "waypointSymbol": waypoint_symbol,
+                "systemSymbol": waypoint_symbol.rsplit("-", 1)[0],
+                "symbol": good,
+                "tradeVolume": trade_good["tradeVolume"],
+                "type": trade_good["type"],
+                "supply": x2supply(x),
+                "activity": trade_good["activity"],
+                "purchasePrice": None,
+                "sellPrice": None,
+                "timestamp": timestamp.isoformat(),
+            }
+        )
+        if action == "sell":
+            md["tradeGoods"][-1]["sellPrice"] = y
+        else:
+            md["tradeGoods"][-1]["purchasePrice"] = y
+
     md["totalPrice"] = round(price_total)
     return md
 
@@ -179,8 +200,8 @@ def submit_log_entry(log_entry):
         cur.execute(
             """
             INSERT INTO trades
-            (symbol, units, "shipSymbol", timestamp, purchase_start, purchase_inf, purchase_obs, sell_start, sell_inf, sell_obs, travel_time, fuel_cost, return_on_investment)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (symbol, units, "shipSymbol", timestamp, purchase_start, purchase_inf, purchase_obs, sell_start, sell_inf, sell_obs, travel_time, fuel_cost, profit, return_on_investment, accuracy)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             [
                 log_entry["symbol"],
@@ -195,6 +216,8 @@ def submit_log_entry(log_entry):
                 Jsonb(log_entry["sell_obs"]),
                 log_entry["travel_time"],
                 log_entry["fuel_cost"],
+                log_entry["profit"],
                 log_entry["return_on_investment"],
+                log_entry["accuracy"],
             ],
         )

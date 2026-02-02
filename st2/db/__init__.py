@@ -542,7 +542,9 @@ def db_tables_init(status=None):
                     "sell_obs" JsonB,
                     "travel_time" integer,
                     "fuel_cost" integer,
-                    "return_on_investment" float8
+                    "profit" integer,
+                    "return_on_investment" float4,
+                    "accuracy" float4
                 )
                 """
             )
