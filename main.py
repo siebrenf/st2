@@ -30,6 +30,7 @@ if __name__ == "__main__":
     agent_symbol = os.environ["ST_AGENT_SYMBOL"]
     try:
         ship = Ship(f"{agent_symbol}-1", request)
+        system = System(ship["nav"]["systemSymbol"], request)
     except ShipNotFoundError:
         register_agent(
             request,
@@ -54,18 +55,25 @@ if __name__ == "__main__":
                 """,
                 ("traders", f"{agent_symbol}-1"),
             )
+        # scout the first two markets
+        ship = Ship(f"{agent_symbol}-1", request)
+        ship.market()
+        probe = f"{agent_symbol}-2"
+        Ship(probe, request).market()
+        # send the probe to a shipyard with additional probes
+        system = System(ship["nav"]["systemSymbol"], request)
+        waypoint_symbol = list(system.shipyards_with("SHIP_PROBE"))[0]
+        task = f"probe shipyard {waypoint_symbol}"
+        with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE tasks
-                SET "pname" = %s
+                SET "task" = %s, 
+                    "pname" = %s
                 WHERE "symbol" = %s
                 """,
-                ("probes", f"{agent_symbol}-2"),
+                (task, "probes", f"{agent_symbol}-2"),
             )
-        ship = Ship(f"{agent_symbol}-1", request)
-        ship.market()
-        Ship(f"{agent_symbol}-2", request).market()
-    system = System(ship["nav"]["systemSymbol"], request)
 
     # start trading & probing
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
