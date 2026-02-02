@@ -49,7 +49,6 @@ def register_random_agent(
     request,
     priority,
     faction="COSMIC",
-    email=None,
     insert_agent=False,
     insert_contract=False,
     insert_ships=True,
@@ -66,7 +65,6 @@ def register_random_agent(
                 priority,
                 symbol,
                 faction,
-                email,
                 insert_agent,
                 insert_contract,
                 insert_ships,
@@ -84,15 +82,12 @@ def register_agent(
     priority,
     symbol,
     faction="COSMIC",
-    email=None,
     insert_agent=True,
     insert_contract=True,
     insert_ships=True,
 ):
     assert symbol == symbol.upper()
     payload = {"symbol": symbol, "faction": faction}
-    if email:
-        payload["email"] = email
     # data keys: ['token', 'agent', 'contract', 'faction', 'ships']
     account_token = os.environ["ST_ACCOUNT_TOKEN"]
     data = request.post("register", priority, account_token, payload)["data"]
