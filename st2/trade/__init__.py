@@ -2,7 +2,7 @@ from psycopg import connect
 
 from st2.db.static import GOODS, SHIPS
 from st2.trade.base_prices import BASE_PRICES
-from st2.trade.functions import a_posterior, a_prior, x2y, y2x
+from st2.trade.functions import a_prior, x2y, y2x
 from st2.trade.price_ranges import PRICE_RANGES
 
 

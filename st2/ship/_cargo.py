@@ -135,7 +135,7 @@ def a_posterior(waypoint_symbol, tgs, tas, action, base_price):
                     f"tradeGood={tg[f"{action}Price"]:_} "
                     f"transaction={ta["pricePerUnit"]:_})"
                 )
-            return None, float("inf")
+            return None, 100
         ss.append(tg["supply"])  # supply level before the transaction
         ys.append(ta["pricePerUnit"])  # price at the transaction
         dxs.append(ta["units"] / tg["tradeVolume"])  # supply change of the transaction
@@ -147,11 +147,11 @@ def a_posterior(waypoint_symbol, tgs, tas, action, base_price):
             f"The tradeVolume for {symbol} increased at {waypoint_symbol} "
             f"from {min(tvs)} to {max(tvs)}!"
         )
-        # return None, float("inf")
+        # return None, 100
 
     # find the value of a where the supply levels match the inferred value of x
     # and look for the lowest difference between the observed and inferred dx.
-    best = A_VALUES[0], float("inf")
+    best = A_VALUES[0], 100
     for a in A_VALUES:
         # infer values for x
         xs = []
