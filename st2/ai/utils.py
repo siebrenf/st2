@@ -62,11 +62,13 @@ def get_tasks(
 
 
 def queue_task(ship, task, pname=None, estimated_profit=None):
-    query = """UPDATE tasks WHERE symbol = %s SET queued = %s"""
-    params = [ship, task]
+    query = """UPDATE tasks SET queued = %s"""
+    params = [task]
     if pname:
         query += """, pname = %s"""
         params.append(pname)
+    query += """ WHERE symbol = %s"""
+    params.append(ship)
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(query, params)  # noqa
     if DEBUG:
@@ -81,10 +83,10 @@ def cancel_task(ship, reason=None, task=None):
         cur.execute(
             """
             UPDATE tasks
-            WHERE symbol = %s
             SET cancel = %s
+            WHERE symbol = %s
             """,
-            (ship, True),
+            (True, ship),
         )
     if DEBUG:
         msg = "Cancelled " + (f"{task=}" if task else "task") + f" for {ship}"
@@ -98,10 +100,10 @@ def dequeue_task(ship, reason=None, task=None):
         cur.execute(
             """
             UPDATE tasks
-            WHERE symbol = %s
             SET queued = %s
+            WHERE symbol = %s
             """,
-            (ship, None),
+            (None, ship),
         )
     if DEBUG:
         msg = "Dequeued " + (f"{task=}" if task else "task") + f" for {ship}"

@@ -627,6 +627,8 @@ class System:
         original_waypoints = set(waypoints)
         if waypoints is None:
             waypoints = list(self.waypoints)
+        else:
+            waypoints = list(waypoints)
 
         nodes = waypoints + [source]
         subgraph = nx.subgraph_view(self.graph, filter_node=lambda node: node in nodes)
@@ -637,11 +639,11 @@ class System:
         )
 
         if reverse is False and source in original_waypoints:
-            yield source, 0
+            yield source
         for wp, md in waypoint_distances:
-            yield wp, math.ceil(md["distance"])
+            yield wp
         if reverse is True and source in original_waypoints:
-            yield source, 0
+            yield source
 
     def uncharted_markets(self):
         """Return uncharted waypoints with a chance on a marketplace"""

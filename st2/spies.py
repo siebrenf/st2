@@ -32,7 +32,7 @@ async def spymasters_apprentice(agent_symbol, request, priority=2, verbose=True)
     # (central waypoints are faster to reach)
     system = System(system_symbol, request)
     source = list(system.waypoints_with(type="ENGINEERED_ASTEROID"))[0]
-    for waypoint_symbol, dist in system.waypoints_sort(source, list(system.markets)):
+    for waypoint_symbol in system.waypoints_sort(source, list(system.markets)):
         wp_type = "shipyard" if waypoint_symbol in system.shipyards else "market"
         key = (wp_type, waypoint_symbol)
         system2market[system_symbol].append(key)
@@ -210,7 +210,7 @@ def __get_system2market(faction2system, request):
         # (central waypoints are faster to reach)
         system = System(system_symbol, request)
         source = list(system.waypoints_with(type="ENGINEERED_ASTEROID"))[0]
-        for waypoint_symbol, dist in system.waypoints_sort(
+        for waypoint_symbol in system.waypoints_sort(
             source, list(system.markets)
         ):
             wp_type = "shipyard" if waypoint_symbol in system.shipyards else "market"

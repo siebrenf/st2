@@ -71,22 +71,23 @@ async def ai_probe_controller(
         + len(unprobed_shipyards_selling_probes)
         + len(unprobed_markets)
     )
-    total = len(shipyards) + len(shipyards_selling_probes) + len(markets)
     if probe_purchases_remaining == 0:
         if DEBUG:
-            logger.debug(f"probe controller {system_symbol} exiting")
+            logger.debug(f"Probe Controller {system_symbol}: task completed")
         return "self destruct"
     if verbose:
         s = len(shipyards) + len(shipyards_selling_probes)
         m = len(markets)
-        logger.info(f"{s} shipyards and {m} marketplaces in {system_symbol}")
+        logger.info(
+            f"Probe Controller {system_symbol}: found {s} shipyards and {m} marketplaces"
+        )
 
     # assign an available ship to buy the first probe
     probe_purchase_underway = False
     while len(shipyards_selling_probes) == len(unprobed_shipyards_selling_probes):
         if DEBUG:
             logger.debug(
-                f"No probes at shipyards in {system_symbol}. Attempting to purchase one"
+                f"Probe Controller {system_symbol}: no probes at shipyards - attempting to purchase one"
             )
         available_ship_symbol = None
         for task in get_tasks(agent_symbol=agent_symbol, system_symbol=system_symbol):
@@ -101,7 +102,8 @@ async def ai_probe_controller(
                     probe_purchases_remaining -= 1
                     if DEBUG:
                         logger.debug(
-                            f"probe controller {system_symbol}: {probe_purchases_remaining=}/{total}"
+                            f"Probe Controller {system_symbol}: "
+                            f"{probe_purchases_remaining} probes remaining"
                         )
         if available_ship_symbol and not probe_purchase_underway:
             waypoint_symbol = sorted(unprobed_shipyards_selling_probes)[0]
@@ -123,20 +125,24 @@ async def ai_probe_controller(
         )
         while len(waypoints_to_probe) > 0:
             # select the cheapest shipyard
-            best = None, {}, float("inf")
+            best = None, {"purchasePrice": float("inf")}
             for shipyard_symbol, md in system.shipyards_with("SHIP_PROBE").items():
                 if shipyard_symbol not in shipyards_selling_probes2probes:
                     continue
-                price = md["purchasePrice"]
-                if price < best[0]:
-                    best = shipyard_symbol, md, price
-            shipyard_symbol, md, price = best
+                if md["purchasePrice"] < best[1]["purchasePrice"]:
+                    best = shipyard_symbol, md
+            shipyard_symbol, md = best
 
             # wait until it's probe has arrived
             shipyard_probe = shipyards_selling_probes2probes[shipyard_symbol]
             if shipyard_probe not in arrived:
                 ship = Ship(shipyards_selling_probes2probes[shipyard_symbol], request)
                 t = ship.nav_remaining() + interval  # extra time to update the DB
+                if DEBUG:
+                    logger.debug(
+                        f"Probe Controller {system_symbol}: waiting {round(t)} seconds "
+                        f"for {shipyard_probe} to arrive at {shipyard_symbol}"
+                    )
                 await sleep(t)
                 arrived.add(shipyard_probe)
                 continue
@@ -162,10 +168,17 @@ async def ai_probe_controller(
                 probe_purchases_remaining -= 1
                 if DEBUG:
                     logger.debug(
-                        f"probe controller {system_symbol}: {probe_purchases_remaining=}/{total}"
+                        f"Probe Controller {system_symbol}: "
+                        f"{probe_purchases_remaining} probes remaining"
                     )
-            await sleep(interval)
+            else:
+                if DEBUG:
+                    logger.debug(
+                        f"Probe Controller {system_symbol}: "
+                        f"cannot purchase a probe ({credits=} {supply=})"
+                    )
+                await sleep(interval)
 
     if DEBUG:
-        logger.debug(f"probe controller {system_symbol} exiting")
+        logger.debug(f"Probe Controller {system_symbol}: task completed")
     return "self destruct"

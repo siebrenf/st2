@@ -68,7 +68,6 @@ async def ai_trade_controller(
                     queued_tasks[ship] = task["queued"]
             if ship not in ships:
                 _set_ship_metadata(ship, ships)
-
         if len(queued_tasks) == 0:
             await sleep(interval)
             continue
@@ -127,8 +126,7 @@ async def ai_trade_controller(
         # assumption: goods in previously queued tasks have either been
         #   - reassigned to another ship
         #   - bought by another player
-        while len(queued_tasks):
-            ship, task = queued_tasks.popitem()
+        for ship, task in queued_tasks.items():
             if task:
                 dequeue_task(ship, reason="outdated", task=task)
 
