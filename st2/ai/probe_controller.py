@@ -56,6 +56,8 @@ async def ai_probe_controller(
         if task["current"].startswith("probe "):
             wp_type, waypoint_symbol = task["current"].split(" ")[1:]
             if wp_type == "shipyard":
+                if task["agentSymbol"] != agent_symbol:
+                    continue  # embed agent probes in all shipyards
                 if waypoint_symbol in shipyards_selling_probes:
                     shipyards_selling_probes2probes[waypoint_symbol] = task["symbol"]
                     unprobed_shipyards_selling_probes.discard(waypoint_symbol)
@@ -151,6 +153,7 @@ async def ai_probe_controller(
                 )
                 task = f"probe {wp_type} {waypoint_symbol}"
                 for t in get_tasks(current=task):
+                    # TODO: what to do with two player agents at one shipyard?
                     cancel_task(
                         t["symbol"], reason=f"{agent_symbol} taking over", task=task
                     )
