@@ -94,8 +94,8 @@ async def ai_trade_system(
             "transactions": tas,
         }
         profit_inferred = (
-                log_entry["sell_inf"]["totalPrice"]
-                - log_entry["purchase_inf"]["totalPrice"]
+            log_entry["sell_inf"]["totalPrice"]
+            - log_entry["purchase_inf"]["totalPrice"]
         )
         profit_observed = sp - pp
         inference_accuracy = round(

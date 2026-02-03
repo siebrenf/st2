@@ -4,7 +4,13 @@ from psycopg import connect
 from psycopg.rows import dict_row
 
 from st2 import time
-from st2.ai.utils import dequeue_task, queue_task
+from st2.ai.utils import (
+    chart_system_marketplaces,
+    dequeue_task,
+    get_tasks,
+    queue_task,
+    scout_system_marketplaces,
+)
 from st2.logging import logger
 from st2.pathing.utils import FUEL_WEIGHT, TIME_WEIGHT, nav_fuel, nav_time
 from st2.request import RequestMp
@@ -27,11 +33,19 @@ async def ai_trade_controller(
     pname = "traders"
     ships = {}  # cargo, fuel and speed per ship
     system = System(system_symbol, RequestMp(qa_pairs))
-    uncharted_waypoints = system.shortest_passing_path(system.uncharted_markets())
-    unscouted_markets = system.shortest_passing_path(system.unscouted_markets())
-    reload = False
+    # ensure that all shipyards and marketplaces are charted & scouted
+    await chart_system_marketplaces(system, interval)
+    await scout_system_marketplaces(system, interval)
     while True:
-        assigned_ships = _get_assigned_ships(system_symbol, pname, agent_symbol)
+        assigned_ships = get_tasks(
+            system_symbol=system_symbol,
+            agent_symbol=agent_symbol,
+            pname=pname,
+        )
+        if DEBUG:
+            logger.debug(
+                f"{len(assigned_ships)} ships assigned to trade in {system_symbol}"
+            )
         if len(assigned_ships) == 0:
             await sleep(interval)
             continue
@@ -55,29 +69,6 @@ async def ai_trade_controller(
             if ship not in ships:
                 _set_ship_metadata(ship, ships)
 
-        while len(uncharted_waypoints) and len(queued_tasks):
-            reload = True
-            if DEBUG:
-                logger.debug(
-                    f"{len(uncharted_waypoints)} uncharted waypoints found in {system_symbol}"
-                )
-            ship = _get_scout_ship(queued_tasks, ships)
-            wp = uncharted_waypoints.pop(0)
-            queue_task(ship, f"scout {wp}")
-
-        while len(unscouted_markets) and len(queued_tasks):
-            reload = True
-            if DEBUG:
-                logger.debug(
-                    f"{len(unscouted_markets)} unscouted markets found in {system_symbol}"
-                )
-            ship = _get_scout_ship(queued_tasks, ships)
-            wp = unscouted_markets.pop(0)
-            queue_task(ship, f"scout {wp}")
-
-        if reload:
-            reload = False
-            system = System(system_symbol, RequestMp(qa_pairs))
         if len(queued_tasks) == 0:
             await sleep(interval)
             continue
@@ -142,30 +133,6 @@ async def ai_trade_controller(
                 dequeue_task(ship, reason="outdated", task=task)
 
         await sleep(interval)
-
-
-def _get_assigned_ships(system_symbol, pname, agent_symbol):
-    with connect(
-        "dbname=st2 user=postgres", row_factory=dict_row
-    ) as conn, conn.cursor() as cur:
-        assigned_ships = cur.execute(
-            """
-            SELECT * FROM "tasks" 
-            WHERE "agentSymbol" = %s 
-            AND "pname" = %s
-            AND "symbol" IN (
-                SELECT "symbol" FROM "ships"
-                WHERE "agentSymbol" = %s
-                AND "nav" ->> 'systemSymbol' = %s
-            )
-            """,
-            (agent_symbol, pname, agent_symbol, system_symbol),
-        ).fetchall()
-    if DEBUG:
-        logger.debug(
-            f"{len(assigned_ships)} ships assigned to trade in {system_symbol}"
-        )
-    return assigned_ships
 
 
 def _set_ship_metadata(ship_symbol, ships_dict):
