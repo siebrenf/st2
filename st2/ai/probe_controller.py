@@ -111,7 +111,7 @@ async def ai_probe_controller(
         await sleep(interval)
 
     central_waypoint = system.central_waypoint()
-    probe_has_arrived = {}
+    arrived = set()
     for waypoints_to_probe in [
         unprobed_shipyards_selling_probes,
         unprobed_shipyards,
@@ -134,11 +134,12 @@ async def ai_probe_controller(
 
             # wait until it's probe has arrived
             shipyard_probe = shipyards_selling_probes2probes[shipyard_symbol]
-            if not probe_has_arrived.get(shipyard_probe, False):
+            if shipyard_probe not in arrived:
                 ship = Ship(shipyards_selling_probes2probes[shipyard_symbol], request)
-                if t := ship.nav_remaining():
-                    await sleep(t)
-                probe_has_arrived[shipyard_probe] = True
+                t = ship.nav_remaining() + interval  # extra time to update the DB
+                await sleep(t)
+                arrived.add(shipyard_probe)
+                continue
 
             # purchase a probe when affordable
             credits = get_agent_public(agent_symbol)["credits"]
