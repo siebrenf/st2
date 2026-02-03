@@ -2,6 +2,7 @@ from psycopg import connect
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from st2 import time
 from st2.exceptions import ShipInTransitError
 from st2.logging import logger
 from st2.trade import get_a, get_base_price, set_a
@@ -34,14 +35,20 @@ def _buy_sell(self, symbol, units, action, log, verbose):
     # If update_a=True, request the TradeGood information between each transaction
     # and use this to calculate the value of `a`.
     # If update_a=False, only request the TradeGood information after the order.
-    update_a = True if log or get_a(wp, symbol)[1] >= 0.005 else False
-    tgs = []
-    tas = []
+    a_old, score_old = get_a(wp, symbol)
+    update_a = True if log or score_old >= 0.005 else False
+    log_entry = {
+        "market_a0": (a_old, score_old),  # before
+        "market_a1": (a_old, score_old),  # after
+        "tradeGoods": [],
+        "transactions": [],
+        "timestamp": time.now(),
+    }
     if update_a:
         for tg in self.market()["tradeGoods"]:
             if tg["symbol"] == symbol:
-                tgs.append(tg)
-        tv = tgs[0]["tradeVolume"]
+                log_entry["tradeGoods"].append(tg)
+        tv = log_entry["tradeGoods"][0]["tradeVolume"]
     else:
         tv = _get_tradegood(self, symbol)["tradeVolume"]
     total_price = 0
@@ -54,11 +61,11 @@ def _buy_sell(self, symbol, units, action, log, verbose):
             data={"symbol": symbol, "units": transaction_units},
         )["data"]
         self._update(data)
-        tas.append(data["transaction"])
         if update_a:
+            log_entry["transactions"].append(data["transaction"])
             for tg in self.market()["tradeGoods"]:
                 if tg["symbol"] == symbol:
-                    tgs.append(tg)
+                    log_entry["tradeGoods"].append(tg)
 
         price = data["transaction"]["totalPrice"]
         total_price += price
@@ -71,18 +78,35 @@ def _buy_sell(self, symbol, units, action, log, verbose):
         remaining_units -= transaction_units
     if update_a:
         base_price = get_base_price(symbol, action)
-        a_new, score_new = a_posterior(wp, tgs, tas, action, base_price)
-        a_old, score_old = get_a(wp, symbol)
+        a_new, score_new = a_posterior(
+            wp, log_entry["tradeGoods"], log_entry["transactions"], action, base_price
+        )
         if score_new < score_old:
+            log_entry["market_a1"] = a_new, score_new
             set_a(wp, symbol, a_new, score_new)
             if DEBUG:
                 logger.debug(
                     f"Updated `a` at {wp} for {symbol} from {a_old} to {a_new}"
                 )
+        with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO ship_transactions
+                (market_a0, market_a1, "tradeGoods", transactions, timestamp)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (
+                    Jsonb(log_entry["market_a0"]),
+                    Jsonb(log_entry["market_a1"]),
+                    Jsonb(log_entry["tradeGoods"]),
+                    Jsonb(log_entry["transactions"]),
+                    log_entry["timestamp"],
+                ),
+            )
     else:
         self.market()
     if log:
-        return total_price, tgs, tas
+        return total_price, log_entry
     return total_price
 
 
@@ -135,7 +159,7 @@ def a_posterior(waypoint_symbol, tgs, tas, action, base_price):
                     f"tradeGood={tg[f"{action}Price"]:_} "
                     f"transaction={ta["pricePerUnit"]:_})"
                 )
-            return None, 100
+            return None, 100.0
         ss.append(tg["supply"])  # supply level before the transaction
         ys.append(ta["pricePerUnit"])  # price at the transaction
         dxs.append(ta["units"] / tg["tradeVolume"])  # supply change of the transaction
@@ -147,11 +171,11 @@ def a_posterior(waypoint_symbol, tgs, tas, action, base_price):
             f"The tradeVolume for {symbol} increased at {waypoint_symbol} "
             f"from {min(tvs)} to {max(tvs)}!"
         )
-        # return None, 100
+        # return None, 100.0
 
     # find the value of a where the supply levels match the inferred value of x
     # and look for the lowest difference between the observed and inferred dx.
-    best = A_VALUES[0], 100
+    best = A_VALUES[0], 100.0
     for a in A_VALUES:
         # infer values for x
         xs = []

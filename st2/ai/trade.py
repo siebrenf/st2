@@ -40,9 +40,15 @@ async def ai_trade_system(
     pp = 0
     t0 = time.now()
     log_entry = {
-        "symbol": good,
-        "units": units,
-        "shipSymbol": ship_symbol,
+        "purchase_start": {},
+        "purchase_inf": {},
+        "purchase_obs": {},
+        "sell_start": {},
+        "sell_inf": {},
+        "sell_obs": {},
+        "accuracy": 0.0,
+        "travel_time": -1,
+        "fuel_cost": -1,
         "timestamp": t0,
     }
     base_price = None
@@ -71,12 +77,11 @@ async def ai_trade_system(
             )
         pp = ship.buy(good, purchase_units, log, verbose=False)
         if log:
-            pp, tgs, tas = pp
+            pp, md = pp
             log_entry["purchase_obs"] = {
-                "market_a": get_a(purchase_wp, good),
-                "totalPrice": pp,
-                "tradeGoods": tgs,
-                "transactions": tas,
+                "market_a": md["market_a1"],
+                "tradeGoods": md["tradeGoods"],
+                "transactions": md["transactions"],
             }
 
     fp += await travel(ship, sell_wp, explore=True, verbose=False)
@@ -86,17 +91,15 @@ async def ai_trade_system(
         )
     sp = ship.sell(good, units, log, verbose=False)
     if log:
-        sp, tgs, tas = sp
+        sp, md = sp
         log_entry["sell_obs"] = {
-            "market_a": get_a(sell_wp, good),
-            "totalPrice": sp,
-            "tradeGoods": tgs,
-            "transactions": tas,
+            "market_a": md["market_a1"],
+            "tradeGoods": md["tradeGoods"],
+            "transactions": md["transactions"],
         }
-        profit_inferred = (
-            log_entry["sell_inf"]["totalPrice"]
-            - log_entry["purchase_inf"]["totalPrice"]
-        )
+        profit_inferred = sum(
+            t["totalPrice"] for t in log_entry["sell_inf"]["transactions"]
+        ) - sum(t["totalPrice"] for t in log_entry["purchase_inf"]["transactions"])
         profit_observed = sp - pp
         inference_accuracy = round(
             100 * (1 - abs(profit_inferred - profit_observed) / profit_observed), 2
@@ -114,11 +117,10 @@ async def ai_trade_system(
             msg = msg[:-1] + f", {inference_accuracy=}%)"  # noqa
         logger.info(msg)
     if log:
+        log_entry["accuracy"] = inference_accuracy  # excludes fuel
         log_entry["travel_time"] = travel_time
         log_entry["fuel_cost"] = fp
-        log_entry["profit"] = total_profit  # includes fuel
-        log_entry["return_on_investment"] = return_on_investment  # includes fuel
-        log_entry["accuracy"] = inference_accuracy  # excludes fuel
+        log_entry["timestamp"] = t0
         submit_log_entry(log_entry)
 
 
@@ -128,7 +130,6 @@ def log_trade_inference(
     a, score = get_a(waypoint_symbol, good)
     md = {
         "market_a": (a, score),
-        "totalPrice": 0,
         "tradeGoods": [],
         "transactions": [],
     }
@@ -181,17 +182,11 @@ def log_trade_inference(
                 "type": trade_good["type"],
                 "supply": x2supply(x),
                 "activity": trade_good["activity"],
-                "purchasePrice": None,
-                "sellPrice": None,
-                "timestamp": timestamp.isoformat(),
+                "purchasePrice": None if action == "sell" else y,
+                "sellPrice": None if action != "sell" else y,
+                # "timestamp": timestamp.isoformat(),
             }
         )
-        if action == "sell":
-            md["tradeGoods"][-1]["sellPrice"] = y
-        else:
-            md["tradeGoods"][-1]["purchasePrice"] = y
-
-    md["totalPrice"] = round(price_total)
     return md
 
 
@@ -200,24 +195,19 @@ def submit_log_entry(log_entry):
         cur.execute(
             """
             INSERT INTO trades
-            (symbol, units, "shipSymbol", timestamp, purchase_start, purchase_inf, purchase_obs, sell_start, sell_inf, sell_obs, travel_time, fuel_cost, profit, return_on_investment, accuracy)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (purchase_start, purchase_inf, purchase_obs, sell_start, sell_inf, sell_obs, accuracy, travel_time, fuel_cost, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             [
-                log_entry["symbol"],
-                log_entry["units"],
-                log_entry["shipSymbol"],
-                log_entry["timestamp"],
                 Jsonb(log_entry["purchase_start"]),
                 Jsonb(log_entry["purchase_inf"]),
                 Jsonb(log_entry["purchase_obs"]),
                 Jsonb(log_entry["sell_start"]),
                 Jsonb(log_entry["sell_inf"]),
                 Jsonb(log_entry["sell_obs"]),
+                log_entry["accuracy"],
                 log_entry["travel_time"],
                 log_entry["fuel_cost"],
-                log_entry["profit"],
-                log_entry["return_on_investment"],
-                log_entry["accuracy"],
+                log_entry["timestamp"],
             ],
         )

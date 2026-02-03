@@ -62,7 +62,7 @@ def get_a(waypoint_symbol, symbol):
             (waypoint_symbol, symbol),
         ).fetchone()
     if ret is None:
-        ret = None, 10.0
+        ret = None, 100.0
     return ret
 
 

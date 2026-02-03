@@ -247,7 +247,7 @@ def a_prior(y, supply, base_price, port, action):
     Returns the highest value of the waypoint modifier (a) that can yield the
     given price (y) within the supply level.
     """
-    best = A_VALUES[0], 100
+    best = A_VALUES[0], 100.0
     x_min, x_max = supply2x(supply)
     x_max += 0.005  # compensate for floating point rounding errors
     x_min -= 0.005
@@ -267,7 +267,7 @@ def a_posterior(y0, y1, s1, units, tv, port, action, base_price):
     Returns the value of the waypoint modifier (a)
     that best matches the difference in price (y)
     """
-    best = A_VALUES[0], 100
+    best = A_VALUES[0], 100.0
     dx = units / tv
     x_min1, x_max1 = supply2x(s1)
     x_max1 += 0.005  # compensate for floating point rounding errors
