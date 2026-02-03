@@ -4,6 +4,14 @@ FUEL_WEIGHT = 0.65  # average FUEL purchase price/100
 TIME_WEIGHT = 10  # credits/sec
 
 
+def dist(x1, y1, x2, y2):
+    # Pythagorean theorem
+    a = math.pow(x1 - x2, 2)
+    b = math.pow(y1 - y2, 2)
+    c = math.sqrt(a + b)
+    return c
+
+
 def nav_score(
     distance,
     speed,

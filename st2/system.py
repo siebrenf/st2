@@ -10,6 +10,7 @@ from psycopg.types.json import Jsonb
 from scipy.spatial.distance import cdist
 
 from st2.logging import logger
+from st2.pathing.utils import dist
 
 DEBUG = False
 
@@ -178,10 +179,12 @@ class System:
 
         return val
 
-    def refresh(self):
-        for name in ["waypoints", "gate", "shipyards", "markets", "uncharted", "graph"]:
+    def refresh(self, refresh_graph=True):
+        keys = ["waypoints", "gate", "shipyards", "markets", "uncharted"]
+        if refresh_graph:  # only needed if the system wasn't loaded into the DB
+            keys.append("graph")
+        for name in keys:
             setattr(self, name, None)
-        _ = self.waypoints
 
     def _get_system(self, cur):
         """
@@ -596,12 +599,10 @@ class System:
         if start and start not in wps:
             wps = wps + [start]  # prevents updating wps out of scope
 
-        if len(wps) >= 3:
+        if len(wps) >= 2:
             path = traveling_salesman_problem(
                 self.graph, weight=weight, nodes=wps, cycle=False
             )
-        elif len(wps) == 2:
-            path = wps
         elif len(wps) == 1:
             path = wps
         else:
@@ -612,16 +613,20 @@ class System:
             path = path[i:] + path[:i]
         return path
 
+    def central_waypoint(self):
+        """Return the waypoint nearest to (0,0)"""
+        best = None, float("inf")
+        for wp, md in self.waypoints.items():
+            distance = dist(0, 0, md["x"], md["y"])
+            if distance < best[1]:
+                best = wp, distance
+        return best[0]
+
     def waypoints_sort(self, source, waypoints=None, reverse=False):
         """Sort waypoints in ascending proximity to the source."""
-        if isinstance(waypoints, str):
-            waypoints = list(waypoints)
+        original_waypoints = set(waypoints)
         if waypoints is None:
             waypoints = list(self.waypoints)
-        else:
-            for wp in waypoints:
-                if wp not in self.waypoints:
-                    raise ValueError(f'Waypoint "{wp}" not in {self["symbol"]}')
 
         nodes = waypoints + [source]
         subgraph = nx.subgraph_view(self.graph, filter_node=lambda node: node in nodes)
@@ -631,11 +636,11 @@ class System:
             reverse=reverse,
         )
 
-        if reverse is False and source in waypoints:
+        if reverse is False and source in original_waypoints:
             yield source, 0
         for wp, md in waypoint_distances:
             yield wp, math.ceil(md["distance"])
-        if reverse is True and source in waypoints:
+        if reverse is True and source in original_waypoints:
             yield source, 0
 
     def uncharted_markets(self):

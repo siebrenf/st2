@@ -1,17 +1,8 @@
-import math
-
 from psycopg import connect
 
 from st2 import time
 from st2.logging import logger
-
-
-def dist(x1, y1, x2, y2):
-    # Pythagorean theorem
-    a = math.pow(x1 - x2, 2)
-    b = math.pow(y1 - y2, 2)
-    c = math.sqrt(a + b)
-    return c
+from st2.pathing.utils import dist
 
 
 def navigate(self, waypoint, verbose=True):
