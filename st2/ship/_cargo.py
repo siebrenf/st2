@@ -6,7 +6,7 @@ from st2 import time
 from st2.exceptions import ShipInTransitError
 from st2.logging import logger
 from st2.trade import get_a, get_base_price, set_a
-from st2.trade.functions import A_VALUES, x2supply, y2x
+from st2.trade.functions import a_posterior2 as a_posterior
 
 DEBUG = True
 
@@ -138,67 +138,6 @@ def _get_tradegood(self, symbol):
                 )
         ret = _get_tradegood(self, symbol)
     return ret
-
-
-def a_posterior(waypoint_symbol, tgs, tas, action, base_price):
-    symbol = tgs[0]["symbol"]
-    port = tgs[0]["type"]
-
-    # match the supply levels with the transaction prices
-    ss = []
-    ys = []
-    dxs = []
-    tvs = []
-    for i, ta in enumerate(tas):
-        tg = tgs[i]
-        if tg[f"{action}Price"] != ta["pricePerUnit"]:
-            if DEBUG:
-                logger.debug(
-                    f"Outside factors influenced the {symbol} transaction "
-                    f"at {waypoint_symbol} (prices changed: "
-                    f"tradeGood={tg[f"{action}Price"]:_} "
-                    f"transaction={ta["pricePerUnit"]:_})"
-                )
-            return None, 100.0
-        ss.append(tg["supply"])  # supply level before the transaction
-        ys.append(ta["pricePerUnit"])  # price at the transaction
-        dxs.append(ta["units"] / tg["tradeVolume"])  # supply change of the transaction
-        tvs.append(tg["tradeVolume"])  # tradeVolume before the transaction
-    ys.append(tgs[-1][f"{action}Price"])  # price after all transactions
-    ss.append(tgs[-1]["supply"])  # supply level after all transactions
-    if DEBUG and len(set(tvs)) != 1:
-        logger.debug(
-            f"The tradeVolume for {symbol} increased at {waypoint_symbol} "
-            f"from {min(tvs)} to {max(tvs)}!"
-        )
-        # return None, 100.0
-
-    # find the value of a where the supply levels match the inferred value of x
-    # and look for the lowest difference between the observed and inferred dx.
-    best = A_VALUES[0], 100.0
-    for a in A_VALUES:
-        # infer values for x
-        xs = []
-        for i, y in enumerate(ys):
-            x = y2x(y, a, base_price, port, action)
-            if ss[i] != x2supply(x):
-                break  # inferred x not contained in supply level
-            xs.append(x)
-        if len(xs) != len(ys):
-            continue  # next value of a
-
-        # lowest difference between the observed and inferred dx
-        diff = 0
-        for i, dx_obs in enumerate(dxs):
-            dx_inf = abs(xs[i + 1] - xs[i])
-            diff += abs(dx_obs - dx_inf) / dx_obs
-        if diff < best[1]:
-            best = a, float(diff)
-    if best[1] == float("inf"):
-        logger.warning(
-            f"The {base_price=:_} for {symbol}, the values for `a`, or the {port} market functions, are incorrect!"
-        )
-    return best
 
 
 def transfer(self, symbol, units, ship, verbose=True):

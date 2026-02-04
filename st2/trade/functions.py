@@ -1,5 +1,9 @@
 import numpy as np
 
+from st2.logging import logger
+
+DEBUG = True
+
 # all known values for 'a'. Values seem to occur on a distribution.
 A_VALUES = [0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2]
 
@@ -158,90 +162,6 @@ def supply2x_avg(supply):
     }[supply]
 
 
-# def supply2x_x2(s0, s1, units, tv, action):
-#     """return the possible ranges of x before and after a transaction"""
-#     dx = units / tv
-#     x_min0, x_max0 = supply2x(s0)
-#     x_min1, x_max1 = supply2x(s1)
-#     if s0 == s1:
-#         if action == "sell":
-#             x_max0 -= dx
-#             x_min1 += dx
-#         else:
-#             x_min0 += dx
-#             x_max1 -= dx
-#     else:
-#         s2i = {"ABUNDANT": 4, "HIGH": 3, "MODERATE": 2, "LIMITED": 1, "SCARCE": 0}
-#         if abs(s2i[s0] - s2i[s1]) > 1:
-#             raise NotImplementedError("Supply levels must be adjacent")
-#
-#         if action == "sell":
-#             # the supply level increased between transactions
-#             # range = (x_min1, x_min1 + dx)
-#             x_min0 = x_max0 - dx
-#             x_max1 = x_min1 + dx
-#         else:
-#             # the supply level decreased between transactions:
-#             # range = (x_max1 - dx, x_max1)
-#             x_max0 = x_min0 + dx
-#             x_min1 = x_max1 - dx
-#     return x_min0, x_max0, x_min1, x_max1
-#
-#
-# def a_prior(y, supply, base_price, port, action):
-#     """
-#     Returns the highest value of the waypoint modifier (a) that can yield the
-#     given price (y) within the supply level, and the matching value of x.
-#     """
-#     best = None, float("inf")
-#     x_min, x_max = supply2x(supply)
-#     for a in A_VALUES:
-#         x = y2x(y, a, base_price, port, action)
-#         if x_max >= round(x, 4) >= x_min:
-#             return a, 0.1
-#
-#         # approximation in case the exact calculations are off
-#         x_avg = supply2x_avg(supply)
-#         diff = abs(x_avg - x)
-#         if diff < best[1]:
-#             best = a, diff
-#     if DEBUG:
-#         logger.debug(
-#             f"Returning approximation. {y=}, {base_price=}, "
-#             f"{supply=}, {port=}, {action=}, a={best[0]}, diff={best[1]}"
-#         )
-#     return best[0], 0.01  # worst score
-#
-#
-# def a_posterior(y0, s0, y1, s1, units, tv, port, action, base_price):
-#     """Find the value of a that best matches the difference in price (y)"""
-#     best = None, float("inf")
-#     dx = units / tv
-#     x_min0, x_max0, x_min1, x_max1 = supply2x_x2(s0, s1, units, tv, action)
-#     for a in A_VALUES:
-#         x0 = y2x(y0, a, base_price, port, action)
-#         x1 = y2x(y1, a, base_price, port, action)
-#         diff = abs(abs(x1 - x0) - dx)
-#         if (
-#             (x_max0 >= round(x0, 4) >= x_min0)
-#             and (x_max1 >= round(x1, 4) >= x_min1)
-#             and (diff < 1 / tv)
-#         ):
-#             return a, 1  # best score
-#
-#         # approximation in case the exact calculations are off
-#         if diff < best[1]:
-#             best = a, diff
-#     if DEBUG:
-#         logger.debug(
-#             f"Returning approximation. {y0=}, {y1=}, {base_price=}, {s0=}, {s1=}, "
-#             f"{units=}, {tv=}, {port=}, {action=}, a={best[0]}, diff={best[1]}"
-#         )
-#     # always better than a_prior, always worse than exact calculations
-#     score = min(0.99, max(0.11, 1 - best[1]))
-#     return best[0], score
-
-
 def a_prior(y, supply, base_price, port, action):
     """
     Returns the highest value of the waypoint modifier (a) that can yield the
@@ -262,7 +182,7 @@ def a_prior(y, supply, base_price, port, action):
     return best
 
 
-def a_posterior(y0, y1, s1, units, tv, port, action, base_price):
+def a_posterior1(y0, y1, s1, units, tv, port, action, base_price):
     """
     Returns the value of the waypoint modifier (a)
     that best matches the difference in price (y)
@@ -280,4 +200,69 @@ def a_posterior(y0, y1, s1, units, tv, port, action, base_price):
         diff = 10.0 + abs(abs(x1 - x0) - dx) / dx  # 10 = pseudovalue
         if diff < best[1]:
             best = a, diff
+    return best
+
+
+def a_posterior2(waypoint_symbol, tgs, tas, action, base_price):
+    """
+    Returns the value of the waypoint modifier (a)
+    that best matches the differences in price (y)
+    across any number of transactions.
+    """
+    symbol = tgs[0]["symbol"]
+    port = tgs[0]["type"]
+
+    # match the supply levels with the transaction prices
+    ss = []
+    ys = []
+    dxs = []
+    tvs = []
+    for i, ta in enumerate(tas):
+        tg = tgs[i]
+        if tg[f"{action}Price"] != ta["pricePerUnit"]:
+            if DEBUG:
+                logger.debug(
+                    f"Outside factors influenced the {symbol} transaction "
+                    f"at {waypoint_symbol} (prices changed: "
+                    f"tradeGood={tg[f"{action}Price"]:_} "
+                    f"transaction={ta["pricePerUnit"]:_})"
+                )
+            return A_VALUES[0], 100.0
+        ss.append(tg["supply"])  # supply level before the transaction
+        ys.append(ta["pricePerUnit"])  # price at the transaction
+        dxs.append(ta["units"] / tg["tradeVolume"])  # supply change of the transaction
+        tvs.append(tg["tradeVolume"])  # tradeVolume before the transaction
+    ys.append(tgs[-1][f"{action}Price"])  # price after all transactions
+    ss.append(tgs[-1]["supply"])  # supply level after all transactions
+    if DEBUG and len(set(tvs)) != 1:
+        logger.debug(
+            f"The tradeVolume for {symbol} increased at {waypoint_symbol} "
+            f"from {min(tvs)} to {max(tvs)}!"
+        )
+
+    # find the value of a where the supply levels match the inferred value of x
+    # and look for the lowest difference between the observed and inferred dx.
+    best = A_VALUES[0], 100.0
+    for a in A_VALUES:
+        # infer values for x
+        xs = []
+        for i, y in enumerate(ys):
+            x = y2x(y, a, base_price, port, action)
+            if ss[i] != x2supply(x):
+                break  # inferred x not contained in supply level
+            xs.append(x)
+        if len(xs) != len(ys):
+            continue  # next value of a
+
+        # lowest difference between the observed and inferred dx
+        diff = 0
+        for i, dx_obs in enumerate(dxs):
+            dx_inf = abs(xs[i + 1] - xs[i])
+            diff += abs(dx_obs - dx_inf) / dx_obs
+        if diff < best[1]:
+            best = a, float(diff)
+    if best[1] == float("inf"):
+        logger.warning(
+            f"The {base_price=:_} for {symbol}, the values for `a`, or the {port} market functions, are incorrect!"
+        )
     return best

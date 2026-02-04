@@ -2,7 +2,7 @@ from psycopg import connect
 
 from st2.db.static import GOODS, SHIPS
 from st2.trade.base_prices import BASE_PRICES
-from st2.trade.functions import a_prior, x2y, y2x
+from st2.trade.functions import A_VALUES, a_prior, x2y, y2x
 from st2.trade.price_ranges import PRICE_RANGES
 
 
@@ -20,7 +20,7 @@ def price_estimate(trade_good, units, action):
     # complex scenario
     base_price = get_base_price(trade_good["symbol"], action)
     a, score = get_a(trade_good["waypointSymbol"], trade_good["symbol"])
-    if score >= 10:
+    if score == 1000.0:  # 1000 = get_a default value
         a, score = a_prior(
             price,
             trade_good["supply"],
@@ -62,7 +62,7 @@ def get_a(waypoint_symbol, symbol):
             (waypoint_symbol, symbol),
         ).fetchone()
     if ret is None:
-        ret = None, 100.0
+        ret = A_VALUES[0], 1000.0
     return ret
 
 
