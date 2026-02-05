@@ -183,7 +183,7 @@ def get_agent(symbol):
         "dbname=st2 user=postgres", row_factory=dict_row
     ) as conn, conn.cursor() as cur:
         agent = cur.execute(
-            """SELECT token FROM agents WHERE symbol = %s""",
+            """SELECT * FROM agents WHERE symbol = %s""",
             (symbol,),
         ).fetchone()
     return agent
