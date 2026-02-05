@@ -137,7 +137,7 @@ async def chart_system_marketplaces(system, interval=60):
             if task["pname"] == "traders":
                 tt += 1
                 if task["queued"] is None or task["queued"].startswith("trade "):
-                    available_ship_symbol = task["ship"]
+                    available_ship_symbol = task["symbol"]
                     at += 1
         if DEBUG:
             logger.debug(f"{at}/{tt} ships available to scout {system.symbol}")
@@ -187,7 +187,7 @@ async def scout_system_marketplaces(system, interval=60):
             if task["pname"] == "traders":
                 tt += 1
                 if task["queued"] is None or task["queued"].startswith("trade "):
-                    available_ship_symbol = task["ship"]
+                    available_ship_symbol = task["symbol"]
                     at += 1
         if DEBUG:
             logger.debug(f"{at}/{tt} ships available to scout {system.symbol}")
