@@ -38,16 +38,19 @@ def _buy_sell(self, symbol, units, action, log, verbose):
     a_old, score_old = get_a(wp, symbol)
     update_a = True if log or score_old >= 0.005 else False
     log_entry = {
+        "symbol": symbol,
+        "waypointSymbol": wp,
         "market_a0": (a_old, score_old),  # before
         "market_a1": (a_old, score_old),  # after
+        "timestamp": time.now(),
         "tradeGoods": [],
         "transactions": [],
-        "timestamp": time.now(),
     }
     if update_a:
         for tg in self.market()["tradeGoods"]:
             if tg["symbol"] == symbol:
                 log_entry["tradeGoods"].append(tg)
+                break
         tv = log_entry["tradeGoods"][0]["tradeVolume"]
     else:
         tv = _get_tradegood(self, symbol)["tradeVolume"]
@@ -66,6 +69,7 @@ def _buy_sell(self, symbol, units, action, log, verbose):
             for tg in self.market()["tradeGoods"]:
                 if tg["symbol"] == symbol:
                     log_entry["tradeGoods"].append(tg)
+                    break
 
         price = data["transaction"]["totalPrice"]
         total_price += price
@@ -91,18 +95,38 @@ def _buy_sell(self, symbol, units, action, log, verbose):
         with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO ship_transactions
-                (market_a0, market_a1, "tradeGoods", transactions, timestamp)
+                INSERT INTO bulk_transactions_metadata
+                (symbol, "waypointSymbol", market_a0, market_a1, timestamp)
                 VALUES (%s, %s, %s, %s, %s)
+                RETURNING id
                 """,
                 (
+                    log_entry["symbol"],
+                    log_entry["waypointSymbol"],
                     Jsonb(log_entry["market_a0"]),
                     Jsonb(log_entry["market_a1"]),
-                    Jsonb(log_entry["tradeGoods"]),
-                    Jsonb(log_entry["transactions"]),
                     log_entry["timestamp"],
                 ),
             )
+            md_id_key = cur.fetchone()[0]
+            for ta in log_entry["transactions"]:
+                cur.execute(
+                    """
+                    INSERT INTO bulk_transactions_transactions
+                    (bulk_transactions_id, transaction_id)
+                    VALUES (%s, %s)
+                    """,
+                    (md_id_key, ta["id"]),
+                )
+            for tg in log_entry["tradeGoods"]:
+                cur.execute(
+                    """
+                    INSERT INTO bulk_transactions_tradegoods
+                    (bulk_transactions_id, tradegood_id)
+                    VALUES (%s, %s)
+                    """,
+                    (md_id_key, tg["id"]),
+                )
     else:
         self.market()
     if log:

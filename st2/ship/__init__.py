@@ -80,83 +80,83 @@ class Ship(dict):
         for key in keys:
             self[key] = data[key]
 
-        with connect("dbname=st2 user=postgres") as conn:
-            with conn.cursor() as cur:
-                if keys:
-                    updates = ", ".join([f'"{key}" = %s' for key in keys])
-                    query = f"UPDATE ships SET {updates} WHERE symbol = %s"
-                    params = [Jsonb(self[key]) for key in keys] + [self["symbol"]]
-                    cur.execute(query, params)
+        with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+            if keys:
+                updates = ", ".join([f'"{key}" = %s' for key in keys])
+                query = f"UPDATE ships SET {updates} WHERE symbol = %s"
+                params = [Jsonb(self[key]) for key in keys] + [self["symbol"]]
+                cur.execute(query, params)  # noqa
 
-                if "agent" in data:
-                    agent = data["agent"]
-                    cur.execute(
-                        """
-                        INSERT INTO agents_public
-                        ("accountId", "symbol", "headquarters", "credits",
-                         "startingFaction", "shipCount", "timestamp")
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (
-                            agent["accountId"],
-                            agent["symbol"],
-                            agent["headquarters"],
-                            agent["credits"],
-                            agent["startingFaction"],
-                            agent["shipCount"],
-                            time.now(),
-                        ),
-                    )
+            if "agent" in data:
+                agent = data["agent"]
+                cur.execute(
+                    """
+                    INSERT INTO agents_public
+                    ("accountId", "symbol", "headquarters", "credits",
+                     "startingFaction", "shipCount", "timestamp")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        agent["accountId"],
+                        agent["symbol"],
+                        agent["headquarters"],
+                        agent["credits"],
+                        agent["startingFaction"],
+                        agent["shipCount"],
+                        time.now(),
+                    ),
+                )
 
-                if "transaction" in data:
-                    # TODO: fails with repair-/scrap-/modificationTransaction
-                    transaction = data["transaction"]
-                    cur.execute(
-                        """
-                        INSERT INTO market_transactions
-                        ("waypointSymbol", "systemSymbol", "shipSymbol", "tradeSymbol",
-                         "type", "units", "pricePerUnit", "totalPrice", "timestamp")
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT ("waypointSymbol", "timestamp") DO NOTHING
-                        """,
-                        (
-                            transaction["waypointSymbol"],
-                            self["nav"]["systemSymbol"],
-                            transaction["shipSymbol"],
-                            transaction["tradeSymbol"],
-                            transaction["type"],
-                            transaction["units"],
-                            transaction["pricePerUnit"],
-                            transaction["totalPrice"],
-                            time.read(transaction["timestamp"]),
-                        ),
-                    )
+            if "transaction" in data:
+                # TODO: fails with repair-/scrap-/modificationTransaction
+                transaction = data["transaction"]
+                cur.execute(
+                    """
+                    INSERT INTO market_transactions
+                    ("waypointSymbol", "systemSymbol", "shipSymbol", "tradeSymbol",
+                     "type", "units", "pricePerUnit", "totalPrice", "timestamp")
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (
+                        transaction["waypointSymbol"],
+                        self["nav"]["systemSymbol"],
+                        transaction["shipSymbol"],
+                        transaction["tradeSymbol"],
+                        transaction["type"],
+                        transaction["units"],
+                        transaction["pricePerUnit"],
+                        transaction["totalPrice"],
+                        time.read(transaction["timestamp"]),
+                    ),
+                )
+                transaction["id"] = cur.fetchone()[0]
 
-                for event in data.get("events", []):
-                    # TODO: use self.refresh() to get the condition after?
-                    activity = None
-                    if "fuel" in data:
-                        activity = "navigate"
-                    elif "extraction" in data:
-                        activity = "extract"
-                    elif "siphon" in data:
-                        activity = "siphon"
-                    condition = self[event["component"].lower()]["condition"]
-                    cur.execute(
-                        """
-                        INSERT INTO events
-                        (symbol, "shipSymbol", activity, component, condition, timestamp)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                        """,
-                        (
-                            event["symbol"],
-                            self["symbol"],
-                            activity,
-                            event["component"],
-                            condition,
-                            time.now(),
-                        ),
-                    )
+            for event in data.get("events", []):
+                # TODO: use self.refresh() to get the condition after?
+                activity = None
+                if "fuel" in data:
+                    activity = "navigate"
+                elif "extraction" in data:
+                    activity = "extract"
+                elif "siphon" in data:
+                    activity = "siphon"
+                condition = self[event["component"].lower()]["condition"]
+                cur.execute(
+                    """
+                    INSERT INTO events
+                    (symbol, "shipSymbol", activity, component, condition, timestamp)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        event["symbol"],
+                        self["symbol"],
+                        activity,
+                        event["component"],
+                        condition,
+                        time.now(),
+                    ),
+                )
 
     def dock(self):
         self._nav_status()

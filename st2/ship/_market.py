@@ -34,7 +34,7 @@ def market(self):
                 ("waypointSymbol", "systemSymbol", "symbol", "tradeVolume", "type",
                  "supply", "activity", "purchasePrice", "sellPrice", "timestamp")
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT ("waypointSymbol", "symbol", "timestamp") DO NOTHING
+                RETURNING id
                 """,
                 (
                     waypoint_symbol,
@@ -49,6 +49,8 @@ def market(self):
                     timestamp,
                 ),
             )
+            t["timestamp"] = timestamp.isoformat()
+            t["id"] = cur.fetchone()[0]
         for t in data.get("transactions", []):
             cur.execute(
                 """
@@ -56,7 +58,8 @@ def market(self):
                 ("waypointSymbol", "systemSymbol", "shipSymbol", "tradeSymbol",
                  "type", "units", "pricePerUnit", "totalPrice", "timestamp")
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT ("waypointSymbol", "timestamp") DO NOTHING
+                ON CONFLICT ("waypointSymbol", "tradeSymbol", "timestamp") DO NOTHING
+                RETURNING id
                 """,
                 (
                     waypoint_symbol,
@@ -70,4 +73,8 @@ def market(self):
                     time.read(t["timestamp"]),
                 ),
             )
+            # only returns an id if this is the first observation
+            row = cur.fetchone()
+            id_key = row[0] if row else None
+            t["id"] = id_key
     return data

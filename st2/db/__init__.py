@@ -389,7 +389,7 @@ def db_tables_init(status=None):
                 """
                 CREATE TABLE market_transactions
                 (
-                    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    "id" BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
                     "waypointSymbol" text,
                     "systemSymbol" text,
                     "shipSymbol" text,
@@ -398,18 +398,14 @@ def db_tables_init(status=None):
                     "units" integer,
                     "pricePerUnit" integer,
                     "totalPrice" integer,
-                    "timestamp" timestamptz
+                    "timestamp" timestamptz,
+                    PRIMARY KEY ("waypointSymbol", "tradeSymbol", "timestamp")
                 )
                 """
             )
             cur.execute(
                 """
                 CREATE INDEX idx_trade_symbol_market_transactions ON market_transactions("tradeSymbol")
-                """
-            )
-            cur.execute(
-                """
-                CREATE INDEX idx_waypoint_symbol_market_transactions ON market_transactions("waypointSymbol")
                 """
             )
             cur.execute(
@@ -432,7 +428,7 @@ def db_tables_init(status=None):
                 """
                 CREATE TABLE market_tradegoods
                 (
-                    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    "id" BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
                     "waypointSymbol" text,
                     "systemSymbol" text,
                     "symbol" text,
@@ -442,18 +438,14 @@ def db_tables_init(status=None):
                     "activity" text,
                     "purchasePrice" integer,
                     "sellPrice" integer,
-                    "timestamp" timestamptz
+                    "timestamp" timestamptz,
+                    PRIMARY KEY ("waypointSymbol", "symbol", "timestamp")
                 )
                 """
             )
             cur.execute(
                 """
                 CREATE INDEX idx_trade_symbol_market_tradegoods ON market_tradegoods("symbol")
-                """
-            )
-            cur.execute(
-                """
-                CREATE INDEX idx_waypoint_symbol_market_tradegoods ON market_tradegoods("waypointSymbol")
                 """
             )
             cur.execute(
@@ -486,6 +478,7 @@ def db_tables_init(status=None):
             )
 
         if "shipyard_transactions" not in tables:
+            # Notes:
             # - Create a waypoint specific transactions table:
             #   CREATE TABLE transactions_wp1 PARTITION OF transactions FOR VALUES IN ('wp1');
             # - Use st2.time.read(timestamp) as timestamp
@@ -493,30 +486,26 @@ def db_tables_init(status=None):
                 """
                 CREATE TABLE shipyard_transactions
                 (
-                    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    "id" BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
                     "waypointSymbol" text,
                     "systemSymbol" text,
                     "shipSymbol" text,
                     "agentSymbol" text,
                     "shipType" text,
                     "price" integer,
-                    "timestamp" timestamptz
+                    "timestamp" timestamptz,
+                    PRIMARY KEY ("waypointSymbol", "shipType", "timestamp")
                 )
                 """
             )
             cur.execute(
                 """
-                CREATE INDEX idx_ship_symbol_shipyard_transactions ON shipyard_transactions("shipSymbol")
+                CREATE INDEX idx_ship_type_shipyard_transactions ON shipyard_transactions("shipType")
                 """
             )
             cur.execute(
                 """
                 CREATE INDEX idx_agent_symbol_shipyard_transactions ON shipyard_transactions("agentSymbol")
-                """
-            )
-            cur.execute(
-                """
-                CREATE INDEX idx_waypoint_symbol_shipyard_transactions ON shipyard_transactions("waypointSymbol")
                 """
             )
             cur.execute(
@@ -531,6 +520,7 @@ def db_tables_init(status=None):
             )
 
         if "shipyard_ships" not in tables:
+            # Notes:
             # - Create a waypoint specific tradegoods table:
             #   CREATE TABLE tradegoods_wp1 PARTITION OF tradegoods FOR VALUES IN ('wp1');
             # - Use st2.time.now() as timestamp
@@ -538,25 +528,21 @@ def db_tables_init(status=None):
                 """
                 CREATE TABLE shipyard_ships
                 (
-                    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    "id" BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
                     "waypointSymbol" text,
                     "systemSymbol" text,
                     "type" text, --shipType
                     "supply" text,
                     "activity" text,
                     "purchasePrice" integer,
-                    "timestamp" timestamptz
+                    "timestamp" timestamptz,
+                    PRIMARY KEY ("waypointSymbol", "type", "timestamp")
                 )
                 """
             )
             cur.execute(
                 """
                 CREATE INDEX idx_ship_type_shipyard_ships ON shipyard_ships("type")
-                """
-            )
-            cur.execute(
-                """
-                CREATE INDEX idx_waypoint_symbol_shipyard_ships ON shipyard_ships("waypointSymbol")
                 """
             )
             cur.execute(
@@ -588,21 +574,6 @@ def db_tables_init(status=None):
                 """
             )
 
-        if "events" not in tables:
-            cur.execute(
-                """
-                CREATE TABLE events
-                (
-                    "symbol" text,
-                    "shipSymbol" text,
-                    "activity" text,
-                    "component" text,
-                    "condition" float8,
-                    "timestamp" timestamptz
-                )
-                """
-            )
-
         if "market_a" not in tables:
             cur.execute(
                 """
@@ -620,7 +591,7 @@ def db_tables_init(status=None):
         if "bulk_transactions_metadata" not in tables:
             # Notes:
             # - query bulk_transactions, not the individual tables
-            # - insert transactions/tradegoods > insert metadata > link rows
+            # - insert transactions/tradegoods > insert metadata > link
             cur.execute(
                 """
                 CREATE TABLE bulk_transactions_metadata
@@ -675,7 +646,7 @@ def db_tables_init(status=None):
                         REFERENCES market_tradegoods(id)
                         ON DELETE RESTRICT,
                     PRIMARY KEY (bulk_transactions_id, tradegood_id),
-                    UNIQUE (transaction_id)
+                    UNIQUE (tradegood_id)
                 )
                 """
             )
@@ -684,102 +655,22 @@ def db_tables_init(status=None):
                 CREATE VIEW bulk_transactions AS
                 SELECT
                     md.*,
-                    ARRAY_AGG(DISTINCT ta.id) AS transaction_ids,
-                    ARRAY_AGG(DISTINCT tg.id) AS tradegood_ids
+                    JSONB_AGG(tg.*) AS tradegoods,
+                    JSONB_AGG(ta.*) AS transactions
                 FROM bulk_transactions_metadata md
-                LEFT JOIN bulk_transactions_transactions btta
-                    ON btta.bulk_transactions_id = md.id
-                LEFT JOIN market_transactions ta
-                    ON ta.id = btta.transaction_id
                 LEFT JOIN bulk_transactions_tradegoods bttg
                     ON bttg.bulk_transactions_id = md.id
                 LEFT JOIN market_tradegoods tg
                     ON tg.id = bttg.tradegood_id
+                LEFT JOIN bulk_transactions_transactions btta
+                    ON btta.bulk_transactions_id = md.id
+                LEFT JOIN market_transactions ta
+                    ON ta.id = btta.transaction_id
                 GROUP BY md.id
                 """
             )
 
-            # TODO: usage of new market_transactions/market_tradegoods
-            """
-            cur.execute(
-                "INSERT INTO users (username) VALUES (%s) RETURNING id",
-                ("alice",)
-            )
-            row_id = cur.fetchone()[0]
-            """
-
-            """
-            # the main table
-            CREATE TABLE bulk_transactions_metadata (
-              id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-              estimated_metadata JSONB[] NOT NULL,
-              measured_metadata  JSONB[] NOT NULL,
-              completed_at TIMESTAMPTZ NOT NULL
-            );
-            
-            # 2 relational tables
-            Why this works            
-            - A transaction can appear zero times → unlinked
-            - Or exactly once → linked to one complete_transaction
-            - The UNIQUE (transaction_id) forbids multiple parents
-            - This is the relational equivalent of “belongs to at most one”.
-
-            CREATE TABLE complete_transaction_transactions (
-              complete_transaction_id BIGINT NOT NULL
-                REFERENCES bulk_transactions_metadata(id)
-                ON DELETE CASCADE,
-            
-              transaction_id BIGINT NOT NULL
-                REFERENCES transactions(id)
-                ON DELETE RESTRICT,
-            
-              PRIMARY KEY (complete_transaction_id, transaction_id),
-            
-              -- THIS is what enforces “zero or one”
-              UNIQUE (transaction_id)
-            );
-            
-            CREATE TABLE complete_transaction_tradegoods (
-              complete_transaction_id BIGINT NOT NULL
-                REFERENCES bulk_transactions_metadata(id)
-                ON DELETE CASCADE,
-            
-              tradegood_id BIGINT NOT NULL
-                REFERENCES tradegoods(id)
-                ON DELETE RESTRICT,
-            
-              PRIMARY KEY (complete_transaction_id, tradegood_id),
-              UNIQUE (tradegood_id)
-            );
-            
-            
-            # get the transactions
-            
-            SELECT t.*
-            FROM transactions t
-            JOIN complete_transaction_transactions ctt
-              ON ctt.transaction_id = t.id
-            WHERE ctt.complete_transaction_id = $1;
-            
-            
-            
-            CREATE VIEW complete_transactions_expanded AS
-            SELECT
-              ct.*,
-              ARRAY_AGG(DISTINCT t.id) AS transaction_ids,
-              ARRAY_AGG(DISTINCT g.id) AS tradegood_ids
-            FROM complete_transactions ct
-            LEFT JOIN complete_transaction_transactions ctt
-              ON ctt.complete_transaction_id = ct.id
-            LEFT JOIN transactions t
-              ON t.id = ctt.transaction_id
-            LEFT JOIN complete_transaction_tradegoods ctg
-              ON ctg.complete_transaction_id = ct.id
-            LEFT JOIN tradegoods g
-              ON g.id = ctg.tradegood_id
-            GROUP BY ct.id;
-            """
-
+        # TODO: refactor (use bulk_transactions.id for the observations)
         if "trades" not in tables:
             cur.execute(
                 """
@@ -845,6 +736,21 @@ def db_tables_init(status=None):
                 """
             )
 
+        if "events" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE events
+                (
+                    "symbol" text,
+                    "shipSymbol" text,
+                    "activity" text,
+                    "component" text,
+                    "condition" float8,
+                    "timestamp" timestamptz
+                )
+                """
+            )
+
         if "supply_chain" not in tables:
             cur.execute(
                 """
@@ -898,17 +804,44 @@ def get_table(table, n=None, ascending=True, header=True, as_dict=False):
                 break
         if n:
             query += f" LIMIT {n}"
-        for row in cur.execute(query).fetchall():
+        for row in cur.execute(query).fetchall():  # noqa
             yield row
 
 
-def delete_table(table):
+def delete_table(table, views=None):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        cur.execute(f"DROP TABLE {table}")
+        # delete view involving the table
+        if views is None:
+            views = cur.execute(
+                """
+                SELECT * from INFORMATION_SCHEMA.views 
+                WHERE table_schema = ANY (current_schemas(false))
+                """
+            ).fetchall()
+        for row in views:
+            if table in row[3]:
+                view = row[2]
+                cur.execute(f"DROP VIEW {view}")  # noqa
+
+        # delete indexes involving the table
+        cur.execute("""SELECT * FROM pg_indexes WHERE tablename = %s""", (table,))
+        for row in cur.fetchall():
+            index = row[2]
+            if index.startswith("idx_"):  # excludes the table's primary key
+                cur.execute(f"DROP INDEX {index}")  # noqa
+
+        # delete the table
+        cur.execute(f"DROP TABLE {table}")  # noqa
 
 
 def delete_tables():
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        views = cur.execute(
+            """
+            SELECT * from INFORMATION_SCHEMA.views 
+            WHERE table_schema = ANY (current_schemas(false))
+            """
+        ).fetchall()
         cur.execute(
             """
             SELECT table_name
@@ -918,4 +851,4 @@ def delete_tables():
         )
         for row in cur.fetchall():
             table = row[0]
-            cur.execute(f"DROP TABLE {table}")
+            delete_table(table, views)

@@ -35,7 +35,7 @@ def shipyard(self):
                     ("waypointSymbol", "systemSymbol", "type",
                      "supply", "activity", "purchasePrice", "timestamp")
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT ("waypointSymbol", "type", "timestamp") DO NOTHING
+                    RETURNING id
                     """,
                     (
                         waypoint_symbol,
@@ -47,6 +47,8 @@ def shipyard(self):
                         timestamp,
                     ),
                 )
+                s["timestamp"] = timestamp.isoformat()
+                s["id"] = cur.fetchone()[0]
                 cur.execute(
                     """
                     INSERT INTO ship_templates
@@ -74,7 +76,8 @@ def shipyard(self):
                     ("waypointSymbol", "systemSymbol", "shipSymbol",
                      "agentSymbol", "shipType", "price", "timestamp")
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT ("waypointSymbol", "timestamp") DO NOTHING
+                    ON CONFLICT ("waypointSymbol", "shipType", "timestamp") DO NOTHING
+                    RETURNING id
                     """,
                     (
                         waypoint_symbol,
@@ -86,6 +89,10 @@ def shipyard(self):
                         time.read(s["timestamp"]),
                     ),
                 )
+                # only returns an id if this is the first observation
+                row = cur.fetchone()
+                id_key = row[0] if row else None
+                s["id"] = id_key
     return data
 
 
