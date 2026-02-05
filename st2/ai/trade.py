@@ -61,12 +61,12 @@ async def ai_trade_system(
         market_a = get_a(purchase_wp, good)
         tg = get_tradegood(purchase_wp, good)
         log_entry["purchase_start"] = log_trade_inference(
-            market_a, tg, units, base_price, "purchase", ship_symbol, t0
+            purchase_wp, market_a, tg, units, base_price, "purchase", ship_symbol, t0
         )
         market_a = get_a(sell_wp, good)
         tg = get_tradegood(sell_wp, good)
         log_entry["sell_start"] = log_trade_inference(
-            market_a, tg, units, base_price, "sell", ship_symbol, t0
+            sell_wp, market_a, tg, units, base_price, "sell", ship_symbol, t0
         )
 
     if purchase_units > 0:
@@ -75,6 +75,7 @@ async def ai_trade_system(
         if log:
             pp, md = pp
             log_entry["purchase_inf"] = log_trade_inference(
+                purchase_wp,
                 md["market_a0"],
                 md["tradeGoods"][0],
                 units,
@@ -93,6 +94,7 @@ async def ai_trade_system(
     if log:
         sp, md = sp
         log_entry["sell_inf"] = log_trade_inference(
+            sell_wp,
             md["market_a0"],
             md["tradeGoods"][0],
             units,
@@ -149,7 +151,14 @@ def get_tradegood(waypoint_symbol, symbol):
 
 
 def log_trade_inference(
-    market_a, trade_good, units, base_price, action, ship_symbol, timestamp=None
+    waypoint_symbol,
+    market_a,
+    trade_good,
+    units,
+    base_price,
+    action,
+    ship_symbol,
+    timestamp=None,
 ):
     if timestamp is None:
         timestamp = trade_good["timestamp"]
@@ -172,8 +181,8 @@ def log_trade_inference(
         # mimic the transaction model
         md["transactions"].append(
             {
-                "waypointSymbol": trade_good["waypointSymbol"],
-                "systemSymbol": trade_good["waypointSymbol"].rsplit("-", 1)[0],
+                "waypointSymbol": waypoint_symbol,
+                "systemSymbol": waypoint_symbol.rsplit("-", 1)[0],
                 "shipSymbol": ship_symbol,
                 "tradeSymbol": trade_good["symbol"],
                 "type": action,
@@ -192,8 +201,8 @@ def log_trade_inference(
         # mimic the tradegood model
         md["tradeGoods"].append(
             {
-                "waypointSymbol": trade_good["waypointSymbol"],
-                "systemSymbol": trade_good["waypointSymbol"].rsplit("-", 1)[0],
+                "waypointSymbol": waypoint_symbol,
+                "systemSymbol": waypoint_symbol.rsplit("-", 1)[0],
                 "symbol": trade_good["symbol"],
                 "tradeVolume": trade_good["tradeVolume"],
                 "type": trade_good["type"],

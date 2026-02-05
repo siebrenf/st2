@@ -694,17 +694,17 @@ def db_tables_init(status=None):
             )
             cur.execute(
                 """
-                CREATE INDEX idx_trade_symbol_ai_trade_system ON bulk_ai_trade_system("symbol")
+                CREATE INDEX idx_trade_symbol_ai_trade_system ON ai_trade_system("symbol")
                 """
             )
             cur.execute(
                 """
-                CREATE INDEX idx_system_symbol_ai_trade_system ON bulk_ai_trade_system("systemSymbol")
+                CREATE INDEX idx_system_symbol_ai_trade_system ON ai_trade_system("systemSymbol")
                 """
             )
             cur.execute(
                 """
-                CREATE INDEX idx_timestamp_bulk_transactions_metadata ON bulk_transactions_metadata("timestamp")
+                CREATE INDEX idx_timestamp_ai_trade_system ON ai_trade_system("timestamp")
                 """
             )
 
@@ -793,7 +793,7 @@ def get_tables():
         return [row[0] for row in cur.fetchall()]
 
 
-def get_table(table, n=None, ascending=True, header=True, as_dict=False):
+def get_table(table, n=None, ascending=True, header=True, as_dict=True):
     factory = dict_row if as_dict else tuple_row
     with connect(
         "dbname=st2 user=postgres", row_factory=factory
@@ -826,20 +826,12 @@ def get_table(table, n=None, ascending=True, header=True, as_dict=False):
             yield row
 
 
-def delete_table(table, views=None):
+def delete_table(table):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         # delete view involving the table
-        if views is None:
-            views = cur.execute(
-                """
-                SELECT * from INFORMATION_SCHEMA.views 
-                WHERE table_schema = ANY (current_schemas(false))
-                """
-            ).fetchall()
-        for row in views:
-            if table in row[3]:
-                view = row[2]
-                cur.execute(f"DROP VIEW {view}")  # noqa
+        if table in ["bulk_transactions_transactions", "bulk_transactions_tradegoods"]:
+            view = "bulk_transactions"
+            cur.execute(f"DROP VIEW {view}")  # noqa
 
         # delete indexes involving the table
         cur.execute("""SELECT * FROM pg_indexes WHERE tablename = %s""", (table,))
@@ -854,12 +846,6 @@ def delete_table(table, views=None):
 
 def delete_tables():
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        views = cur.execute(
-            """
-            SELECT * from INFORMATION_SCHEMA.views 
-            WHERE table_schema = ANY (current_schemas(false))
-            """
-        ).fetchall()
         cur.execute(
             """
             SELECT table_name
@@ -869,4 +855,4 @@ def delete_tables():
         )
         for row in cur.fetchall():
             table = row[0]
-            delete_table(table, views)
+            delete_table(table)
