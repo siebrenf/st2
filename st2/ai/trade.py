@@ -40,6 +40,8 @@ async def ai_trade_system(
     pp = 0
     t0 = time.now()
     log_entry = {
+        "symbol": good,
+        "systemSymbol": sell_wp.rsplit("-", 1)[0],
         "purchase_start": {},
         "purchase_inf": {},
         "purchase_obs": {},
@@ -56,28 +58,30 @@ async def ai_trade_system(
         log = False  # only log complete tasks
     if log:
         base_price = get_base_price(good, "purchase")
+        market_a = get_a(purchase_wp, good)
+        tg = get_tradegood(purchase_wp, good)
         log_entry["purchase_start"] = log_trade_inference(
-            good, units, base_price, "purchase", purchase_wp, ship_symbol, t0
+            market_a, tg, units, base_price, "purchase", ship_symbol, t0
         )
+        market_a = get_a(sell_wp, good)
+        tg = get_tradegood(sell_wp, good)
         log_entry["sell_start"] = log_trade_inference(
-            good, units, base_price, "sell", sell_wp, ship_symbol, t0
+            market_a, tg, units, base_price, "sell", ship_symbol, t0
         )
 
     if purchase_units > 0:
         fp += await travel(ship, purchase_wp, explore=True, verbose=False)
-        if log:
-            log_entry["purchase_inf"] = log_trade_inference(
-                good,
-                units,
-                base_price,
-                "purchase",
-                purchase_wp,
-                ship_symbol,
-                time.now(),
-            )
         pp = ship.buy(good, purchase_units, log, verbose=False)
         if log:
             pp, md = pp
+            log_entry["purchase_inf"] = log_trade_inference(
+                md["market_a0"],
+                md["tradeGoods"][0],
+                units,
+                base_price,
+                "purchase",
+                ship_symbol,
+            )
             log_entry["purchase_obs"] = {
                 "market_a": md["market_a1"],
                 "tradeGoods": md["tradeGoods"],
@@ -85,13 +89,17 @@ async def ai_trade_system(
             }
 
     fp += await travel(ship, sell_wp, explore=True, verbose=False)
-    if log:
-        log_entry["sell_inf"] = log_trade_inference(
-            good, units, base_price, "sell", sell_wp, ship_symbol, time.now()
-        )
     sp = ship.sell(good, units, log, verbose=False)
     if log:
         sp, md = sp
+        log_entry["sell_inf"] = log_trade_inference(
+            md["market_a0"],
+            md["tradeGoods"][0],
+            units,
+            base_price,
+            "sell",
+            ship_symbol,
+        )
         log_entry["sell_obs"] = {
             "market_a": md["market_a1"],
             "tradeGoods": md["tradeGoods"],
@@ -124,32 +132,38 @@ async def ai_trade_system(
         submit_log_entry(log_entry)
 
 
-def log_trade_inference(
-    good, units, base_price, action, waypoint_symbol, ship_symbol, timestamp
-):
-    a, score = get_a(waypoint_symbol, good)
-    md = {
-        "market_a": (a, score),
-        "tradeGoods": [],
-        "transactions": [],
-    }
+def get_tradegood(waypoint_symbol, symbol):
     with connect(
         "dbname=st2 user=postgres", row_factory=dict_row
     ) as conn, conn.cursor() as cur:
         trade_good = cur.execute(
             """
-            SELECT * FROM market_tradegoods
-            WHERE "waypointSymbol" = %s AND "symbol" = %s
-            ORDER BY "timestamp" DESC LIMIT 1
+            SELECT * FROM market_tradegoods 
+            WHERE "waypointSymbol" = %s AND symbol = %s 
+            ORDER BY timestamp DESC LIMIT 1
             """,
-            (waypoint_symbol, good),
+            (waypoint_symbol, symbol),
         ).fetchone()
     trade_good["timestamp"] = trade_good["timestamp"].isoformat()
-    md["tradeGoods"].append(trade_good)
+    return trade_good
 
-    y = trade_good[f"{action}Price"]
+
+def log_trade_inference(
+    market_a, trade_good, units, base_price, action, ship_symbol, timestamp=None
+):
+    if timestamp is None:
+        timestamp = trade_good["timestamp"]
+    if not isinstance(timestamp, str):
+        timestamp = timestamp.isoformat()
+    md = {
+        "market_a": market_a,
+        "tradeGoods": [trade_good],
+        "transactions": [],
+    }
     price_total = 0
     units_remaining = units
+    y = trade_good[f"{action}Price"]
+    a = market_a[0]
     x = y2x(y, a, base_price, trade_good["type"], action)
     while units_remaining > 0:
         u = min(units_remaining, trade_good["tradeVolume"])
@@ -158,33 +172,36 @@ def log_trade_inference(
         # mimic the transaction model
         md["transactions"].append(
             {
-                "waypointSymbol": waypoint_symbol,
-                "systemSymbol": waypoint_symbol.rsplit("-", 1)[0],
+                "waypointSymbol": trade_good["waypointSymbol"],
+                "systemSymbol": trade_good["waypointSymbol"].rsplit("-", 1)[0],
                 "shipSymbol": ship_symbol,
-                "tradeSymbol": good,
+                "tradeSymbol": trade_good["symbol"],
                 "type": action,
                 "units": u,
                 "pricePerUnit": y,
                 "totalPrice": y * u,
-                "timestamp": timestamp.isoformat(),
+                "timestamp": timestamp,
             }
         )
+
         units_remaining -= u
         dx = u / trade_good["tradeVolume"]
         x += dx if action == "sell" else -dx
         y = x2y(x, a, base_price, trade_good["type"], action)
+
+        # mimic the tradegood model
         md["tradeGoods"].append(
             {
-                "waypointSymbol": waypoint_symbol,
-                "systemSymbol": waypoint_symbol.rsplit("-", 1)[0],
-                "symbol": good,
+                "waypointSymbol": trade_good["waypointSymbol"],
+                "systemSymbol": trade_good["waypointSymbol"].rsplit("-", 1)[0],
+                "symbol": trade_good["symbol"],
                 "tradeVolume": trade_good["tradeVolume"],
                 "type": trade_good["type"],
                 "supply": x2supply(x),
                 "activity": trade_good["activity"],
                 "purchasePrice": None if action == "sell" else y,
                 "sellPrice": None if action != "sell" else y,
-                # "timestamp": timestamp.isoformat(),
+                "timestamp": timestamp,
             }
         )
     return md
@@ -194,11 +211,13 @@ def submit_log_entry(log_entry):
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO trades
-            (purchase_start, purchase_inf, purchase_obs, sell_start, sell_inf, sell_obs, accuracy, travel_time, fuel_cost, timestamp)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO ai_trade_system
+            (symbol, "systemSymbol", purchase_start, purchase_inf, purchase_obs, sell_start, sell_inf, sell_obs, accuracy, travel_time, fuel_cost, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             [
+                log_entry["symbol"],
+                log_entry["systemSymbol"],
                 Jsonb(log_entry["purchase_start"]),
                 Jsonb(log_entry["purchase_inf"]),
                 Jsonb(log_entry["purchase_obs"]),

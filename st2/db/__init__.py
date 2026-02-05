@@ -671,11 +671,14 @@ def db_tables_init(status=None):
             )
 
         # TODO: refactor (use bulk_transactions.id for the observations)
-        if "trades" not in tables:
+        if "ai_trade_system" not in tables:
             cur.execute(
                 """
-                CREATE TABLE trades
+                CREATE TABLE ai_trade_system
                 (
+                    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    "symbol" text,
+                    "systemSymbol" text,
                     "purchase_start" JsonB,
                     "purchase_inf" JsonB,
                     "purchase_obs" JsonB, 
@@ -687,6 +690,21 @@ def db_tables_init(status=None):
                     "fuel_cost" integer,
                     "timestamp" timestamptz
                 )
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX idx_trade_symbol_ai_trade_system ON bulk_ai_trade_system("symbol")
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX idx_system_symbol_ai_trade_system ON bulk_ai_trade_system("systemSymbol")
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX idx_timestamp_bulk_transactions_metadata ON bulk_transactions_metadata("timestamp")
                 """
             )
 
