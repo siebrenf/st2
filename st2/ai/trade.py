@@ -207,7 +207,7 @@ def log_trade_inference(
                 "tradeVolume": trade_good["tradeVolume"],
                 "type": trade_good["type"],
                 "supply": x2supply(x),
-                "activity": trade_good["activity"],
+                "activity": trade_good.get("activity"),
                 "purchasePrice": None if action == "sell" else y,
                 "sellPrice": None if action != "sell" else y,
                 "timestamp": timestamp,
