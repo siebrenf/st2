@@ -405,6 +405,11 @@ def db_tables_init(status=None):
             )
             cur.execute(
                 """
+                CREATE INDEX idx_id_market_transactions ON market_transactions("id")
+                """
+            )
+            cur.execute(
+                """
                 CREATE INDEX idx_trade_symbol_market_transactions ON market_transactions("tradeSymbol")
                 """
             )
@@ -441,6 +446,11 @@ def db_tables_init(status=None):
                     "timestamp" timestamptz,
                     PRIMARY KEY ("waypointSymbol", "symbol", "timestamp")
                 )
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX idx_id_market_tradegoods ON market_tradegoods("id")
                 """
             )
             cur.execute(
@@ -655,18 +665,25 @@ def db_tables_init(status=None):
                 CREATE VIEW bulk_transactions AS
                 SELECT
                     md.*,
-                    JSONB_AGG(tg.*) AS tradegoods,
-                    JSONB_AGG(ta.*) AS transactions
+                    tg.tradegoods,
+                    ta.transactions
                 FROM bulk_transactions_metadata md
-                LEFT JOIN bulk_transactions_tradegoods bttg
-                    ON bttg.bulk_transactions_id = md.id
-                LEFT JOIN market_tradegoods tg
-                    ON tg.id = bttg.tradegood_id
-                LEFT JOIN bulk_transactions_transactions btta
-                    ON btta.bulk_transactions_id = md.id
-                LEFT JOIN market_transactions ta
-                    ON ta.id = btta.transaction_id
-                GROUP BY md.id
+                
+                LEFT JOIN LATERAL (
+                    SELECT JSONB_AGG(tg.* ORDER BY timestamp ASC) AS tradegoods
+                    FROM bulk_transactions_tradegoods bttg
+                    JOIN market_tradegoods tg
+                        ON tg.id = bttg.tradegood_id
+                    WHERE bttg.bulk_transactions_id = md.id
+                ) tg ON true
+                
+                LEFT JOIN LATERAL (
+                    SELECT JSONB_AGG(ta.* ORDER BY timestamp ASC) AS transactions
+                    FROM bulk_transactions_transactions btta
+                    JOIN market_transactions ta
+                        ON ta.id = btta.transaction_id
+                    WHERE btta.bulk_transactions_id = md.id
+                ) ta ON true
                 """
             )
 

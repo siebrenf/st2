@@ -14,6 +14,155 @@ SUPPLY2COLOR = {
 }
 
 
+def plot_bulk_transaction(log_entry):
+    good = log_entry["symbol"]
+    action = log_entry["transactions"][0]["type"].lower()
+    tg = log_entry["tradegoods"][0]
+    port = tg["type"]
+    tv = tg["tradeVolume"]
+    units = sum(t["units"] for t in log_entry["transactions"])
+    base_price = get_base_price(good, action)
+    a_obs, score_obs = log_entry["market_a0"]
+
+    # if units <= tv:
+    #     return  # not interesting
+    # if port != "EXCHANGE":
+    #     return  # not interesting
+    # print(good, units, port, log_entry)
+
+    xs_inf = []  # based on 1 inferred value, then adjusted by observed dx values
+    ys_inf = []  # based on all inferred values
+    cs_inf = []  # based on all inferred values
+    tv_inf = []  # based on all inferred values
+    for t in log_entry["transactions"]:
+        tv_inf.append(tv)
+        x = y2x(t["pricePerUnit"], a_obs, base_price, port, action)
+        xs_inf.append(x)
+        ys_inf.append(t["pricePerUnit"])
+        cs_inf.append(SUPPLY2COLOR[x2supply(x)])
+    # trailing value (from inferred final tradeGood)
+    ta = log_entry["transactions"][-1]
+    a_inf, score_inf = log_entry["market_a0"]
+    x = y2x(ta["pricePerUnit"], a_obs, base_price, port, action)
+    dx = ta["units"] / tv
+    x += dx if action == "sell" else -dx
+    y = x2y(x, a_inf, base_price, port, action)
+    xs_inf.append(x)
+    ys_inf.append(y)
+    cs_inf.append(SUPPLY2COLOR[x2supply(x)])
+
+    xs_obs = []  # based on all **inferred** values
+    ys_obs = []  # based on all observed values
+    cs_obs = []  # based on all observed values
+    tv_obs = []
+    for j, t in enumerate(log_entry["transactions"]):
+        tg = log_entry["tradegoods"][j]
+        tv_obs.append(tg["tradeVolume"])
+        x = y2x(t["pricePerUnit"], a_obs, base_price, port, action)
+        xs_obs.append(x)
+        ys_obs.append(t["pricePerUnit"])
+        cs_obs.append(SUPPLY2COLOR[tg["supply"]])
+        if t["pricePerUnit"] != tg[f"{action}Price"]:
+            print(good, j, t["pricePerUnit"], tg[f"{action}Price"])
+    # trailing value (from the final tradeGood)
+    tg = log_entry["tradegoods"][-1]
+    y = tg[f"{action}Price"]
+    x = y2x(y, a_obs, base_price, port, action)
+    xs_obs.append(x)
+    ys_obs.append(y)
+    cs_obs.append(SUPPLY2COLOR[tg["supply"]])
+
+    tgs = log_entry["tradegoods"]
+    tas = log_entry["transactions"]
+    a2, score2 = a_posterior(None, tgs, tas, action, base_price)
+    print(f"{a_obs=} {score_obs=} {a2} {score2}")
+    if len(set(tv_obs)) != 1:
+        print("TV changed:", tv_obs)
+
+    fig, ax = plt.subplots()
+    xs = np.linspace(-6, 6, 12 * tv_obs[0] + 1, endpoint=True)
+    for a in A_VALUES:
+        ys = []
+        cs = []
+        for x in xs:
+            ys.append(x2y(x, a, base_price, port, action))
+            s = x2supply(x)
+            cs.append(SUPPLY2COLOR[s])
+        ax.scatter(xs, ys, c=cs, zorder=1, s=18, alpha=0.5)
+        ax.plot(xs, ys, zorder=-2, label=f"{a=}")  #  if i == 0 else None
+    ax.scatter(
+        xs,
+        [base_price for _ in range(len(xs))],
+        c="grey",
+        alpha=0.5,
+        marker="|",
+        zorder=-5,
+        label=f"{tv=}",
+    )
+    ax.scatter(
+        xs_inf,
+        ys_inf,
+        c=cs_inf,
+        zorder=2,
+        s=22,
+        edgecolors="black",
+        marker="D",
+        label="inferred",
+    )
+    for j in range(0, len(xs_inf) - 1):
+        ax.annotate(
+            text="",
+            xytext=(xs_inf[j], ys_inf[j]),
+            xy=(xs_inf[j + 1], ys_inf[j + 1]),
+            xycoords="data",
+            arrowprops=dict(
+                arrowstyle="->",
+                linestyle="--",
+                connectionstyle="arc3,rad=0.7",
+                color="black",
+                zorder=2,
+            ),
+        )
+    ax.scatter(
+        xs_obs,
+        ys_obs,
+        c=cs_obs,
+        zorder=2,
+        s=22,
+        edgecolors="black",
+        marker="s",
+        label="observed",
+    )
+    for j in range(0, len(xs_obs) - 1):
+        ax.annotate(
+            text="",
+            xytext=(xs_obs[j], ys_obs[j]),
+            xy=(xs_obs[j + 1], ys_obs[j + 1]),
+            xycoords="data",
+            arrowprops=dict(
+                arrowstyle="->",
+                color="black",
+                zorder=3,
+            ),
+        )
+    ax.axvline(-4, zorder=-5)
+    ax.axvline(-2, zorder=-5)
+    ax.axvline(2, zorder=-5)
+    ax.axvline(4, zorder=-5)
+    ax.grid(which="major")
+    ax.set_title(f"{action=} {port=}")
+    # https://stackoverflow.com/questions/4700614/how-to-put-the-legend-outside-the-plot
+    handles, labels = ax.get_legend_handles_labels()
+    # sort both labels and handles by labels
+    if handles:
+        labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
+        ax.legend(handles, labels, loc="center left", bbox_to_anchor=(1, 0.5))
+        fig.subplots_adjust(right=0.7)
+    t = log_entry["timestamp"].isoformat()[11:19]
+    fig.suptitle(f"{good=} time={t}")
+    plt.show()
+
+
 def plot_trade(log_entry):
     good = log_entry["symbol"]
     units = log_entry["units"]
@@ -230,72 +379,20 @@ def plot_trade(log_entry):
 
 
 if __name__ == "__main__":
-    from st2 import time
     from st2.db import get_table
     from st2.startup import game_server
 
     game_server()
 
-    for good, t_min, t_max in [
-        # Bug / a / baseprice issue
-        (
-            "FOOD",
-            time.read("2026-01-31T01:30:00.000Z"),
-            time.read("2026-01-31T01:50:00.000Z"),
-        ),
-        # Edge case
-        (
-            "JEWELRY",
-            time.read("2026-01-31T01:50:00.000Z"),
-            time.read("2026-01-31T02:10:00.000Z"),
-        ),
-        # Edge case
-        (
-            "MACHINERY",
-            time.read("2026-01-31T02:20:00.000Z"),
-            time.read("2026-01-31T02:40:00.000Z"),
-        ),
-        # Edge case
-        (
-            "MACHINERY",
-            time.read("2026-01-31T04:00:00.000Z"),
-            time.read("2026-01-31T06:00:00.000Z"),
-        ),
-        # Edge case
-        (
-            "SHIP_PLATING",
-            time.read("2026-01-31T05:00:00.000Z"),
-            time.read("2026-01-31T05:30:00.000Z"),
-        ),
-        # Edge case
-        (
-            "MICROPROCESSORS",
-            time.read("2026-01-31T07:00:20.000Z"),
-            time.read("2026-01-31T07:40:00.000Z"),
-        ),
-        # Bug / a / baseprice issue
-        (
-            "POLYNUCLEOTIDES",
-            time.read("2026-01-31T07:30:20.000Z"),
-            time.read("2026-01-31T07:50:00.000Z"),
-        ),
-    ]:
-        for row in get_table("trades", as_dict=True, ascending=True):
-            if row["timestamp"] < t_min:
-                continue
-            if row["timestamp"] > t_max:
-                continue
-            if row["symbol"] != good:
-                continue
-            plot_trade(row)
-
     # t_min = time.read("2026-01-31T01:30:00.000Z")
-    for row in get_table("trades", as_dict=True, ascending=True):
+    for row in get_table("bulk_transactions", ascending=True):
+        # for k,v in row.items():
+        #     print(k, v)
         # if row["timestamp"] < t_min:
         #     continue
-        if (
-            row["purchase_obs"]["tradeGoods"][0]["tradeVolume"] >= row["units"]
-            and row["sell_obs"]["tradeGoods"][0]["tradeVolume"] >= row["units"]
-        ):
-            continue  # not interesting
-        plot_trade(row)
+        # if (
+        #     row["purchase_obs"]["tradegoods"][0]["tradeVolume"] >= row["units"]
+        #     and row["sell_obs"]["tradegoods"][0]["tradeVolume"] >= row["units"]
+        # ):
+        #     continue  # not interesting
+        plot_bulk_transaction(row)

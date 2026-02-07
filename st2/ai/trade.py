@@ -181,6 +181,7 @@ def log_trade_inference(
         # mimic the transaction model
         md["transactions"].append(
             {
+                "id": None,
                 "waypointSymbol": waypoint_symbol,
                 "systemSymbol": waypoint_symbol.rsplit("-", 1)[0],
                 "shipSymbol": ship_symbol,
@@ -201,6 +202,7 @@ def log_trade_inference(
         # mimic the tradegood model
         md["tradeGoods"].append(
             {
+                "id": None,
                 "waypointSymbol": waypoint_symbol,
                 "systemSymbol": waypoint_symbol.rsplit("-", 1)[0],
                 "symbol": trade_good["symbol"],
