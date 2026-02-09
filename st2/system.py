@@ -444,6 +444,7 @@ class System:
         :return: dict with waypoints as key and their latest tradeGood as values
         """
         # TODO: will return nothing if the system was not loaded, charted and scouted
+        # TODO: this function can be converted into a single query
         query = """SELECT * FROM markets WHERE "systemSymbol" = %s """
         params = [self.symbol, symbol]
         if isinstance(type, str):
@@ -694,6 +695,12 @@ class System:
             {row["symbol"] for row in ret1} - {row["waypointSymbol"] for row in ret2}
         )
         return wps
+
+    def get_construction(self, waypoint_symbol):
+        data = self.request.get(
+            f"systems/{self.symbol}/waypoints/{waypoint_symbol}/construction"
+        )["data"]
+        return data
 
 
 def get_start_systems(faction):

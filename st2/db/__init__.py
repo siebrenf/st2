@@ -725,6 +725,22 @@ def db_tables_init(status=None):
                 """
             )
 
+        if "ai_deliver_system" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE ai_deliver_system (
+                    contracts_id text NOT NULL
+                        REFERENCES contracts(id)
+                        ON DELETE CASCADE,
+                    bulk_transactions_id BIGINT NOT NULL
+                        REFERENCES bulk_transactions_metadata(id)
+                        ON DELETE RESTRICT,
+                    PRIMARY KEY (contracts_id, bulk_transactions_id),
+                    UNIQUE (bulk_transactions_id)
+                )
+                """
+            )
+
         if "navigation" not in tables:
             cur.execute(
                 """

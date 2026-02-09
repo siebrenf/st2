@@ -58,8 +58,7 @@ if __name__ == "__main__":
         # scout the first two markets
         ship = Ship(f"{agent_symbol}-1", request)
         ship.market()
-        probe = f"{agent_symbol}-2"
-        Ship(probe, request).market()
+        Ship(f"{agent_symbol}-2", request).market()
         # send the probe to a shipyard with additional probes
         system = System(ship["nav"]["systemSymbol"], request)
         waypoint_symbol = list(system.shipyards_with("SHIP_PROBE"))[0]

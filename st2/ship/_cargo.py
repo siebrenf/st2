@@ -38,6 +38,7 @@ def _buy_sell(self, symbol, units, action, log, verbose):
     a_old, score_old = get_a(wp, symbol)
     update_a = True if log or score_old >= 0.005 else False
     log_entry = {
+        "id": None,
         "symbol": symbol,
         "waypointSymbol": wp,
         "market_a0": (a_old, score_old),  # before
@@ -108,7 +109,7 @@ def _buy_sell(self, symbol, units, action, log, verbose):
                     log_entry["timestamp"],
                 ),
             )
-            md_id_key = cur.fetchone()[0]
+            log_entry["id"] = cur.fetchone()[0]
             for ta in log_entry["transactions"]:
                 cur.execute(
                     """
@@ -116,7 +117,7 @@ def _buy_sell(self, symbol, units, action, log, verbose):
                     (bulk_transactions_id, transaction_id)
                     VALUES (%s, %s)
                     """,
-                    (md_id_key, ta["id"]),
+                    (log_entry["id"], ta["id"]),
                 )
             for tg in log_entry["tradeGoods"]:
                 cur.execute(
@@ -125,7 +126,7 @@ def _buy_sell(self, symbol, units, action, log, verbose):
                     (bulk_transactions_id, tradegood_id)
                     VALUES (%s, %s)
                     """,
-                    (md_id_key, tg["id"]),
+                    (log_entry["id"], tg["id"]),
                 )
     else:
         self.market()

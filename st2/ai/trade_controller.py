@@ -207,18 +207,18 @@ def _get_trade_goods(system_symbol, blacklisted_goods=None, max_age=3600):
             continue
         best[good] = (-float("inf"), (), ())
         # the best buyer has the highest sellPrice
-        best_buyer = -float("inf"), None, None, 0
+        best_buyer = -float("inf"), None
         for wp in buyers[good]:
             if wp["sellPrice"] > best_buyer[0]:
                 best_buyer = wp["sellPrice"], wp
         # the best seller has the lowest purchasePrice
-        best_seller = float("inf"), None, None, 0
+        best_seller = float("inf"), None
         for wp in sellers[good]:
             if wp["purchasePrice"] < best_seller[0]:
                 best_seller = wp["purchasePrice"], wp
         # the best seller-buyer combo has the highest profit per unit
         profit_per_unit = best_buyer[0] - best_seller[0]
-        if profit_per_unit > best[good][0]:
+        if profit_per_unit > 0:
             best[good] = profit_per_unit, best_seller[1], best_buyer[1]
     best = {
         k: v for k, v in sorted(best.items(), key=lambda item: item[1][0], reverse=True)

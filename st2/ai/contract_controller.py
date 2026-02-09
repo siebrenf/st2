@@ -23,7 +23,6 @@ async def ai_contract_controller(
     interval=60,
     verbose=False,
 ):
-    # TODO: track contract expenses and payments
     token = get_agent(agent_symbol)["token"]
     request = RequestMp(qa_pairs, priority=priority, token=token)
     while True:
@@ -65,7 +64,7 @@ async def ai_contract_controller(
                     system2trade_goods[system_symbol] = []
                 system2trade_goods[system_symbol].append(term["tradeSymbol"])
             for system_symbol, trade_goods in system2trade_goods.items():
-                ship_tasks = _get_active_traders(agent_symbol, system_symbol)
+                ship_tasks = get_active_traders(agent_symbol, system_symbol)
                 if not ship_tasks:
                     doable = False
                     reason = f"No traders in {system_symbol}"
@@ -105,7 +104,7 @@ async def ai_contract_controller(
             fulfill_contract = False
 
             # currently active tasks in this system
-            ship_tasks = _get_active_traders(agent_symbol, system_symbol)
+            ship_tasks = get_active_traders(agent_symbol, system_symbol)
             available_traders = set()
             current = 0
             queued = 0
@@ -147,11 +146,7 @@ async def ai_contract_controller(
                     best = purchase_wp, price
             purchase_wp, price = best
             if purchase_wp is None:
-                if DEBUG:
-                    logger.debug(
-                        f"Marketplaces selling {good} have not been scouted yet"
-                    )
-                break
+                continue  # next good
 
             cost = 2 * price * (term["unitsRequired"] - term["unitsFulfilled"])
             credits = get_agent_public(agent_symbol)["credits"]  # noqa
@@ -161,7 +156,7 @@ async def ai_contract_controller(
                 break  # try again later
 
             # select a ship to deliver the goods
-            ship, units = _get_trader(available_traders, units)
+            ship, units = get_trader(available_traders, units)
             task = f"deliver {good} {units} {purchase_wp} {deliver_wp}"
             queue_task(ship, task)
             queued += units
@@ -185,7 +180,7 @@ async def ai_contract_controller(
             await sleep(interval)
 
 
-def _get_active_traders(agent_symbol, system_symbol):
+def get_active_traders(agent_symbol, system_symbol):
     with connect(
         "dbname=st2 user=postgres", row_factory=dict_row
     ) as conn, conn.cursor() as cur:
@@ -228,7 +223,7 @@ def _get_deliver_tasks(agent_symbol):
     return queued_tasks_to_clear, current_tasks_to_cancel
 
 
-def _get_trader(available_traders, units):
+def get_trader(available_traders, units):
     """
     Return the trader with the best fitting cargo capacity.
     Speed is used as tiebreaker.
