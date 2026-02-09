@@ -305,21 +305,22 @@ def supply(self, symbol, units, verbose=True):
     )["data"]
     self._update(data)
 
-    # TODO: log data["construction"]
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO construction
+            (symbol, materials, "isComplete", timestamp)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (
+                data["construction"]["symbol"],
+                Jsonb(data["construction"]["materials"]),
+                data["construction"]["isComplete"],
+                time.now(),
+            ),
+        )
 
     if verbose:
-        if data["construction"]["isComplete"]:
-            logger.info(
-                f'Construction at {data["construction"]["symbol"]} has completed!'
-            )
-        else:
-            logger.info(
-                f"{self.name()} supplied {units} {symbol} to the construction "
-                f"at {self['nav']['waypointSymbol']}. Remaining requirements:"
-            )
-            for material in data["construction"]["materials"]:
-                if (
-                    material["required"] > material["fulfilled"]
-                    or material["tradeSymbol"] == symbol
-                ):
-                    logger.info(f"  {material}")
+        wp = self["nav"]["waypointSymbol"]
+        logger.info(f"{self.name()} supplied {units} {symbol} at {wp}")
+    return data["construction"]

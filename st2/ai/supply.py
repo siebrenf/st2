@@ -1,18 +1,17 @@
 from psycopg import connect
 
-from st2.contract import get_active_contract
 from st2.logging import logger
 from st2.pathing.travel import travel
 from st2.ship import Ship
 
 
 @logger.catch  # catch errors in a separate thread
-async def ai_deliver_system(
+async def ai_supply_system(
     ship_symbol,
     good,
     units,
     purchase_wp,
-    deliver_wp,
+    supply_wp,
     qa_pairs,
     priority=1,
     verbose=False,
@@ -20,11 +19,10 @@ async def ai_deliver_system(
 ):
     if verbose:
         logger.info(
-            f"{ship_symbol} will purchase {units} {good} from {purchase_wp} and deliver at {deliver_wp}"
+            f"{ship_symbol} will purchase {units} {good} from {purchase_wp} and supply at {supply_wp}"
         )
 
     ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
-    contract = get_active_contract(ship["agentSymbol"])
     # jettison unrelated cargo
     purchase_units = units
     for g, u in ship.cargo_yield():
@@ -37,16 +35,16 @@ async def ai_deliver_system(
         await travel(ship, purchase_wp, explore=True, verbose=False)
         pp = ship.buy(good, purchase_units, log, verbose=False)
         if log:
-            # link purchase to contract
+            # link purchase to construction
             pp, md = pp
             with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO ai_deliver_system
-                    (contracts_id, bulk_transactions_id)
+                    INSERT INTO ai_supply_system
+                    ("waypointSymbol", bulk_transactions_id)
                     VALUES (%s, %s)
                     """,
-                    (contract["id"], md["id"]),
+                    (supply_wp, md["id"]),
                 )
-    await travel(ship, deliver_wp, explore=True, verbose=False)
-    ship.deliver(good, units, contract, verbose=verbose)
+    await travel(ship, supply_wp, explore=True, verbose=False)
+    ship.supply(good, units, verbose=verbose)

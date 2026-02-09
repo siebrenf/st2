@@ -741,6 +741,36 @@ def db_tables_init(status=None):
                 """
             )
 
+        if "ai_supply_system" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE ai_supply_system (
+                    "waypointSymbol" text NOT NULL
+                        REFERENCES waypoints(symbol)
+                        ON DELETE CASCADE,
+                    bulk_transactions_id BIGINT NOT NULL
+                        REFERENCES bulk_transactions_metadata(id)
+                        ON DELETE RESTRICT,
+                    PRIMARY KEY (contracts_id, bulk_transactions_id),
+                    UNIQUE (bulk_transactions_id)
+                )
+                """
+            )
+
+        if "construction" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE construction
+                (
+                symbol text,
+                materials JsonB,
+                "isComplete" bool,
+                timestamp timestamptz
+
+                )
+                """
+            )
+
         if "navigation" not in tables:
             cur.execute(
                 """

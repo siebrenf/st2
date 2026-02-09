@@ -1,4 +1,3 @@
-import math
 from operator import itemgetter
 
 import networkx as nx
@@ -11,6 +10,7 @@ from scipy.spatial.distance import cdist
 
 from st2.logging import logger
 from st2.pathing.utils import dist
+from st2 import time
 
 DEBUG = False
 
@@ -700,6 +700,15 @@ class System:
         data = self.request.get(
             f"systems/{self.symbol}/waypoints/{waypoint_symbol}/construction"
         )["data"]
+        with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO construction
+                (symbol, materials, "isComplete", timestamp)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (data["symbol"], Jsonb(data["materials"]), data["isComplete"], time.now()),
+            )
         return data
 
 
