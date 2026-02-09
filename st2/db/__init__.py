@@ -225,6 +225,16 @@ def db_tables_init(status=None):
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE INDEX idx_agentSymbol_ships ON ships("agentSymbol")
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX idx_nav_systemSymbol_ships ON ships ((nav ->> 'systemSymbol'))
+                """
+            )
 
         if "tasks" not in tables:
             """
