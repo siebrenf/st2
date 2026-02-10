@@ -111,7 +111,11 @@ async def ai_trade_system(
             t["totalPrice"] for t in log_entry["sell_inf"]["transactions"]
         ) - sum(t["totalPrice"] for t in log_entry["purchase_inf"]["transactions"])
         profit_observed = sp - pp
-        inference_accuracy = float(round(100 * (1 - abs(profit_inferred - profit_observed) / profit_observed), 2))
+        inference_accuracy = float(
+            round(
+                100 * (1 - abs(profit_inferred - profit_observed) / profit_observed), 2
+            )
+        )
 
     travel_time = (time.now() - t0).seconds
     total_profit = round(sp - pp - fp)

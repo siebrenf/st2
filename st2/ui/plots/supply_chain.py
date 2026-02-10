@@ -1,4 +1,5 @@
 from psycopg import connect
+
 from st2.db.static import SUPPLY_CHAIN
 from st2.system import System
 
@@ -67,14 +68,19 @@ def plot_supply_chain(system_symbol):
     # consumer goods with production supported in-system
     complete = set()
     for good in consumer_goods:
-        if good in port2good2wp["imports"] and good in port2good2wp["sell"] and chained(good):
+        if (
+            good in port2good2wp["imports"]
+            and good in port2good2wp["sell"]
+            and chained(good)
+        ):
             complete.add(good)
 
-    def chained_wps(product, wps):
-        buyers = port2good2wp["imports"].get(product, set()) & wps
+    def chained_wps(product, buyers=None):
+        if buyers is None:
+            buyers = port2good2wp["imports"].get(product, set())
         if tiers[product] == 0:
             sellers = port2good2wp["exchange"].get(product, set())
-            port = "exchange"
+            port = "exchange"  # drones can sell extracted/siphoned goods here
         else:
             sellers = port2good2wp["exports"].get(product, set())
             port = "export"
@@ -86,7 +92,7 @@ def plot_supply_chain(system_symbol):
 
     # print the supply chain for complete consumer goods
     for good in sorted(complete):
-        chained_wps(good, port2good2wp["imports"][good])
+        chained_wps(good)
         print()
 
 

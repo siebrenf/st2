@@ -1,11 +1,11 @@
 from asyncio import sleep
 
 from st2.agent import get_agent, get_agent_public
+from st2.ai.contract_controller import get_active_traders, get_trader
 from st2.ai.utils import queue_task
 from st2.logging import logger
 from st2.request import RequestMp
 from st2.system import System
-from st2.ai.contract_controller import get_active_traders, get_trader
 
 DEBUG = True
 

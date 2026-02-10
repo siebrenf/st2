@@ -6,13 +6,13 @@ from uuid import uuid1
 from psycopg import connect
 
 from st2.ai.advisor_controller import ai_advisor_controller
-from st2.ai.contract_controller import ai_contract_controller
 from st2.ai.construction_controller import ai_construction_controller
-from st2.ai.supply import ai_supply_system
+from st2.ai.contract_controller import ai_contract_controller
 from st2.ai.deliver import ai_deliver_system
 from st2.ai.probe import ai_probe_purchase, ai_probe_waypoint
 from st2.ai.probe_controller import ai_probe_controller
 from st2.ai.scout import ai_scout_waypoint
+from st2.ai.supply import ai_supply_system
 from st2.ai.trade import ai_trade_system
 from st2.ai.trade_controller import ai_trade_controller
 from st2.logging import logger

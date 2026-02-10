@@ -112,7 +112,11 @@ async def ai_trade_controller(
             )
             task = f"trade {good} {units} {seller_wp} {buyer_wp}"
             if task != task_old:
-                queue_task(ship, task, estimated_profit=round(estimated_profit - estimated_fuel_cost))
+                queue_task(
+                    ship,
+                    task,
+                    estimated_profit=round(estimated_profit - estimated_fuel_cost),
+                )
             if len(queued_tasks) == 0:
                 break
 

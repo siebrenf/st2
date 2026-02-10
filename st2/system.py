@@ -8,9 +8,9 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from scipy.spatial.distance import cdist
 
+from st2 import time
 from st2.logging import logger
 from st2.pathing.utils import dist
-from st2 import time
 
 DEBUG = False
 
@@ -707,7 +707,12 @@ class System:
                 (symbol, materials, "isComplete", timestamp)
                 VALUES (%s, %s, %s, %s)
                 """,
-                (data["symbol"], Jsonb(data["materials"]), data["isComplete"], time.now()),
+                (
+                    data["symbol"],
+                    Jsonb(data["materials"]),
+                    data["isComplete"],
+                    time.now(),
+                ),
             )
         return data
 
