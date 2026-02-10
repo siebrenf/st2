@@ -7,6 +7,8 @@ from psycopg import connect
 
 from st2.ai.advisor_controller import ai_advisor_controller
 from st2.ai.contract_controller import ai_contract_controller
+from st2.ai.construction_controller import ai_construction_controller
+from st2.ai.supply import ai_supply_system
 from st2.ai.deliver import ai_deliver_system
 from st2.ai.probe import ai_probe_purchase, ai_probe_waypoint
 from st2.ai.probe_controller import ai_probe_controller
@@ -214,6 +216,13 @@ class TaskMaster:
                     verbose=True,  # TODO: remove
                 )
 
+            case "construction_controller":
+                coro = ai_construction_controller(
+                    system_symbol=task[1],
+                    agent_symbol=agent_symbol,
+                    qa_pairs=self.qa_pairs,
+                )
+
             case "contract_controller":
                 coro = ai_contract_controller(
                     agent_symbol=agent_symbol,
@@ -270,6 +279,17 @@ class TaskMaster:
             #         qa_pairs=self.qa_pairs,
             #         verbose=True,  # TODO: remove
             #     )
+
+            case "deliver":
+                coro = ai_supply_system(
+                    ship_symbol=ship_symbol,
+                    good=task[1],
+                    units=int(task[2]),
+                    purchase_wp=task[3],
+                    supply_wp=task[4],
+                    qa_pairs=self.qa_pairs,
+                    verbose=True,  # TODO: remove
+                )
 
             case "test":
                 coro = _test_coroutine(*task[1:])

@@ -59,15 +59,18 @@ if __name__ == "__main__":
         ship = Ship(f"{agent_symbol}-1", request)
         ship.market()
         Ship(f"{agent_symbol}-2", request).market()
-        # send the probe to a shipyard with additional probes
+        # log gate construction status (and the system's waypoints)
         system = System(ship["nav"]["systemSymbol"], request)
+        gate = system.gate["symbol"]
+        _ = system.get_construction(gate)
+        # send the probe to a shipyard with additional probes
         waypoint_symbol = list(system.shipyards_with("SHIP_PROBE"))[0]
         task = f"probe shipyard {waypoint_symbol}"
         with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE tasks
-                SET "task" = %s, 
+                SET "current" = %s, 
                     "pname" = %s
                 WHERE "symbol" = %s
                 """,
@@ -88,6 +91,16 @@ if __name__ == "__main__":
             (symbol, agent_symbol, symbol, None, False, "traders", None),
         )
         symbol = "contract_controller"
+        cur.execute(
+            """
+            INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT ("symbol") DO UPDATE
+            SET "current" = EXCLUDED."current"
+            """,
+            (symbol, agent_symbol, symbol, None, False, "traders", None),
+        )
+        symbol = f"construction_controller {system_symbol}"
         cur.execute(
             """
             INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")

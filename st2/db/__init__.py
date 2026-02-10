@@ -761,7 +761,7 @@ def db_tables_init(status=None):
                     bulk_transactions_id BIGINT NOT NULL
                         REFERENCES bulk_transactions_metadata(id)
                         ON DELETE RESTRICT,
-                    PRIMARY KEY (contracts_id, bulk_transactions_id),
+                    PRIMARY KEY ("waypointSymbol", bulk_transactions_id),
                     UNIQUE (bulk_transactions_id)
                 )
                 """

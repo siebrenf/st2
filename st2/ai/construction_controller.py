@@ -36,7 +36,7 @@ async def ai_construction_controller(
     construction = system.get_construction(gate_symbol)
     while not construction["isComplete"]:
         for material in construction["materials"]:
-            units = material["required"] - material["fullfilled"]
+            units = material["required"] - material["fulfilled"]
             if units <= 0:
                 continue  # next good
             good = material["tradeSymbol"]
@@ -76,18 +76,20 @@ async def ai_construction_controller(
                 break  # try again later
 
             # select the cheapest waypoint to purchase the goods from
-            best = None, float("inf")
+            best = None, float("inf"), dict()
             for purchase_wp, md in system.markets_with(good, "sells").items():
                 if md["supply"] in ["SCARCE", "LIMITED"]:
                     continue
                 price = md["purchasePrice"]
                 if price and price < best[1]:
-                    best = purchase_wp, price
-            purchase_wp, price = best
+                    best = purchase_wp, price, md
+            purchase_wp, price, md = best
             if purchase_wp is None:
                 continue  # next good
+            # trade max 1 tv per task
+            units = min(units, md["tradeVolume"])
 
-            cost = 2 * price * (material["required"] - material["fullfilled"])
+            cost = 2 * price * units
             credits = get_agent_public(agent_symbol)["credits"]  # noqa
             if credits < max(1_000_000, cost):
                 if DEBUG:
@@ -101,14 +103,14 @@ async def ai_construction_controller(
             queued += units
             if DEBUG:
                 remaining = (
-                    material["required"] - material["fullfilled"] - current - queued
+                    material["required"] - material["fulfilled"] - current - queued
                 )
                 logger.debug(
                     "Construction supplies: "
                     f"{remaining} remaining/"
                     f"{current} currently underway/"
                     f"{queued} queued underway/"
-                    f"{material['fullfilled']} fulfilled/"
+                    f"{material['fulfilled']} fulfilled/"
                     f"{material['required']} total {good}"
                 )
             break

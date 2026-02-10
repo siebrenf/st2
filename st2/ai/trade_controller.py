@@ -112,9 +112,7 @@ async def ai_trade_controller(
             )
             task = f"trade {good} {units} {seller_wp} {buyer_wp}"
             if task != task_old:
-                queue_task(
-                    ship, task, estimated_profit=estimated_profit - estimated_fuel_cost
-                )
+                queue_task(ship, task, estimated_profit=round(estimated_profit - estimated_fuel_cost))
             if len(queued_tasks) == 0:
                 break
 
@@ -205,7 +203,6 @@ def _get_trade_goods(system_symbol, blacklisted_goods=None, max_age=3600):
     for good in buyers:
         if good not in sellers:
             continue
-        best[good] = (-float("inf"), (), ())
         # the best buyer has the highest sellPrice
         best_buyer = -float("inf"), None
         for wp in buyers[good]:

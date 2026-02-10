@@ -175,9 +175,9 @@ async def ai_probe_controller(
                 if DEBUG:
                     logger.debug(
                         f"Probe Controller {system_symbol}: "
-                        f"cannot purchase a probe ({credits=} {supply=})"
+                        f"cannot purchase a probe ({credits=}, {supply=})"
                     )
-                await sleep(interval)
+            await sleep(interval)
 
     if DEBUG:
         logger.debug(f"Probe Controller {system_symbol}: task completed")

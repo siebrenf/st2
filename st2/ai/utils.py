@@ -148,7 +148,7 @@ async def chart_system_marketplaces(system, interval=60):
                 ship = cur.execute(
                     """SELECT * FROM ships WHERE symbol = %s""",
                     (available_ship_symbol,),
-                )
+                ).fetchone()
             wp = ship["nav"]["waypointSymbol"]
             wps = system.shortest_passing_path(uncharted_markets, start=wp)
             assert (
@@ -156,7 +156,7 @@ async def chart_system_marketplaces(system, interval=60):
             ), f"expected that {wp=} is not present in {uncharted_markets=}"
             waypoint_symbol = wps[1]
             task = f"scout {waypoint_symbol}"
-            queue_task(ship, task)
+            queue_task(ship["symbol"], task)
         await sleep(interval)
         system.refresh(refresh_graph=False)
         uncharted_markets = system.uncharted_markets()
@@ -198,7 +198,7 @@ async def scout_system_marketplaces(system, interval=60):
                 ship = cur.execute(
                     """SELECT * FROM ships WHERE symbol = %s""",
                     (available_ship_symbol,),
-                )
+                ).fetchone()
             wp = ship["nav"]["waypointSymbol"]
             wps = system.shortest_passing_path(unscouted_markets, start=wp)
             assert (
@@ -206,7 +206,7 @@ async def scout_system_marketplaces(system, interval=60):
             ), f"expected that {wp=} is not present in {unscouted_markets=}"
             waypoint_symbol = wps[1]
             task = f"scout {waypoint_symbol}"
-            queue_task(ship, task)
+            queue_task(ship["symbol"], task)
         await sleep(interval)
         # system.refresh()  not needed
         unscouted_markets = system.unscouted_markets()
