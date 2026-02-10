@@ -1,111 +1,93 @@
 from psycopg import connect
-from psycopg.rows import dict_row
+from st2.db.static import SUPPLY_CHAIN
 from st2.system import System
 
 
 def plot_supply_chain(system_symbol):
-    # # system tradeGoods
-    # sellers = {}
-    # buyers = {}
-    # with connect(
-    #     "dbname=st2 user=postgres", row_factory=dict_row
-    # ) as conn, conn.cursor() as cur:
-    #     ret = cur.execute(
-    #         """
-    #         SELECT DISTINCT ON ("waypointSymbol", "symbol") * FROM market_tradegoods
-    #         WHERE "systemSymbol" = %s
-    #         ORDER BY "waypointSymbol", "symbol", "timestamp" DESC;
-    #         """,
-    #         (system_symbol,),
-    #     ).fetchall()
-    # for row in ret:
-    #     good = row["symbol"]
-    #     if good not in buyers:
-    #         buyers[good] = []
-    #     buyers[good].append(row)
-    #     if good not in sellers:
-    #         sellers[good] = []
-    #     sellers[good].append(row)
-
-    raw_goods = [
-        "ALUMINUM_ORE",
-        "AMMONIA_ICE",
-        "COPPER_ORE",
-        "DIAMONDS" 
-        "GOLD_ORE",
-        "HYDROCARBON",
-        "ICE_WATER",
-        "IRON_ORE",
-        "MERITIUM_ORE",
-        "PLATINUM_ORE",
-        "PRECIOUS_STONES",
-        "QUARTZ_SAND",
-        "SILICON_CRYSTALS",
-        "SILVER_ORE",
-        "URANITE_ORE",
-    ]
-    system = System(system_symbol)
-
-    sold = set()  # exported + exchanged
-    bought = set()  # imported
-    for wp, md in system.markets:
-        sold.update(md["exports"])
-        sold.update(md["exchange"])
-        bought.update(md["imports"])
-
-    # supply chain elements present in this system
-    exp2imp = {}
-    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-        ret = cur.execute("""SELECT * FROM supply_chain""").fetchall()
-    for row in ret:
-        good_exp, goods_imp = row
-        if good_exp in raw_goods:
+    # good that can be extracted/siphoned
+    raw_goods = []
+    # goods that are consumed by waypoints
+    consumer_goods = []
+    for good_exp in SUPPLY_CHAIN.keys():
+        if SUPPLY_CHAIN[good_exp] in [["EXPLOSIVES"], ["MACHINERY"]]:
+            raw_goods.append(good_exp)
+        # ships & ship components
+        if good_exp.startswith(("ENGINE_", "MODULE_", "MOUNT_", "REACTOR_", "SHIP_")):
             continue
-        if good_exp not in bought:
-            continue  # good not imported in this system
-        if len(goods_imp) != set(goods_imp) & sold:
-            continue  # good not manufactured in this system
-        exp2imp[good_exp] = goods_imp
-
+        # ship/gate consumables
+        if good_exp in ["ANTIMATTER", "FAB_MATS", "FUEL"]:
+            continue
+        used_in_production = False
+        for goods_imp in SUPPLY_CHAIN.values():
+            if good_exp in goods_imp:
+                used_in_production = True
+                break
+        if used_in_production is False:
+            consumer_goods.append(good_exp)
+    # production tiers (the number of markets between raw goods and the product)
     tiers = {}
     for good in raw_goods:
         tiers[good] = 0
-    while len(exp2imp) > len(tiers):
-        for good_exp, goods_imp in exp2imp.items():
+    while len(SUPPLY_CHAIN) > len(tiers):
+        for good_exp, goods_imp in SUPPLY_CHAIN.items():
             if good_exp in tiers:
                 continue
-            if len(goods_imp) == set(goods_imp) & set(tiers):
+            if len(goods_imp) == len(set(goods_imp) & set(tiers)):
                 best = 0
                 for good_imp in goods_imp:
                     best = max(best, tiers[good_imp])
                 tiers[good_exp] = best + 1
-        print(tiers)  # TODO: rm
 
-    # supply_chain = {"exports": {}, "imports": {}}
-    # for wp, md in system.markets:
-    #     for good_exp in wp["exports"]:
-    #         if good_exp not in supply_chain:
-    #             supply_chain["exports"][good_exp] = []
-    #         supply_chain["exports"][good_exp].append(wp)
-    #         for good_imp in exp2imp[good_exp]:
-    #             if good_imp not in md["imports"] + md["exchange"]:
-    #                 print(f"{good_imp} not bought at {wp}???")
-    #             if good_imp not in supply_chain:
-    #                 supply_chain["imports"][good_imp] = []
-    #             supply_chain["imports"][good_exp].append(wp)
-    #
-    # supply_chain = {}
-    # for good in raw_goods:
-    #     for good_exp, goods_imp in exp2imp.items():
-    #         if good in goods_imp and good in sellers:
-    #
-    #
-    #     complete = True
-    #     for good_imp in exp2imp[good_exp]:
-    #         if good_imp not in sellers:
-    #             complete = False
-    #             break  # broken supply chain
-    #     if
+    system = System(system_symbol)
+    port2good2wp = {"imports": {}, "exports": {}, "exchange": {}, "sell": {}}
+    for wp, md in system.markets.items():
+        for key in ["imports", "exports", "exchange"]:
+            for good in md[key]:
+                if good not in port2good2wp[key]:
+                    port2good2wp[key][good] = set()
+                port2good2wp[key][good].add(wp)
+                if key == "imports":
+                    continue
+                if good not in port2good2wp["sell"]:
+                    port2good2wp["sell"][good] = set()
+                port2good2wp["sell"][good].add(wp)
+
+    def chained(product):
+        """Recursive function to find fully connected supply chains"""
+        for material in SUPPLY_CHAIN[product]:
+            sold = material in port2good2wp["sell"]
+            if material in raw_goods and sold:
+                continue
+            if not sold:
+                return False
+            if not chained(material):
+                return False
+        return True
+
+    # consumer goods with production supported in-system
+    complete = set()
+    for good in consumer_goods:
+        if good in port2good2wp["imports"] and good in port2good2wp["sell"] and chained(good):
+            complete.add(good)
+
+    def chained_wps(product, wps):
+        buyers = port2good2wp["imports"].get(product, set()) & wps
+        if tiers[product] == 0:
+            sellers = port2good2wp["exchange"].get(product, set())
+            port = "exchange"
+        else:
+            sellers = port2good2wp["exports"].get(product, set())
+            port = "export"
+        spaces = (max(tiers.values()) - tiers[product]) * "  "
+        print(f"{spaces}- {product} {buyers=} {sellers=} ({port=})")
+        for material in SUPPLY_CHAIN[product]:
+            if product not in raw_goods:
+                chained_wps(material, sellers)
+
+    # print the supply chain for complete consumer goods
+    for good in sorted(complete):
+        chained_wps(good, port2good2wp["imports"][good])
+        print()
 
 
 if __name__ == "__main__":
