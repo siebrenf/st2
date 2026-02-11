@@ -280,7 +280,7 @@ class TaskMaster:
             #         verbose=True,  # TODO: remove
             #     )
 
-            case "deliver":
+            case "supply":
                 coro = ai_supply_system(
                     ship_symbol=ship_symbol,
                     good=task[1],
