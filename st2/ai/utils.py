@@ -125,36 +125,45 @@ async def chart_system_marketplaces(system, interval=60):
                 f"{len(uncharted_markets)} uncharted markets in {system.symbol}"
             )
         available_ship_symbol = None
+        available_scout_symbol = None
         system_scouting_underway = False
         at = 0  # available traders
         tt = 0  # total traders
-        for task in get_tasks(system_symbol=system.symbol):  # any agent
-            # only queue one scouting task at a time
-            for key in ["current", "queued"]:
-                if str(task[key]).startswith("scout "):
-                    system_scouting_underway = True
-            # select a random available trader
-            if task["pname"] == "traders":
-                tt += 1
-                if task["queued"] is None or task["queued"].startswith("trade "):
-                    available_ship_symbol = task["symbol"]
-                    at += 1
+        # any agent's ships can be drafted
+        for task in get_tasks(system_symbol=system.symbol, pname="traders"):
+            tt += 1
+            if str(task["queued"]).startswith("scout "):
+                system_scouting_underway = True
+            elif str(task["current"]).startswith("scout "):  # no queued scout task
+                available_scout_symbol = task["symbol"]
+                system_scouting_underway = True
+                wp = task["current"].split(" ")[1]
+                if wp in uncharted_markets:
+                    uncharted_markets.remove(wp)
+                at += 1
+            elif task["queued"] is None or task["queued"].startswith("trade "):
+                available_ship_symbol = task["symbol"]
+                at += 1
+        if len(uncharted_markets) == 0:
+            break
         if DEBUG:
             logger.debug(f"{at}/{tt} ships available to scout {system.symbol}")
-        if available_ship_symbol and not system_scouting_underway:
+        ship_symbol = None
+        if available_scout_symbol:
+            ship_symbol = available_scout_symbol
+        elif available_ship_symbol and not system_scouting_underway:
+            ship_symbol = available_ship_symbol
+        if ship_symbol:
             with connect(
                 "dbname=st2 user=postgres", row_factory=dict_row
             ) as conn, conn.cursor() as cur:
                 ship = cur.execute(
                     """SELECT * FROM ships WHERE symbol = %s""",
-                    (available_ship_symbol,),
+                    (ship_symbol,),
                 ).fetchone()
             wp = ship["nav"]["waypointSymbol"]
             wps = system.shortest_passing_path(uncharted_markets, start=wp)
-            assert (
-                len(wps) > 1
-            ), f"expected that {wp=} is not present in {uncharted_markets=}"
-            waypoint_symbol = wps[1]
+            waypoint_symbol = wps[1]  # indexError: ship was at the last wp
             task = f"scout {waypoint_symbol}"
             queue_task(ship["symbol"], task)
         await sleep(interval)
@@ -175,36 +184,45 @@ async def scout_system_marketplaces(system, interval=60):
                 f"{len(unscouted_markets)} unscouted markets in {system.symbol}"
             )
         available_ship_symbol = None
+        available_scout_symbol = None
         system_scouting_underway = False
         at = 0  # available traders
         tt = 0  # total traders
-        for task in get_tasks(system_symbol=system.symbol):  # any agent
-            # only queue one scouting task at a time
-            for key in ["current", "queued"]:
-                if str(task[key]).startswith("scout "):
-                    system_scouting_underway = True
-            # select a random available trader
-            if task["pname"] == "traders":
-                tt += 1
-                if task["queued"] is None or task["queued"].startswith("trade "):
-                    available_ship_symbol = task["symbol"]
-                    at += 1
+        # any agent's ships can be drafted
+        for task in get_tasks(system_symbol=system.symbol, pname="traders"):
+            tt += 1
+            if str(task["queued"]).startswith("scout "):
+                system_scouting_underway = True
+            elif str(task["current"]).startswith("scout "):  # no queued scout task
+                available_scout_symbol = task["symbol"]
+                system_scouting_underway = True
+                wp = task["current"].split(" ")[1]
+                if wp in unscouted_markets:
+                    unscouted_markets.remove(wp)
+                at += 1
+            elif task["queued"] is None or task["queued"].startswith("trade "):
+                available_ship_symbol = task["symbol"]
+                at += 1
+        if len(unscouted_markets) == 0:
+            break
         if DEBUG:
             logger.debug(f"{at}/{tt} ships available to scout {system.symbol}")
-        if available_ship_symbol and not system_scouting_underway:
+        ship_symbol = None
+        if available_scout_symbol:
+            ship_symbol = available_scout_symbol
+        elif available_ship_symbol and not system_scouting_underway:
+            ship_symbol = available_ship_symbol
+        if ship_symbol:
             with connect(
                 "dbname=st2 user=postgres", row_factory=dict_row
             ) as conn, conn.cursor() as cur:
                 ship = cur.execute(
                     """SELECT * FROM ships WHERE symbol = %s""",
-                    (available_ship_symbol,),
+                    (ship_symbol,),
                 ).fetchone()
             wp = ship["nav"]["waypointSymbol"]
             wps = system.shortest_passing_path(unscouted_markets, start=wp)
-            assert (
-                len(wps) > 1
-            ), f"expected that {wp=} is not present in {unscouted_markets=}"
-            waypoint_symbol = wps[1]
+            waypoint_symbol = wps[1]  # indexError: ship was at the last wp
             task = f"scout {waypoint_symbol}"
             queue_task(ship["symbol"], task)
         await sleep(interval)
