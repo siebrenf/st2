@@ -48,11 +48,7 @@ async def ai_construction_controller(
             queued = 0
             for tasks in ship_tasks:
                 ship = tasks["symbol"]
-                if (
-                    tasks["current"] is None
-                    or tasks["queued"] is None
-                    or tasks["queued"].startswith("trade ")
-                ):
+                if tasks["queued"] is None or tasks["queued"].startswith("trade "):
                     available_traders.add(ship)
 
                 for key in ["current", "queued"]:
@@ -70,7 +66,9 @@ async def ai_construction_controller(
                 continue  # remaining units are already tasked
             if DEBUG:
                 logger.debug(
-                    f"{len(available_traders)} ships available to supply {good} to gate {gate_symbol}"
+                    f"Construction Controller {system_symbol}: "
+                    f"{len(available_traders)}/{len(ship_tasks)} "
+                    f"ships available to supply {good} to gate {gate_symbol}"
                 )
             if len(available_traders) == 0:
                 break  # try again later
@@ -93,7 +91,9 @@ async def ai_construction_controller(
             credits = get_agent_public(agent_symbol)["credits"]  # noqa
             if credits < max(1_000_000, cost):
                 if DEBUG:
-                    logger.debug(f"Too poor for construction work")
+                    logger.debug(
+                        f"Construction Controller {system_symbol}: insufficient funds"
+                    )
                 break  # try again later
 
             # select a ship to deliver the goods
@@ -106,12 +106,10 @@ async def ai_construction_controller(
                     material["required"] - material["fulfilled"] - current - queued
                 )
                 logger.debug(
-                    "Construction supplies: "
-                    f"{remaining} remaining/"
-                    f"{current} currently underway/"
-                    f"{queued} queued underway/"
+                    f"Construction Controller {system_symbol}: "
                     f"{material['fulfilled']} fulfilled/"
-                    f"{material['required']} total {good}"
+                    f"{current + queued} underway/"
+                    f"{remaining} remaining {good}"
                 )
             break
 

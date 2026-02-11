@@ -36,7 +36,9 @@ async def ai_contract_controller(
             if verbose:
                 n = len(queued_tasks_to_clear) + len(current_tasks_to_cancel)
                 if n:
-                    logger.warning(f"{n} ships with outdated deliver tasks found!")
+                    logger.warning(
+                        f"Contract Controller: {n} ships with outdated deliver tasks found!"
+                    )
             for ship in queued_tasks_to_clear:
                 dequeue_task(ship, reason="contract expired")
             for ship in current_tasks_to_cancel:
@@ -67,18 +69,17 @@ async def ai_contract_controller(
                 ship_tasks = get_active_traders(agent_symbol, system_symbol)
                 if not ship_tasks:
                     doable = False
-                    reason = f"No traders in {system_symbol}"
+                    reason = f"no traders in {system_symbol}"
                     sleep_timer = interval  # new traders may be assigned to the system
                     break
                 system = System(system_symbol, request)
-                missing = system.uncharted_markets() + system.unscouted_markets()
+                missing_wps = system.uncharted_markets() + system.unscouted_markets()
                 for good in trade_goods:
                     if not system.markets_with(good, "sells"):
                         doable = False
-                        reason = f"No {good} for sale in {system_symbol}"
-                        if len(missing) == 0:
-                            sleep_timer = time.remaining(contract["deadlineToAccept"])
-                        else:
+                        reason = f"no {good} in {system_symbol}"
+                        sleep_timer = time.remaining(contract["deadlineToAccept"])
+                        if missing_wps:
                             reason += " (yet)"
                             sleep_timer = interval * 5
                         break
@@ -88,7 +89,7 @@ async def ai_contract_controller(
                 Contract(contract["id"], request).accept(verbose)
             else:
                 if DEBUG:
-                    logger.debug(f"Contract not doable: {reason}")
+                    logger.debug(f"Contract Controller: {reason}")
                 await sleep(sleep_timer)
                 continue
 
@@ -110,11 +111,7 @@ async def ai_contract_controller(
             queued = 0
             for tasks in ship_tasks:
                 ship = tasks["symbol"]
-                if (
-                    tasks["current"] is None
-                    or tasks["queued"] is None
-                    or tasks["queued"].startswith("trade ")
-                ):
+                if tasks["queued"] is None or tasks["queued"].startswith("trade "):
                     available_traders.add(ship)
 
                 for key in ["current", "queued"]:
@@ -132,7 +129,8 @@ async def ai_contract_controller(
                 continue  # remaining units are already tasked
             if DEBUG:
                 logger.debug(
-                    f"{len(available_traders)} ships available to deliver {good} to {deliver_wp}"
+                    f"Contract Controller: {len(available_traders)}/{len(ship_tasks)} "
+                    f"ships available to deliver {good} to {deliver_wp}"
                 )
             if len(available_traders) == 0:
                 break  # try again later
@@ -152,7 +150,7 @@ async def ai_contract_controller(
             credits = get_agent_public(agent_symbol)["credits"]  # noqa
             if credits < max(100_000, cost):
                 if DEBUG:
-                    logger.debug(f"Too poor for contract work")
+                    logger.debug(f"Contract Controller: insufficient funds")
                 break  # try again later
 
             # select a ship to deliver the goods
@@ -165,12 +163,10 @@ async def ai_contract_controller(
                     term["unitsRequired"] - term["unitsFulfilled"] - current - queued
                 )
                 logger.debug(
-                    "Contract delivery: "
-                    f"{remaining} remaining/"
-                    f"{current} currently underway/"
-                    f"{queued} queued underway/"
+                    "Contract Controller: "
                     f"{term['unitsFulfilled']} fulfilled/"
-                    f"{term['unitsRequired']} total {good}"
+                    f"{current + queued} underway/"
+                    f"{remaining} remaining {good}"
                 )
             break
 

@@ -42,10 +42,6 @@ async def ai_trade_controller(
             agent_symbol=agent_symbol,
             pname=pname,
         )
-        if DEBUG:
-            logger.debug(
-                f"{len(assigned_ships)} ships assigned to trade in {system_symbol}"
-            )
         if len(assigned_ships) == 0:
             await sleep(interval)
             continue
@@ -68,18 +64,28 @@ async def ai_trade_controller(
                     queued_tasks[ship] = task["queued"]
             if ship not in ships:
                 _set_ship_metadata(ship, ships)
+        if DEBUG:
+            logger.debug(
+                f"Trade Controller {system_symbol}: "
+                f"{len(queued_tasks)}/{len(assigned_ships)} "
+                f"ships available to trade in {system_symbol}"
+            )
         if len(queued_tasks) == 0:
             await sleep(interval)
             continue
 
         # identify trade opportunities
         trades, outdated_markets = _get_trade_goods(system_symbol, blacklisted_goods)
-        if DEBUG:
-            logger.debug(f"{len(trades)} trades found in {system_symbol}")
-            if len(outdated_markets):
-                logger.debug(
-                    f"{len(outdated_markets)} outdated markets found in {system_symbol}"
-                )
+        # if DEBUG:
+        #     logger.debug(
+        #         f"Trade Controller {system_symbol}: "
+        #         f"{len(trades)} trades found in {system_symbol}"
+        #     )
+        #     if len(outdated_markets):
+        #         logger.debug(
+        #             f"Trade Controller {system_symbol}: "
+        #             f"{len(outdated_markets)} outdated markets found in {system_symbol}"
+        #         )
         cargo_capacity_max = max([v["cargo"] for v in ships.values()])
         for good, (_, seller, buyer) in trades.items():
             max_units, purchase_price, sell_price = _get_trade_units(

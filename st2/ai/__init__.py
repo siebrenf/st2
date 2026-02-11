@@ -313,6 +313,7 @@ class TaskMaster:
                 )
 
             case _:
+                task = " ".join(task)
                 raise ValueError(f"Task not recognized: {ship_symbol=}, {task=}")
         return coro  # noqa: always loaded on time
 

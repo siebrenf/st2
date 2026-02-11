@@ -171,12 +171,11 @@ async def ai_probe_controller(
                         f"Probe Controller {system_symbol}: "
                         f"{probe_purchases_remaining} probes remaining"
                     )
-            else:
-                if DEBUG:
-                    logger.debug(
-                        f"Probe Controller {system_symbol}: "
-                        f"cannot purchase a probe ({credits=}, {supply=})"
-                    )
+            elif DEBUG:
+                msg = "insufficient funds"
+                if credits > 500_000:
+                    msg = f"probe supply too low"
+                logger.debug(f"Probe Controller {system_symbol}: {msg}")
             await sleep(interval)
 
     if DEBUG:
