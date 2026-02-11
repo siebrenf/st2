@@ -5,6 +5,7 @@ from st2.ai.contract_controller import get_active_traders, get_trader
 from st2.ai.utils import queue_task
 from st2.logging import logger
 from st2.request import RequestMp
+from st2.ship import Ship
 from st2.system import System
 
 DEBUG = True
@@ -44,6 +45,7 @@ async def ai_construction_controller(
             # currently active tasks in this system
             ship_tasks = get_active_traders(agent_symbol, system_symbol)
             available_traders = set()
+            blacklist = set()
             current = 0
             queued = 0
             for tasks in ship_tasks:
@@ -57,10 +59,18 @@ async def ai_construction_controller(
                         if task_split[1] == good:
                             u = int(task_split[2])
                             units -= u
+                            purchase_wp = task_split[3]
+                            # max 1 ship per waypoint at once
                             if key == "current":
                                 current += u
+                                if good not in [
+                                    c["symbol"]
+                                    for c in Ship(ship, request)["cargo"]["inventory"]
+                                ]:
+                                    blacklist.add(purchase_wp)
                             else:
                                 queued += u
+                                blacklist.add(purchase_wp)
 
             if units <= 0:
                 continue  # remaining units are already tasked
@@ -74,20 +84,21 @@ async def ai_construction_controller(
                 break  # try again later
 
             # select the cheapest waypoint to purchase the goods from
-            best = None, float("inf"), dict()
+            best = None, {"purchasePrice": float("inf")}
             for purchase_wp, md in system.markets_with(good, "sells").items():
+                if purchase_wp in blacklist:
+                    continue
                 if md["supply"] in ["SCARCE", "LIMITED"]:
                     continue
-                price = md["purchasePrice"]
-                if price and price < best[1]:
-                    best = purchase_wp, price, md
-            purchase_wp, price, md = best
+                if md["purchasePrice"] < best[1]["purchasePrice"]:
+                    best = purchase_wp, md
+            purchase_wp, md = best
             if purchase_wp is None:
                 continue  # next good
             # trade max 1 tv per task
             units = min(units, md["tradeVolume"])
 
-            cost = 2 * price * units
+            cost = 2 * md["purchasePrice"] * units
             credits = get_agent_public(agent_symbol)["credits"]  # noqa
             if credits < max(1_000_000, cost):
                 if DEBUG:
