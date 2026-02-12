@@ -1,5 +1,6 @@
 from psycopg import connect
 
+from st2.ai.trade import get_tradegood
 from st2.db.static import SUPPLY_CHAIN
 from st2.system import System
 
@@ -84,14 +85,34 @@ def plot_supply_chain(system_symbol):
         else:
             sellers = port2good2wp["exports"].get(product, set())
             port = "export"
+        # spaces = (max(tiers.values()) - tiers[product]) * "  "
+        # print(f"{spaces}- {product} {buyers=} {sellers=} ({port=})")
+
+        line = []
+        for wp in buyers:
+            if "buyers" not in line:
+                line.append("buyers")
+            md = get_tradegood(wp, product)
+            s = md.get("supply", "N")
+            a = str(md.get("activity", "N"))
+            line.append(f"{wp} {s}/{a}")
+        for wp in sellers:
+            if "sellers" not in line:
+                line.append("sellers")
+            md = get_tradegood(wp, product)
+            s = md.get("supply", "N")
+            a = str(md.get("activity", "N"))
+            line.append(f"{wp} {s}/{a}")
+        line = " ".join(line)
         spaces = (max(tiers.values()) - tiers[product]) * "  "
-        print(f"{spaces}- {product} {buyers=} {sellers=} ({port=})")
+        print(f"{spaces}- {product} {line}")
+
         for material in SUPPLY_CHAIN[product]:
             if product not in raw_goods:
                 chained_wps(material, sellers)
 
     # print the supply chain for complete consumer goods
-    for good in sorted(complete):
+    for good in sorted(complete) + ["FAB_MATS", "SHIP_PARTS", "SHIP_PLATING"]:
         chained_wps(good)
         print()
 
