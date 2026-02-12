@@ -28,24 +28,23 @@ async def ai_siphon_start_system(
     if verbose:
         logger.info(f"{ship_symbol} will siphon from {siphon_wp} and sell at {sell_wp}")
 
-    # sanity check
-    for g, u in ship.cargo_yield():
-        if g not in ["HYDROCARBON", "LIQUID_HYDROGEN", "LIQUID_NITROGEN"]:
-            ship.jettison(g, u, verbose)
-
     # fuel per roundtrip
     dist = system.graph[sell_wp][siphon_wp]["distance"]
     fuel_minimum = nav_fuel(dist) * 4  # add extra fuel for safety
+    avg_yield = 7  # prevent too much waste
 
-    # start at the sell_wp
+    # on start, begin at the sell_wp
     if ship["nav"]["waypointSymbol"] not in [sell_wp, siphon_wp]:
         await travel(ship, sell_wp, explore=False, verbose=False)
+        ship.nav_patch("CRUISE")
+    # on restart, continue until the sell_wp
     if ship["nav"]["waypointSymbol"] == siphon_wp:
-        if t := ship.cooldown_remaining():
-            await sleep(t)
-        while ship["cargo"]["units"] < ship["cargo"]["capacity"]:
+        await sleep(max(ship.nav_remaining(), ship.cooldown_remaining()))
+
+        while ship["cargo"]["units"] + avg_yield < ship["cargo"]["capacity"]:
             ship.siphon(verbose=False)
             await sleep(ship.cooldown_remaining())
+
         ship.navigate(sell_wp)
         await sleep(ship.nav_remaining())
 
@@ -55,12 +54,14 @@ async def ai_siphon_start_system(
             ship.sell(g, u, verbose=False)
         if ship["fuel"]["current"] < fuel_minimum:
             ship.refuel()
+
         ship.navigate(siphon_wp)
         await sleep(max(ship.nav_remaining(), ship.cooldown_remaining()))
 
         # at the siphon_wp
-        while ship["cargo"]["units"] < ship["cargo"]["capacity"]:
+        while ship["cargo"]["units"] + avg_yield < ship["cargo"]["capacity"]:
             ship.siphon(verbose=False)
             await sleep(ship.cooldown_remaining())
+
         ship.navigate(sell_wp)
         await sleep(ship.nav_remaining())

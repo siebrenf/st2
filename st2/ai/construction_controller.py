@@ -100,7 +100,7 @@ async def ai_construction_controller(
 
             cost = 2 * md["purchasePrice"] * units
             credits = get_agent_public(agent_symbol)["credits"]  # noqa
-            if credits < max(1_000_000, cost):
+            if credits < max(2_000_000, cost):
                 if DEBUG:
                     logger.debug(
                         f"Construction Controller {system_symbol}: insufficient funds"
