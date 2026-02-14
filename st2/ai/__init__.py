@@ -9,9 +9,12 @@ from st2.ai.advisor_controller import ai_advisor_controller
 from st2.ai.construction_controller import ai_construction_controller
 from st2.ai.contract_controller import ai_contract_controller
 from st2.ai.deliver import ai_deliver_system
+from st2.ai.extract import ai_extract_start_system
 from st2.ai.probe import ai_probe_purchase, ai_probe_waypoint
 from st2.ai.probe_controller import ai_probe_controller
 from st2.ai.scout import ai_scout_waypoint
+from st2.ai.siphon import ai_siphon_start_system
+from st2.ai.start_system_controller import ai_start_system_controller
 from st2.ai.supply import ai_supply_system
 from st2.ai.trade import ai_trade_system
 from st2.ai.trade_controller import ai_trade_controller
@@ -241,6 +244,15 @@ class TaskMaster:
                     verbose=True,  # TODO: remove
                 )
 
+            case "extract":
+                coro = ai_extract_start_system(
+                    ship_symbol=ship_symbol,
+                    extract_wp=task[1],
+                    sell_wp=task[2],
+                    qa_pairs=self.qa_pairs,
+                    verbose=True,  # TODO: remove
+                )
+
             case "probe":
                 coro = ai_probe_waypoint(
                     ship_symbol=ship_symbol,
@@ -272,6 +284,15 @@ class TaskMaster:
                     qa_pairs=self.qa_pairs,
                 )
 
+            case "siphon":
+                coro = ai_siphon_start_system(
+                    ship_symbol=ship_symbol,
+                    siphon_wp=task[1],
+                    sell_wp=task[2],
+                    qa_pairs=self.qa_pairs,
+                    verbose=True,  # TODO: remove
+                )
+
             # too many API requests!
             # case "spymaster_controller":
             #     coro = ai_spymaster_controller(
@@ -279,6 +300,14 @@ class TaskMaster:
             #         qa_pairs=self.qa_pairs,
             #         verbose=True,  # TODO: remove
             #     )
+
+            case "start_system_controller":
+                coro = ai_start_system_controller(
+                    system_symbol=task[1],
+                    agent_symbol=agent_symbol,
+                    qa_pairs=self.qa_pairs,
+                    verbose=True,  # TODO: remove
+                )
 
             case "supply":
                 coro = ai_supply_system(
@@ -290,6 +319,9 @@ class TaskMaster:
                     qa_pairs=self.qa_pairs,
                     verbose=True,  # TODO: remove
                 )
+
+            case "survey":
+                coro = _test_coroutine(ship_symbol, 3600)  # TODO
 
             case "test":
                 coro = _test_coroutine(*task[1:])

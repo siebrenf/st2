@@ -13,18 +13,18 @@ def plot_supply_chain(system_symbol):
     for good_exp in SUPPLY_CHAIN.keys():
         if SUPPLY_CHAIN[good_exp] in [["EXPLOSIVES"], ["MACHINERY"]]:
             raw_goods.append(good_exp)
-        # ships & ship components
-        if good_exp.startswith(("ENGINE_", "MODULE_", "MOUNT_", "REACTOR_", "SHIP_")):
-            continue
-        # ship/gate consumables
-        if good_exp in ["ANTIMATTER", "FAB_MATS", "FUEL"]:
-            continue
+        # # ships & ship components
+        # if good_exp.startswith(("ENGINE_", "MODULE_", "MOUNT_", "REACTOR_", "SHIP_")):
+        #     continue
+        # # ship/gate consumables
+        # if good_exp in ["ANTIMATTER", "FAB_MATS", "FUEL"]:
+        #     continue
         used_in_production = False
         for goods_imp in SUPPLY_CHAIN.values():
             if good_exp in goods_imp:
                 used_in_production = True
                 break
-        if used_in_production is False:
+        if not used_in_production:
             consumer_goods.append(good_exp)
     # production tiers (the number of markets between raw goods and the product)
     tiers = {}
@@ -57,34 +57,39 @@ def plot_supply_chain(system_symbol):
     def chained(product):
         """Recursive function to find fully connected supply chains"""
         for material in SUPPLY_CHAIN[product]:
-            sold = material in port2good2wp["sell"]
-            if material in raw_goods and sold:
+            if material in raw_goods:
+                complete_raw_goods.add(material)
                 continue
-            if not sold:
+            if not material in port2good2wp["sell"]:
                 return False
             if not chained(material):
                 return False
         return True
 
     # consumer goods with production supported in-system
-    complete = set()
+    complete_consumer_goods = set()
+    complete_raw_goods = set()
     for good in consumer_goods:
         if (
-            good in port2good2wp["imports"]
+            (
+                good in port2good2wp["imports"]
+                or good
+                in ["ANTIMATTER", "FAB_MATS", "FUEL", "SHIP_PARTS", "SHIP_PLATING"]
+            )
             and good in port2good2wp["sell"]
             and chained(good)
         ):
-            complete.add(good)
+            complete_consumer_goods.add(good)
 
     def chained_wps(product, buyers=None):
         if buyers is None:
             buyers = port2good2wp["imports"].get(product, set())
-        if tiers[product] == 0:
+        if product in raw_goods:
             sellers = port2good2wp["exchange"].get(product, set())
-            port = "exchange"  # drones can sell extracted/siphoned goods here
+            # port = "exchange"  # drones can sell extracted/siphoned goods here
         else:
             sellers = port2good2wp["exports"].get(product, set())
-            port = "export"
+            # port = "export"
         # spaces = (max(tiers.values()) - tiers[product]) * "  "
         # print(f"{spaces}- {product} {buyers=} {sellers=} ({port=})")
 
@@ -112,9 +117,14 @@ def plot_supply_chain(system_symbol):
                 chained_wps(material, sellers)
 
     # print the supply chain for complete consumer goods
-    for good in sorted(complete) + ["FAB_MATS", "SHIP_PARTS", "SHIP_PLATING"]:
+    for good in sorted(
+        complete_consumer_goods
+        | {"ANTIMATTER", "FAB_MATS", "FUEL", "SHIP_PARTS", "SHIP_PLATING"}
+    ):
         chained_wps(good)
         print()
+
+    print(sorted(complete_raw_goods))
 
 
 if __name__ == "__main__":

@@ -141,6 +141,16 @@ if __name__ == "__main__":
             """,
             (symbol, agent_symbol, symbol, None, False, "probes", None),
         )
+        symbol = f"start_system_controller {system_symbol}"
+        cur.execute(
+            """
+            INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT ("symbol") DO UPDATE
+            SET "current" = EXCLUDED."current"
+            """,
+            (symbol, agent_symbol, symbol, None, False, "drones", None),
+        )
 
     # start background processes
     import atexit
@@ -182,6 +192,21 @@ if __name__ == "__main__":
 
     atexit.register(stop_trade_taskmaster)
     trade_taskmaster.start()
+
+    pname = "drones"
+    drone_taskmaster = mp.Process(
+        target=taskmaster,
+        kwargs={"pname": pname, "qa_pairs": qa_pairs},
+    )
+
+
+    def stop_drone_taskmaster():
+        drone_taskmaster.terminate()
+        drone_taskmaster.join()
+
+
+    atexit.register(stop_drone_taskmaster)
+    drone_taskmaster.start()
 
     # run forever
     time.sleep(1e9)

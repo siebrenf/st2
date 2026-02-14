@@ -148,7 +148,7 @@ async def ai_contract_controller(
 
             cost = 2 * price * (term["unitsRequired"] - term["unitsFulfilled"])
             credits = get_agent_public(agent_symbol)["credits"]  # noqa
-            if credits < max(100_000, cost):
+            if credits < 100_000 + cost:
                 if DEBUG:
                     logger.debug(f"Contract Controller: insufficient funds")
                 break  # try again later

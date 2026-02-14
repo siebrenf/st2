@@ -355,11 +355,18 @@ class System:
         )
         return g
 
-    def waypoints_with(self, type: str = None, traits: list[str] = None):
+    def waypoints_with(
+        self, type: list[str] | str = None, traits: list[str] | str = None
+    ):
         query = """SELECT * FROM waypoints WHERE "systemSymbol" = %s """
         params = [self.symbol]
         if type:
-            query += "AND type = %s "
+            if isinstance(type, list):
+                query += "AND type = ANY(%s) "
+            elif isinstance(type, str):
+                query += "AND type = %s "
+            else:
+                raise TypeError(f"Argument type must be list or str")
             params.append(type)
         if traits:
             if isinstance(traits, list):
