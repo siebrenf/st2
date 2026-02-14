@@ -247,8 +247,10 @@ class TaskMaster:
             case "extract":
                 coro = ai_extract_start_system(
                     ship_symbol=ship_symbol,
-                    extract_wp=task[1],
-                    sell_wp=task[2],
+                    trait=task[1],
+                    extract_wp=task[2],
+                    sell_wp=task[3],
+                    whitelist=task[4],
                     qa_pairs=self.qa_pairs,
                     verbose=True,  # TODO: remove
                 )
@@ -287,8 +289,8 @@ class TaskMaster:
             case "siphon":
                 coro = ai_siphon_start_system(
                     ship_symbol=ship_symbol,
-                    siphon_wp=task[1],
-                    sell_wp=task[2],
+                    siphon_wp=task[2],
+                    sell_wp=task[3],
                     qa_pairs=self.qa_pairs,
                     verbose=True,  # TODO: remove
                 )
@@ -321,7 +323,7 @@ class TaskMaster:
                 )
 
             case "survey":
-                coro = _test_coroutine(ship_symbol, 3600)  # TODO
+                coro = _test_coroutine(ship_symbol, 1e999)  # TODO
 
             case "test":
                 coro = _test_coroutine(*task[1:])

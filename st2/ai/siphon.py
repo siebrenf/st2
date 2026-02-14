@@ -13,17 +13,25 @@ async def ai_siphon_start_system(
 ):
     ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     fuel_minimum = get_fuel_minimum(ship, sell_wp, siphon_wp)
-    avg_yield = 9  # prevent too much waste
+    mode = "CRUISE"
+    if fuel_minimum > ship["fuel"]["capacity"]:
+        fuel_minimum = 2
+        mode = "DRIFT"
+    buffer = 5  # prevent too much waste
+    if verbose:
+        logger.info(
+            f"{ship.name()} will siphon {siphon_wp} and {mode} to sell at {sell_wp}"
+        )
 
     # on start, begin at the sell_wp
     if ship["nav"]["waypointSymbol"] not in [sell_wp, siphon_wp]:
         await travel(ship, sell_wp, explore=False, verbose=False)
-        ship.nav_patch("CRUISE")
+    ship.nav_patch(mode)
     # on restart, continue until the sell_wp
     if ship["nav"]["waypointSymbol"] == siphon_wp:
         await sleep(max(ship.nav_remaining(), ship.cooldown_remaining()))
 
-        while ship["cargo"]["units"] + avg_yield < ship["cargo"]["capacity"]:
+        while ship["cargo"]["units"] + buffer < ship["cargo"]["capacity"]:
             ship.siphon(verbose=False)
             await sleep(ship.cooldown_remaining())
 
@@ -41,7 +49,7 @@ async def ai_siphon_start_system(
         await sleep(max(ship.nav_remaining(), ship.cooldown_remaining()))
 
         # at the siphon_wp
-        while ship["cargo"]["units"] + avg_yield < ship["cargo"]["capacity"]:
+        while ship["cargo"]["units"] + buffer < ship["cargo"]["capacity"]:
             ship.siphon(verbose=False)
             await sleep(ship.cooldown_remaining())
 
@@ -54,5 +62,5 @@ def get_fuel_minimum(ship, sell_wp, siphon_wp):
     system = System(system_symbol, ship.request)
     # fuel per roundtrip * 2 for safety
     dist = system.graph[sell_wp][siphon_wp]["distance"]  # noqa
-    fuel_minimum = nav_fuel(dist) * 4
+    fuel_minimum = nav_fuel(dist) * 2 * 1.2
     return fuel_minimum

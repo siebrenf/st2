@@ -91,8 +91,8 @@ async def ai_trade_controller(
             max_units, purchase_price, sell_price = _get_trade_units(
                 seller, buyer, cargo_capacity_max
             )
-            if sell_price - purchase_price < 1000:
-                break  # no worthwhile trades left
+            # if sell_price - purchase_price < 1000:
+            #     break  # no worthwhile trades left
 
             # beeline distance * 3 to account for
             #  - trader traveling to the seller first
@@ -102,11 +102,11 @@ async def ai_trade_controller(
             distance = system.graph[seller_wp][buyer_wp]["distance"] * 3  # noqa
             estimated_time_cost = nav_time(distance) * TIME_WEIGHT
             estimated_fuel_cost = nav_fuel(distance) * FUEL_WEIGHT
-            estimated_max_profit = (
-                sell_price - purchase_price - estimated_fuel_cost - estimated_time_cost
-            )
-            if estimated_max_profit < 1000:
-                continue  # unworthwhile trade
+            # estimated_max_profit = (
+            #     sell_price - purchase_price - estimated_fuel_cost - estimated_time_cost
+            # )
+            # if estimated_max_profit < 1000:
+            #     continue  # unworthwhile trade
             estimated_return_on_investment = (
                 sell_price - purchase_price - estimated_fuel_cost - estimated_time_cost
             ) / (purchase_price + estimated_fuel_cost + estimated_time_cost)

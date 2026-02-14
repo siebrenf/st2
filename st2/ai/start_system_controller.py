@@ -72,9 +72,6 @@ async def ai_start_system_controller(
 
     This controller self-destructs after completing its task.
     """
-    # TODO:
-    #  - ICE_WATER is truly useless
-    #  - QUARTZ_SAND is only used for FAB_MATS
     token = get_agent(agent_symbol)["token"]
     request = RequestMp(qa_pairs, priority, token)
     system = System(system_symbol, request, priority)
@@ -84,193 +81,217 @@ async def ai_start_system_controller(
         await sleep(interval)
         system.refresh(refresh_graph=False)
 
-    # get all required traits & derived raw goods to feed the start system
-    complete_consumer_goods, complete_raw_goods = get_raw_and_final_consumer_goods(
-        system
-    )
-    traits2goods = {}
-    deposits = {
-        "COMMON_METAL_DEPOSITS",
-        "MINERAL_DEPOSITS",
-        "PRECIOUS_METAL_DEPOSITS",
-        "RARE_METAL_DEPOSITS",
-    }
-    for good in complete_raw_goods:
-        if good in ["HYDROCARBON", "LIQUID_HYDROGEN", "LIQUID_NITROGEN"]:
-            continue  # siphoned goods, always present for FUEL production
-        for deposit in sorted(deposits):
-            if deposit in EXTRACT2TRAIT[good]:
-                if deposit not in traits2goods:
-                    traits2goods[deposit] = set()
-                traits2goods[deposit].add(good)
-                break
+    raw2products = get_raw_and_product_goods(system)
+    if DEBUG:
+        products = set()
+        for v in raw2products.values():
+            products.update(v)
+        logger.debug(
+            f"Start System Controller {system_symbol}: local commodities: {sorted(products)}"
+        )
+
+    trait2raw_goods = {}
+    seen = set()
+    for deposit, extracts in TRAIT2EXTRACT.items():
+        goods = set(extracts) & set(raw2products)
+        # minimize the number of traits needed
+        if goods - seen:
+            if deposit in ["PRECIOUS_METAL_DEPOSITS", "RARE_METAL_DEPOSITS"]:
+                goods -= seen & {"QUARTZ_SAND", "SILICON_CRYSTALS"}
+            trait2raw_goods[deposit] = goods
+            seen.update(goods)
+    if DEBUG:
+        logger.debug(f"Start System Controller {system_symbol}: {trait2raw_goods=}")
 
     # for each trait, find the best extract_wp and extract_sell_wp
     trait2waypoints = {}
-    for trait in sorted(traits2goods):
-        rest = deposits - {trait}
-        best = None, None, float("inf")
-
-        extract_sell_wps = None
-        for good in traits2goods[trait]:
-            if extract_sell_wps is None:
-                extract_sell_wps = set(system.markets_with(good, "buys"))
+    traits_blacklisted = set(TRAIT2EXTRACT) - set(trait2raw_goods)
+    for trait, goods in trait2raw_goods.items():
+        sell_wps = None
+        for good in goods:
+            if sell_wps is None:
+                sell_wps = set(system.markets_with(good, "buys"))
             else:
-                extract_sell_wps = extract_sell_wps & set(
-                    system.markets_with(good, "buys")
-                )
+                sell_wps = sell_wps & set(system.markets_with(good, "buys"))
 
-        for extract_wp in system.waypoints_with(
+        best = None, None, float("inf")
+        for extract_wp, md in system.waypoints_with(
             traits=trait, type=["ASTEROID", "ENGINEERED_ASTEROID"]
-        ):
-            # TODO: exclude extract_wps out of range
-            # penalize unwanted products
-            penalty = 200 * len(
-                set(system.waypoints[extract_wp]["traits"]) & rest  # noqa
-            )
-            for extract_sell_wp in extract_sell_wps:
-                dist = (
-                    system.graph[extract_wp][extract_sell_wp]["distance"]  # noqa
-                    + penalty
-                )
-                if dist < best[2]:
-                    best = extract_wp, extract_sell_wp, dist
-        extract_wp, extract_sell_wp, dist = best
+        ).items():
+            if set(md["traits"]) & traits_blacklisted:  # noqa
+                continue
+            for sell_wp in sell_wps:
+                dist = system.graph[extract_wp][sell_wp]["distance"]  # noqa
+                if dist < best[2]:  # noqa
+                    best = extract_wp, sell_wp, dist
+        extract_wp, sell_wp, dist = best
         if extract_wp:
-            trait2waypoints[trait] = extract_wp, extract_sell_wp
+            trait2waypoints[trait] = extract_wp, sell_wp
 
     # select a market that exchanges siphoned goods, around a gas giant
-    #  tiebreaker: distance to center
-    type2waypoints = {}
     best = None, None, float("inf")
-    center_wp = system.central_waypoint()
-    for siphon_sell_wp in system.markets_with("HYDROCARBON", "EXCHANGE"):
-        siphon_wp = system.waypoints[siphon_sell_wp].get("orbits")  # noqa
-        if system.waypoints.get(siphon_wp, {}).get("type") == "GAS_GIANT":
-            dist = system.graph[center_wp][siphon_wp]["distance"]  # noqa
+    for siphon_wp in system.waypoints_with(type="GAS_GIANT"):
+        for sell_wp in system.markets_with("HYDROCARBON", "EXCHANGE"):
+            dist = system.graph[siphon_wp][sell_wp]["distance"]  # noqa
             if dist < best[2]:
-                best = siphon_wp, siphon_sell_wp, dist
-    siphon_wp, siphon_sell_wp, dist = best
-    type2waypoints["GAS_GIANT"] = siphon_wp, siphon_sell_wp
+                best = siphon_wp, sell_wp, dist
+    siphon_wp, sell_wp, dist = best
+    if siphon_wp:
+        trait2waypoints["GAS_GIANT"] = siphon_wp, sell_wp
+    if DEBUG:
+        logger.debug(f"Start System Controller {system_symbol}: {trait2waypoints=}")
 
-    target = {"siphon": {"GAS_GIANT": 2}, "extract": {}, "survey": {}}
+    # remaining drones per waypoint type/trait
+    remaining = {"siphon": {"GAS_GIANT": 2}, "extract": {}, "survey": {}}
     for trait in sorted(trait2waypoints):
-        target["extract"][trait] = 2
-        target["survey"][trait] = 1
-
-    remaining = target.copy()
+        if trait == "GAS_GIANT":
+            continue
+        remaining["extract"][trait] = 4
+        remaining["survey"][trait] = 1
+    if DEBUG:
+        logger.debug(
+            f"Start System Controller {system_symbol}: drones_required={remaining}"
+        )
     for task in get_tasks(
         system_symbol=system.symbol,
         agent_symbol=agent_symbol,
         pname="drones",
     ):
         for key in ["current", "queued"]:
-            t = str(task[key]).split(" ")
-            if t[0] == "siphon":
-                remaining["siphon"]["GAS_GIANT"] -= 1
-            if t[0] in ["extract", "survey"]:
-                action, extract_wp = t[0:2]
-                for trait, (e_wp, es_wp) in trait2waypoints.items():
-                    if extract_wp == e_wp:
-                        remaining[action][trait] -= 1
-    if DEBUG:
-        logger.debug(f"Start System Controller {system_symbol}: {remaining=}")
-
-    # TODO: alternate mining/surveying drones
-    probed_shipyards = set()
-    for action, v in remaining.items():
-        for trait, n_ships in v.items():
-            if action == "siphon":
-                ship_type = "SHIP_SIPHON_DRONE"
-                siphon_wp, siphon_sell_wp = type2waypoints["GAS_GIANT"]
-                task = f"siphon {siphon_wp} {siphon_sell_wp}"
-            elif action == "extract":
-                ship_type = "SHIP_MINING_DRONE"
-                extract_wp, extract_sell_wp = trait2waypoints[trait]
-                task = f"extract {extract_wp} {extract_sell_wp}"
-            elif action == "survey":
-                ship_type = "SHIP_SURVEYOR"
-                extract_wp, extract_sell_wp = trait2waypoints[trait]
-                task = f"survey {extract_wp}"
-            else:
-                raise ValueError
-
-            for _ in range(n_ships):
-                while True:
-                    await sleep(interval)
-
-                    best = None, {}
-                    for shipyard_symbol, md in system.shipyards_with(ship_type).items():
-                        if md["purchasePrice"] < best[1].get(
-                            "purchasePrice", float("inf")
-                        ):
-                            best = shipyard_symbol, md
-                    shipyard_symbol, md = best
-
-                    if shipyard_symbol not in probed_shipyards:
-                        tasks = get_tasks(
-                            current=f"probe shipyard {shipyard_symbol}",
-                            agent_symbol=agent_symbol,
-                        )
-                        if tasks is None:
-                            continue
-
-                        t = Ship(tasks[0]["symbol"], request).nav_remaining()
-                        if t:
-                            await sleep(t)
-                        probed_shipyards.add(shipyard_symbol)
-                        if t:
-                            continue  # check the prices again
-
-                    cost = md["purchasePrice"]
-                    credits = get_agent_public(agent_symbol)["credits"]  # noqa
-                    supply = md["supply"]
-                    if credits < 1_000_000 + cost:
-                        if DEBUG:
-                            logger.debug(
-                                f"Start System Controller {system_symbol}: insufficient funds"
-                            )
-                        continue
-                    if supply == "SCARCE":
-                        if DEBUG:
-                            logger.debug(
-                                f"Start System Controller {system_symbol}: insufficient supply"
-                            )
-                        continue
-                    break  # all good!
-
-                ship = buy_ship(
-                    ship_type, shipyard_symbol, agent_symbol, request, verbose
-                )
-                with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE tasks
-                        SET "pname" = %s
-                        WHERE "symbol" = %s
-                        """,
-                        ("drones", ship),
-                    )
-                queue_task(ship, task)
+            if task[key]:
+                action, trait = str(task[key]).split(" ")[0:2]
                 remaining[action][trait] -= 1
+                if remaining[action][trait] == 0:
+                    del remaining[action][trait]
+                    if len(remaining[action]) == 0:
+                        del remaining[action]
+    if DEBUG:
+        logger.debug(
+            f"Start System Controller {system_symbol}: drones_remaining={remaining}"
+        )
+
+    # purchase orders:
+    #  - all siphoners
+    #  - 1 extractor > 1 surveyor > remaining extractors > remaining surveyor s
+    order = []
+    for n in range(remaining.get("siphon", {}).get("GAS_GIANT", 0)):
+        order.append(("siphon", "GAS_GIANT"))
+    for trait in remaining.get("extract", {}):
+        n = remaining.get("extract", {}).get(trait, 0)
+        if n:
+            order.append(("extract", trait))
+        m = remaining.get("survey", {}).get(trait, 0)
+        if m:
+            order.append(("survey", trait))
+        for _ in range(n - 1):
+            order.append(("extract", trait))
+        for _ in range(m - 1):
+            order.append(("survey", trait))
+
+    probed_shipyards = set()
+    for action, trait in order:
+        action_wp, sell_wp = trait2waypoints[trait]
+        if action == "siphon":
+            ship_type = "SHIP_SIPHON_DRONE"
+            task = f"siphon GAS_GIANT {action_wp} {sell_wp}"
+        elif action == "extract":
+            ship_type = "SHIP_MINING_DRONE"
+            # list or worthwhile goods at the waypoint
+            whitelist = set()
+            for t in set(system.waypoints[action_wp]["traits"]) & set(  # noqa
+                trait2raw_goods
+            ):
+                whitelist.update(trait2raw_goods[t])
+            whitelist = ",".join(sorted(whitelist))
+            task = f"extract {trait} {action_wp} {sell_wp} {whitelist}"
+        elif action == "survey":
+            ship_type = "SHIP_SURVEYOR"
+            task = f"survey {trait} {action_wp}"
+        else:
+            raise ValueError
+        if DEBUG:
+            logger.debug(f"Start System Controller {system_symbol}: next {task=}")
+
+        while True:
+            await sleep(interval)
+
+            best = None, {}
+            for shipyard_symbol, md in system.shipyards_with(ship_type).items():
+                if md["purchasePrice"] < best[1].get("purchasePrice", float("inf")):
+                    best = shipyard_symbol, md
+            shipyard_symbol, md = best
+
+            if shipyard_symbol not in probed_shipyards:
+                tasks = get_tasks(
+                    current=f"probe shipyard {shipyard_symbol}",
+                    agent_symbol=agent_symbol,
+                )
+                if tasks is None:
+                    continue
+
+                t = Ship(tasks[0]["symbol"], request).nav_remaining()
+                if t:
+                    await sleep(t)
+                probed_shipyards.add(shipyard_symbol)
+                if t:
+                    continue  # check the prices again
+
+            cost = md["purchasePrice"]
+            credits = get_agent_public(agent_symbol)["credits"]  # noqa
+            supply = md["supply"]
+            if credits < 1_000_000 + cost:
                 if DEBUG:
                     logger.debug(
-                        f"Start System Controller {system_symbol}: {remaining=}"
+                        f"Start System Controller {system_symbol}: insufficient funds"
                     )
+                continue
+            if supply == "SCARCE":
+                if DEBUG:
+                    logger.debug(
+                        f"Start System Controller {system_symbol}: insufficient supply"
+                    )
+                continue
+            break  # all good!
+
+        ship = buy_ship(ship_type, shipyard_symbol, request, verbose=verbose)
+        with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE tasks
+                SET "pname" = %s
+                WHERE "symbol" = %s
+                """,
+                ("drones", ship),
+            )
+        queue_task(ship, task)
+        remaining[action][trait] -= 1
+        if remaining[action][trait] == 0:
+            del remaining[action][trait]
+            if len(remaining[action]) == 0:
+                del remaining[action]
+        if DEBUG:
+            logger.debug(f"Start System Controller {system_symbol}: {remaining=}")
 
     if DEBUG:
         logger.debug(f"Start System Controller {system_symbol}: task completed")
     return "self destruct"
 
 
-def get_raw_and_final_consumer_goods(system):
-    # good that can be extracted/siphoned
-    raw_goods = []
-    # goods that are consumed by waypoints
-    consumer_goods = []
+def get_raw_and_product_goods(system):
+    """
+    Identify why tradeGoods are desired and can be produced in-system.
+    Returns a dict of raw goods and their final products
+    """
+    # categorize each tradeGood
+    raw_goods = []  # good that can be extracted/siphoned
+    consumer_goods = []  # goods that are consumed by waypoints
+    player_goods = []  # goods that are consumed by players
     for good_exp in SUPPLY_CHAIN.keys():
         if SUPPLY_CHAIN[good_exp] in [["EXPLOSIVES"], ["MACHINERY"]]:
             raw_goods.append(good_exp)
+            continue
+        if SUPPLY_CHAIN[good_exp] == ["SHIP_PLATING", "SHIP_PARTS"]:
+            continue  # skip actual ships, include components below
         used_in_production = False
         for goods_imp in SUPPLY_CHAIN.values():
             if good_exp in goods_imp:
@@ -278,44 +299,44 @@ def get_raw_and_final_consumer_goods(system):
                 break
         if not used_in_production:
             consumer_goods.append(good_exp)
+    for good in sorted(raw_goods):
+        if good in ["ICE_WATER", "SHIP_SALVAGE"]:  # junk, ignore
+            raw_goods.remove(good)
+    for good in sorted(consumer_goods):
+        if good in ["ANTIMATTER", "FAB_MATS", "FUEL", "SHIP_PARTS", "SHIP_PLATING"]:
+            consumer_goods.remove(good)
+            player_goods.append(good)
+        if good.startswith(("ENGINE_", "MODULE_", "MOUNT_", "REACTOR_")):
+            consumer_goods.remove(good)
+            player_goods.append(good)
 
-    port2good2wp = {"imports": {}, "exports": {}, "exchange": {}, "sell": {}}
+    # identify markets where each good can be traded
+    port2goods = {"imports": set(), "exports": set(), "exchange": set()}
     for wp, md in system.markets.items():
         for key in ["imports", "exports", "exchange"]:
             for good in md[key]:
-                if good not in port2good2wp[key]:
-                    port2good2wp[key][good] = set()
-                port2good2wp[key][good].add(wp)
-                if key == "imports":
-                    continue
-                if good not in port2good2wp["sell"]:
-                    port2good2wp["sell"][good] = set()
-                port2good2wp["sell"][good].add(wp)
+                port2goods[key].add(good)
 
-    def chained(product):
+    def update_raw2product(product, good):
         """Recursive function to find fully connected supply chains"""
-        for material in SUPPLY_CHAIN[product]:
-            if material in raw_goods:
-                complete_raw_goods.add(material)
-                continue
-            if not material in port2good2wp["sell"]:
-                return False
-            if not chained(material):
-                return False
+        if good in raw_goods:
+            if good not in raw2products:
+                raw2products[good] = set()
+            raw2products[good].add(product)
+        elif good not in port2goods["exports"]:
+            return False
+        else:
+            for material in SUPPLY_CHAIN[good]:
+                if not update_raw2product(product, material):
+                    return False
         return True
 
-    # consumer goods with production supported in-system
-    complete_consumer_goods = set()
-    complete_raw_goods = set()
-    for good in consumer_goods:
-        if (
-            (
-                good in port2good2wp["imports"]
-                or good
-                in ["ANTIMATTER", "FAB_MATS", "FUEL", "SHIP_PARTS", "SHIP_PLATING"]
-            )
-            and good in port2good2wp["sell"]
-            and chained(good)
-        ):
-            complete_consumer_goods.add(good)
-    return complete_consumer_goods, complete_raw_goods
+    # for each tradeGood of interest,
+    # - find out if it's supply chain is present in-system
+    # - and if so, record it's raw materials
+    raw2products = {}
+    target_goods = (set(consumer_goods) & port2goods["imports"]) | set(player_goods)
+    for good in target_goods:
+        update_raw2product(good, good)
+
+    return raw2products

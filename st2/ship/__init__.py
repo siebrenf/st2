@@ -199,9 +199,8 @@ class Ship(dict):
         ship_symbol = buy_ship(
             ship_type,
             self["nav"]["waypointSymbol"],
-            self["agentSymbol"],
             self.request,
-            verbose,
+            verbose=verbose,
         )
         self.shipyard()
         return ship_symbol
@@ -218,12 +217,14 @@ class Ship(dict):
     from ._shipyard import shipyard
 
 
-def buy_ship(ship_type, waypoint_symbol, agent_symbol, request, verbose=True):
+def buy_ship(ship_type, waypoint_symbol, request, agent_symbol=None, verbose=True):
     """
     Purchase the specified ship_type at the current waypoint's shipyard.
     Returns the new ship instance.
     """
-    token = get_agent(agent_symbol)["token"]
+    token = request.token
+    if agent_symbol:
+        token = get_agent(agent_symbol)["token"]
     if token != request.token:
         request = request.copy(token=token)
     system_symbol = waypoint_symbol.rsplit("-", 1)[0]

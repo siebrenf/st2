@@ -4,6 +4,7 @@ from psycopg import connect
 from psycopg.rows import dict_row, tuple_row
 
 from st2.logging import logger
+from st2.ship import buy_ship
 
 DEBUG = True
 
@@ -228,3 +229,29 @@ async def scout_system_marketplaces(system, interval=60):
         await sleep(interval)
         # system.refresh()  not needed
         unscouted_markets = system.unscouted_markets()
+
+
+def ai_buy_ship(
+    system, ship_type, request, pname, task, agent_symbol=None, supply_blacklist=None, verbose=False
+):
+    best = None, float("inf")
+    for shipyard_symbol, md in system.shipyards_with(ship_type).items():
+        if md["purchasePrice"] < best[1]["purchasePrice"]:
+            best = shipyard_symbol, md
+    shipyard_symbol, md = best[0]
+    if supply_blacklist is None:
+        supply_blacklist = []
+    if md["supply"] in supply_blacklist:
+        return None
+
+    ship_symbol = buy_ship(ship_type, shipyard_symbol, request, agent_symbol, verbose)
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE tasks
+            SET pname = %s, queued = %s
+            WHERE symbol = %s
+            """,
+            (pname, task, ship_symbol),
+        )
+    return ship_symbol
