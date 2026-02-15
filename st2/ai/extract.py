@@ -1,10 +1,9 @@
 from asyncio import sleep
 
+from st2.ai.siphon import get_fuel_minimum
 from st2.logging import logger
 from st2.pathing.travel import travel
-from st2.pathing.utils import nav_fuel
 from st2.ship import Ship
-from st2.system import System
 
 
 @logger.catch  # catch errors in a separate thread
@@ -15,11 +14,11 @@ async def ai_extract_start_system(
     sell_wp,
     whitelist,
     qa_pairs,
-    priority=1,
+    priority=2,
     verbose=False,
 ):
     ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
-    fuel_minimum = get_fuel_minimum(ship, sell_wp, extract_wp)
+    fuel_minimum = get_fuel_minimum(ship, extract_wp, sell_wp)
     mode = "CRUISE"
     if fuel_minimum > ship["fuel"]["capacity"]:
         fuel_minimum = 2
@@ -28,15 +27,14 @@ async def ai_extract_start_system(
     whitelist = whitelist.split(",")
     if verbose:
         logger.info(
-            f"{ship.name()} will extract the {trait} at {extract_wp} and {mode} to sell at {sell_wp}"
+            f"{ship.name()} will extract the {trait} at {extract_wp} and {mode} to market {sell_wp}"
         )
 
     # on start, begin at the sell_wp
+    # on restart, continue until the sell_wp
     if ship["nav"]["waypointSymbol"] not in [sell_wp, extract_wp]:
         await travel(ship, sell_wp, explore=False, verbose=False)
-    ship.nav_patch(mode)
-    # on restart, continue until the sell_wp
-    if ship["nav"]["waypointSymbol"] == extract_wp:
+    elif ship["nav"]["waypointSymbol"] == extract_wp:
         await sleep(max(ship.nav_remaining(), ship.cooldown_remaining()))
 
         while True:
@@ -46,12 +44,14 @@ async def ai_extract_start_system(
                         ship.jettison(g, u, verbose=False)
                 if ship["cargo"]["units"] + buffer >= ship["cargo"]["capacity"]:
                     break
-
             ship.extract(verbose=False)
             await sleep(ship.cooldown_remaining())
 
         ship.navigate(sell_wp, verbose=False)
         await sleep(ship.nav_remaining())
+    elif ship["nav"]["waypointSymbol"] == sell_wp:
+        await sleep(ship.nav_remaining())
+    ship.nav_patch(mode)
 
     while True:
         # at the sell_wp
@@ -71,18 +71,8 @@ async def ai_extract_start_system(
                         ship.jettison(g, u, verbose=False)
                 if ship["cargo"]["units"] + buffer >= ship["cargo"]["capacity"]:
                     break
-
             ship.extract(verbose=False)
             await sleep(ship.cooldown_remaining())
 
         ship.navigate(sell_wp, verbose=False)
         await sleep(ship.nav_remaining())
-
-
-def get_fuel_minimum(ship, sell_wp, extract_wp):
-    system_symbol = sell_wp.rsplit("-", 1)[0]
-    system = System(system_symbol, ship.request)
-    # fuel per roundtrip * 2 for safety
-    dist = system.graph[sell_wp][extract_wp]["distance"]  # noqa
-    fuel_minimum = nav_fuel(dist) * 4
-    return fuel_minimum

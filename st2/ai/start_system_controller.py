@@ -161,26 +161,20 @@ async def ai_start_system_controller(
             if task[key]:
                 action, trait = str(task[key]).split(" ")[0:2]
                 remaining[action][trait] -= 1
-                if remaining[action][trait] == 0:
-                    del remaining[action][trait]
-                    if len(remaining[action]) == 0:
-                        del remaining[action]
     if DEBUG:
-        logger.debug(
-            f"Start System Controller {system_symbol}: drones_remaining={remaining}"
-        )
+        logger.debug(f"Start System Controller {system_symbol}: drones_{remaining=}")
 
     # purchase orders:
     #  - all siphoners
     #  - 1 extractor > 1 surveyor > remaining extractors > remaining surveyor s
     order = []
-    for n in range(remaining.get("siphon", {}).get("GAS_GIANT", 0)):
+    for n in range(remaining["siphon"]["GAS_GIANT"]):
         order.append(("siphon", "GAS_GIANT"))
-    for trait in remaining.get("extract", {}):
-        n = remaining.get("extract", {}).get(trait, 0)
+    for trait in remaining["extract"]:
+        n = remaining["extract"][trait]
         if n:
             order.append(("extract", trait))
-        m = remaining.get("survey", {}).get(trait, 0)
+        m = remaining["survey"][trait]
         if m:
             order.append(("survey", trait))
         for _ in range(n - 1):
@@ -270,7 +264,9 @@ async def ai_start_system_controller(
             if len(remaining[action]) == 0:
                 del remaining[action]
         if DEBUG:
-            logger.debug(f"Start System Controller {system_symbol}: {remaining=}")
+            logger.debug(
+                f"Start System Controller {system_symbol}: drones_{remaining=}"
+            )
 
     if DEBUG:
         logger.debug(f"Start System Controller {system_symbol}: task completed")
