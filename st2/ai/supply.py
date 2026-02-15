@@ -17,12 +17,11 @@ async def ai_supply_system(
     verbose=False,
     log=True,
 ):
+    ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     if verbose:
         logger.info(
-            f"{ship_symbol} will purchase {units} {good} from {purchase_wp} and supply at {supply_wp}"
+            f"{ship.name()} will purchase {units} {good} from {purchase_wp} and supply at {supply_wp}"
         )
-
-    ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     # jettison unrelated cargo
     purchase_units = units
     for g, u in ship.cargo_yield():

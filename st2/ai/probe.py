@@ -18,14 +18,15 @@ async def ai_probe_waypoint(
     verbose=False,
 ):
     ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
-    # ship.refresh()
+    trait = "shipyard" if is_shipyard else "market"
+    if verbose:
+        logger.info(f"{ship.name()} will probe {trait} {waypoint_symbol}")
 
     # navigate to the waypoint
     await travel(ship, waypoint_symbol, explore=True, verbose=verbose)
 
     # start probing
     if verbose:
-        trait = "shipyard" if is_shipyard else "market"
         logger.info(f"{ship.name()} is probing {trait} {waypoint_symbol}")
     while True:
         if is_shipyard:

@@ -18,12 +18,11 @@ async def ai_deliver_system(
     verbose=False,
     log=True,
 ):
+    ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     if verbose:
         logger.info(
-            f"{ship_symbol} will purchase {units} {good} from {purchase_wp} and deliver at {deliver_wp}"
+            f"{ship.name()} will purchase {units} {good} from {purchase_wp} and deliver at {deliver_wp}"
         )
-
-    ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     contract = get_active_contract(ship["agentSymbol"])
     # jettison unrelated cargo
     purchase_units = units

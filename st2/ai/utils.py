@@ -232,7 +232,14 @@ async def scout_system_marketplaces(system, interval=60):
 
 
 def ai_buy_ship(
-    system, ship_type, request, pname, task, agent_symbol=None, supply_blacklist=None, verbose=False
+    system,
+    ship_type,
+    request,
+    pname,
+    task,
+    agent_symbol=None,
+    supply_blacklist=None,
+    verbose=False,
 ):
     best = None, float("inf")
     for shipyard_symbol, md in system.shipyards_with(ship_type).items():

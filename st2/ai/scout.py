@@ -7,9 +7,9 @@ from st2.ship import Ship
 async def ai_scout_waypoint(
     ship_symbol, waypoint_symbol, qa_pairs, priority=1, verbose=False
 ):
-    if verbose:
-        logger.info(f"{ship_symbol} will scout {waypoint_symbol}")
     ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
+    if verbose:
+        logger.info(f"{ship.name()} will scout {waypoint_symbol}")
     await travel(ship, waypoint_symbol, explore=True, verbose=False)
     if verbose:
         wp = ship["nav"]["waypointSymbol"]

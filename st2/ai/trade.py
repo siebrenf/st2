@@ -22,12 +22,11 @@ async def ai_trade_system(
     verbose=False,
     log=True,
 ):
+    ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     if verbose:
         logger.info(
-            f"{ship_symbol} will trade {units} {good} between {purchase_wp} and {sell_wp}"
+            f"{ship.name()} will trade {units} {good} between {purchase_wp} and {sell_wp}"
         )
-
-    ship = Ship(ship_symbol, qa_pairs=qa_pairs, priority=priority)
     # jettison unrelated cargo
     purchase_units = units
     for g, u in ship.cargo_yield():
