@@ -827,6 +827,41 @@ def db_tables_init(status=None):
                 """
             )
 
+        if "surveys" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE surveys
+                (
+                    "signature" text PRIMARY KEY,
+                    "symbol" text,
+                    "deposits" text[],
+                    "expiration" timestamptz,
+                    "size" text,  --SMALL/MODERATE/LARGE
+                )
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX idx_symbol_surveys ON surveys("symbol")
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX idx_expiration_surveys ON surveys("expiration")
+                """
+            )
+
+        if "waypoint_survey" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE waypoint_survey
+                (
+                    "symbol" text PRIMARY KEY,
+                    "signature" text
+                )
+                """
+            )
+
         if "events" not in tables:
             cur.execute(
                 """

@@ -2,6 +2,7 @@ from psycopg import connect
 from psycopg.types.json import Jsonb
 
 from st2.logging import logger
+from st2 import time
 
 
 def survey(self, verbose=True):
@@ -9,8 +10,22 @@ def survey(self, verbose=True):
 
     data = self.request.post(f'my/ships/{self["symbol"]}/survey')["data"]
     self._update(data)
-    # TODO: log data["surveys"]
-    # TODO: create table/module surveys
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        for s in data["surveys"]:
+            cur.execute(
+                """
+                INSERT INTO surveys
+                ("signature", "symbol", "deposits", "expiration", "size)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (
+                    s["signature"],
+                    s["symbol"],
+                    s["deposits"],
+                    time.read(s["expiration"]),
+                    s["size"],
+                ),
+            )
 
     if verbose:
         for s in data["surveys"]:
@@ -54,53 +69,53 @@ def extract(self, survey=None, verbose=True):
     if survey is None:
         data = self.request.post(f'my/ships/{self["symbol"]}/extract')["data"]
     else:
-        # TODO: ability to use surveys
-        raise NotImplementedError
-        # ret = self.request.post(f'my/ships/{self["symbol"]}/extract/survey', data=survey)
-        # if "data" not in ret:
-        #     # remove outdated survey from the cache
-        #     surveys.remove(survey)
-        #     if verbose:
-        #         ex = "expired" if survey["expiration"] < time.write() else "exhausted"
-        #         logger.info(f'Survey {survey["signature"]} has {ex}')
-        #     return None
-        # data = ret["data"]
+        survey["expiration"] = time.write(survey["expiration"])
+        ret = self.request.post(f'my/ships/{self["symbol"]}/extract/survey', data=survey)
+        if "data" not in ret:
+            # TODO: remove outdated survey from the cache?
+            if verbose:
+                ex = "expired" if survey["expiration"] < time.write() else "exhausted"
+                logger.info(f'Survey {survey["signature"]} has {ex}')
+            return None
+        data = ret["data"]
     self._update(data)
 
+    # TODO: log/use data["modifiers"]
+
+    # log data["extraction"]
     mount = [
         m["symbol"]
         for m in self["mounts"]
         if m["symbol"].startswith("MOUNT_MINING_LASER_")
     ][0]
     cargo_full = self["cargo"]["units"] == self["cargo"]["capacity"]
-    with connect("dbname=st2 user=postgres") as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO extraction
-                ("symbol", "units", "survey", "cargo_full", "mount", 
-                "frame", "frame_condition", "frame_integrity", 
-                "reactor", "reactor_condition", "reactor_integrity", 
-                "engine", "engine_condition", "engine_integrity")
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    data["extraction"]["yield"]["symbol"],
-                    data["extraction"]["yield"]["units"],
-                    Jsonb(survey),
-                    cargo_full,
-                    mount,
-                    self["frame"]["symbol"],
-                    self["frame"]["condition"],
-                    self["frame"]["integrity"],
-                    self["reactor"]["symbol"],
-                    self["reactor"]["condition"],
-                    self["reactor"]["integrity"],
-                    self["engine"]["symbol"],
-                    self["engine"]["condition"],
-                    self["engine"]["integrity"],
-                ),
-            )
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO extraction
+            ("symbol", "units", "survey", "cargo_full", "mount", 
+            "frame", "frame_condition", "frame_integrity", 
+            "reactor", "reactor_condition", "reactor_integrity", 
+            "engine", "engine_condition", "engine_integrity")
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                data["extraction"]["yield"]["symbol"],
+                data["extraction"]["yield"]["units"],
+                Jsonb(survey),
+                cargo_full,
+                mount,
+                self["frame"]["symbol"],
+                self["frame"]["condition"],
+                self["frame"]["integrity"],
+                self["reactor"]["symbol"],
+                self["reactor"]["condition"],
+                self["reactor"]["integrity"],
+                self["engine"]["symbol"],
+                self["engine"]["condition"],
+                self["engine"]["integrity"],
+            ),
+        )
 
     if verbose:
         for event in data["events"]:
