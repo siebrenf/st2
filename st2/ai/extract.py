@@ -1,10 +1,10 @@
 from asyncio import sleep
 
 from st2.ai.siphon import get_fuel_minimum
+from st2.ai.survey import compare_surveys_db, get_waypoint_survey
 from st2.logging import logger
 from st2.pathing.travel import travel
 from st2.ship import Ship
-from st2.ai.survey import compare_surveys_db, get_waypoint_survey
 
 
 @logger.catch  # catch errors in a separate thread
@@ -49,13 +49,14 @@ async def ai_extract_start_system(
             ret = ship.extract(survey=survey, verbose=False)
             if ret is None:
                 # survey expired/exhausted, select the next best survey
-                compare_surveys_db(extract_wp, sell_wp, whitelist)
+                survey = compare_surveys_db(extract_wp, sell_wp, whitelist)
+                ship.extract(survey=survey, verbose=False)
             await sleep(ship.cooldown_remaining())
 
         ship.navigate(sell_wp, verbose=False)
-        await sleep(ship.nav_remaining())
     elif ship["nav"]["waypointSymbol"] == sell_wp:
-        await sleep(ship.nav_remaining())
+        pass
+    await sleep(ship.nav_remaining())
     ship.nav_patch(mode)
 
     while True:
@@ -80,7 +81,8 @@ async def ai_extract_start_system(
             ret = ship.extract(survey=survey, verbose=False)
             if ret is None:
                 # survey expired/exhausted, select the next best survey
-                compare_surveys_db(extract_wp, sell_wp, whitelist)
+                survey = compare_surveys_db(extract_wp, sell_wp, whitelist)
+                ship.extract(survey=survey, verbose=False)
             await sleep(ship.cooldown_remaining())
 
         ship.navigate(sell_wp, verbose=False)

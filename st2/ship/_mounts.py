@@ -1,8 +1,8 @@
 from psycopg import connect
 from psycopg.types.json import Jsonb
 
-from st2.logging import logger
 from st2 import time
+from st2.logging import logger
 
 
 def survey(self, verbose=True):
@@ -21,7 +21,7 @@ def survey(self, verbose=True):
                 (
                     s["signature"],
                     s["symbol"],
-                    s["deposits"],
+                    Jsonb(s["deposits"]),
                     time.read(s["expiration"]),
                     s["size"],
                 ),
@@ -67,8 +67,11 @@ def extract(self, survey=None, verbose=True):
     self.orbit()
 
     if survey:
-        survey["expiration"] = time.write(survey["expiration"])
-        ret = self.request.post(f'my/ships/{self["symbol"]}/extract/survey', data=survey)
+        if not isinstance(survey["expiration"], str):
+            survey["expiration"] = time.write(survey["expiration"])
+        ret = self.request.post(
+            f'my/ships/{self["symbol"]}/extract/survey', data=survey
+        )
         if "data" not in ret:
             # survey expired/exhausted
             if verbose:
@@ -98,16 +101,17 @@ def extract(self, survey=None, verbose=True):
             )
 
         # log data["extraction"]
+        survey_signature = None if not survey else survey["signature"]
+        cargo_full = self["cargo"]["units"] == self["cargo"]["capacity"]
         mount = [
             m["symbol"]
             for m in self["mounts"]
             if m["symbol"].startswith("MOUNT_MINING_LASER_")
         ][0]
-        cargo_full = self["cargo"]["units"] == self["cargo"]["capacity"]
         cur.execute(
             """
             INSERT INTO extraction
-            ("symbol", "units", "survey", "cargo_full", "mount", 
+            ("symbol", "units", "survey_signature", "cargo_full", "mount", 
             "frame", "frame_condition", "frame_integrity", 
             "reactor", "reactor_condition", "reactor_integrity", 
             "engine", "engine_condition", "engine_integrity")
@@ -116,7 +120,7 @@ def extract(self, survey=None, verbose=True):
             (
                 data["extraction"]["yield"]["symbol"],
                 data["extraction"]["yield"]["units"],
-                Jsonb(survey),
+                survey_signature,
                 cargo_full,
                 mount,
                 self["frame"]["symbol"],

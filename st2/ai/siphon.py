@@ -35,9 +35,9 @@ async def ai_siphon_start_system(
             await sleep(ship.cooldown_remaining())
 
         ship.navigate(sell_wp, verbose=False)
-        await sleep(ship.nav_remaining())
     elif ship["nav"]["waypointSymbol"] == sell_wp:
-        await sleep(ship.nav_remaining())
+        pass
+    await sleep(ship.nav_remaining())
     ship.nav_patch(mode)
 
     while True:

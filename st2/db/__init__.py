@@ -811,7 +811,7 @@ def db_tables_init(status=None):
                 (
                     "symbol" text,
                     "units" integer,
-                    "survey" JsonB,
+                    "survey_signature" text,
                     "cargo_full" bool,
                     "mount" text,
                     "frame" text,
@@ -834,9 +834,9 @@ def db_tables_init(status=None):
                 (
                     "signature" text PRIMARY KEY,
                     "symbol" text,
-                    "deposits" text[],
+                    "deposits" JsonB,
                     "expiration" timestamptz,
-                    "size" text,  --SMALL/MODERATE/LARGE
+                    "size" text  --SMALL/MODERATE/LARGE
                 )
                 """
             )
