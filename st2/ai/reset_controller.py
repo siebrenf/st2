@@ -1,5 +1,6 @@
+import os
+
 from psycopg import connect
-from psycopg.rows import dict_row
 
 from st2.logging import logger
 
@@ -11,11 +12,10 @@ def ai_reset_controller():
     Execute this function on script restart **before** starting the taskmasters,
     in order to clear all time-sensitive tasks.
     """
+    active_agents = [os.environ["ST_AGENT_SYMBOL"], None]
     tasks_to_clear = ["trade", "supply", "deliver"]
     reason = "script reset"
-    with connect(
-        "dbname=st2 user=postgres", row_factory=dict_row
-    ) as conn, conn.cursor() as cur:
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         for (
             ship_symbol,
             agent_symbol,
@@ -25,6 +25,36 @@ def ai_reset_controller():
             pname,
             pid,
         ) in cur.execute("""SELECT * FROM tasks""").fetchall():
+            if agent_symbol not in active_agents:
+                # destroy controller tasks, terminate ship tasks
+                if "_controller" in ship_symbol:
+                    cur.execute(
+                        """
+                        DELETE FROM tasks
+                        WHERE symbol = %s
+                        """,
+                        (ship_symbol,),
+                    )
+                else:
+                    current_task = None
+                    queued_task = None
+                    cancel_task = False
+                    cur.execute(
+                        """
+                        UPDATE tasks
+                        SET current = %s,
+                            queued = %s,
+                            cancel = %s
+                        WHERE symbol = %s
+                        """,
+                        (current_task, queued_task, cancel_task, ship_symbol),
+                    )
+                if DEBUG:
+                    reason = "inactive agent"
+                    logger.debug(
+                        f"Reset Controller: Cleared the tasks of {ship_symbol} {reason=}"
+                    )
+
             if cancel_task:
                 current_task = None
                 cancel_task = False
@@ -85,4 +115,4 @@ def _ship_cargo(ship_symbol, cur):
         """,
         (ship_symbol,),
     ).fetchone()
-    return [tg["symbol"] for tg in ship["cargo"]["inventory"]]
+    return [tg["symbol"] for tg in ship[0]["inventory"]]

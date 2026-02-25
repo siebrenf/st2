@@ -220,7 +220,7 @@ async def ai_start_system_controller(
                     current=f"probe shipyard {shipyard_symbol}",
                     agent_symbol=agent_symbol,
                 )
-                if tasks is None:
+                if len(tasks) == 0:
                     continue
 
                 t = Ship(tasks[0]["symbol"], request).nav_remaining()
@@ -247,17 +247,8 @@ async def ai_start_system_controller(
                 continue
             break  # all good!
 
-        ship = buy_ship(ship_type, shipyard_symbol, request, verbose=verbose)
-        with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE tasks
-                SET "pname" = %s
-                WHERE "symbol" = %s
-                """,
-                ("drones", ship),
-            )
-        queue_task(ship, task)
+        ship = buy_ship(ship_type, shipyard_symbol, request, agent_symbol, verbose)
+        queue_task(ship, task, pname="drones")
         remaining[action][trait] -= 1
         if remaining[action][trait] == 0:
             del remaining[action][trait]

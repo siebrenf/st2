@@ -152,7 +152,7 @@ async def ai_probe_controller(
             supply = md["supply"]
             if credits > 500_000 and supply != "SCARCE":
                 probe_symbol = buy_ship(
-                    "SHIP_PROBE", shipyard_symbol, request, verbose=verbose
+                    "SHIP_PROBE", shipyard_symbol, request, agent_symbol, verbose
                 )
                 waypoint_symbol = waypoints_to_probe.pop(0)
                 wp_type = (

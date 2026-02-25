@@ -90,7 +90,7 @@ if __name__ == "__main__":
             """,
             (symbol, agent_symbol, symbol, None, False, "traders", None),
         )
-        symbol = "contract_controller"
+        symbol = f"contract_controller {agent_symbol}"
         cur.execute(
             """
             INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
@@ -129,7 +129,7 @@ if __name__ == "__main__":
             ON CONFLICT ("symbol") DO UPDATE
             SET "current" = EXCLUDED."current"
             """,
-            (symbol, agent_symbol, symbol, None, False, "probes", None),
+            (symbol, None, symbol, None, False, "probes", None),
         )
         symbol = f"probe_controller {system_symbol}"
         cur.execute(

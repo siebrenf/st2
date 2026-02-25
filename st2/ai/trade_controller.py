@@ -4,6 +4,7 @@ from psycopg import connect
 from psycopg.rows import dict_row
 
 from st2 import time
+from st2.agent import get_agent_public
 from st2.ai.utils import (
     chart_system_marketplaces,
     dequeue_task,
@@ -89,7 +90,7 @@ async def ai_trade_controller(
         cargo_capacity_max = max([v["cargo"] for v in ships.values()])
         for good, (_, seller, buyer) in trades.items():
             max_units, purchase_price, sell_price = _get_trade_units(
-                seller, buyer, cargo_capacity_max
+                seller, buyer, agent_symbol, cargo_capacity_max
             )
             # if sell_price - purchase_price < 1000:
             #     break  # no worthwhile trades left
@@ -233,10 +234,13 @@ def _get_trade_goods(system_symbol, blacklisted_goods=None, max_age=3600):
     return best, outdated_markets
 
 
-def _get_trade_units(tradegood_at_seller, tradegood_at_buyer, cargo_capacity_max=80):
+def _get_trade_units(
+    tradegood_at_seller, tradegood_at_buyer, agent_symbol, cargo_capacity_max=80
+):
     """
     Estimate the optimal number of units & the buy and sell prices.
     """
+    max_credits = get_agent_public(agent_symbol)["credits"] * 0.25  # noqa
     tv_min, tv_max = sorted(
         [tradegood_at_buyer["tradeVolume"], tradegood_at_seller["tradeVolume"]]
     )
@@ -253,6 +257,8 @@ def _get_trade_units(tradegood_at_seller, tradegood_at_buyer, cargo_capacity_max
             units = min(tv_max * n_max, cargo_capacity_max)
             n_max += 1
         purchase_price = price_estimate(tradegood_at_seller, units, action="purchase")
+        if purchase_price > max_credits:
+            break  # too expensive
         sell_price = price_estimate(tradegood_at_buyer, units, action="sell")
         if best[2] - best[1] >= sell_price - purchase_price:
             break
