@@ -42,23 +42,27 @@ async def ai_survey_start_system(
         ship.nav_patch(mode)
         ship.navigate(extract_wp, verbose=False)
     elif ship["nav"]["waypointSymbol"] == extract_wp:
-        await sleep(ship.nav_remaining())
+        pass
+    await sleep(ship.nav_remaining())
 
     while True:
         await sleep(ship.cooldown_remaining())
 
         surveys = ship.survey(verbose=False)
-        compare_surveys(surveys, extract_wp, sell_wp, whitelist)
+        current_survey = get_waypoint_survey(extract_wp)
+        if current_survey is None or current_survey["expiration"] > time.now():
+            # no active survey: compare all surveys
+            compare_surveys_db(extract_wp, sell_wp, whitelist)
+        else:
+            # active survey: only compare it to the new surveys
+            compare_surveys(current_survey, surveys, extract_wp, sell_wp, whitelist)
 
 
-def compare_surveys(surveys, extract_wp, sell_wp, whitelist):
-    current_survey = get_waypoint_survey(extract_wp)
-    if current_survey is None:
-        current_survey = compare_surveys_db(extract_wp, sell_wp, whitelist)
+def compare_surveys(current_survey, new_surveys, extract_wp, sell_wp, whitelist):
     trade_goods = get_tradegoods(sell_wp)
     score = get_survey_score(current_survey, trade_goods, whitelist)
     best = current_survey, score
-    for survey in surveys:
+    for survey in new_surveys:
         score = get_survey_score(survey, trade_goods, whitelist)
         if score > best[1]:
             best = survey, score
