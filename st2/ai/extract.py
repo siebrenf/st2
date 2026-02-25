@@ -4,6 +4,7 @@ from st2.ai.siphon import get_fuel_minimum
 from st2.logging import logger
 from st2.pathing.travel import travel
 from st2.ship import Ship
+from st2.ai.survey import compare_surveys_db, get_waypoint_survey
 
 
 @logger.catch  # catch errors in a separate thread
@@ -44,7 +45,11 @@ async def ai_extract_start_system(
                         ship.jettison(g, u, verbose=False)
                 if ship["cargo"]["units"] + buffer >= ship["cargo"]["capacity"]:
                     break
-            ship.extract(verbose=False)
+            survey = get_waypoint_survey(extract_wp)
+            ret = ship.extract(survey=survey, verbose=False)
+            if ret is None:
+                # survey expired/exhausted, select the next best survey
+                compare_surveys_db(extract_wp, sell_wp, whitelist)
             await sleep(ship.cooldown_remaining())
 
         ship.navigate(sell_wp, verbose=False)
@@ -71,7 +76,11 @@ async def ai_extract_start_system(
                         ship.jettison(g, u, verbose=False)
                 if ship["cargo"]["units"] + buffer >= ship["cargo"]["capacity"]:
                     break
-            ship.extract(verbose=False)
+            survey = get_waypoint_survey(extract_wp)
+            ret = ship.extract(survey=survey, verbose=False)
+            if ret is None:
+                # survey expired/exhausted, select the next best survey
+                compare_surveys_db(extract_wp, sell_wp, whitelist)
             await sleep(ship.cooldown_remaining())
 
         ship.navigate(sell_wp, verbose=False)

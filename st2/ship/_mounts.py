@@ -15,7 +15,7 @@ def survey(self, verbose=True):
             cur.execute(
                 """
                 INSERT INTO surveys
-                ("signature", "symbol", "deposits", "expiration", "size)
+                ("signature", "symbol", "deposits", "expiration", "size")
                 VALUES (%s, %s, %s, %s, %s)
                 """,
                 (
@@ -66,30 +66,44 @@ def survey(self, verbose=True):
 def extract(self, survey=None, verbose=True):
     self.orbit()
 
-    if survey is None:
-        data = self.request.post(f'my/ships/{self["symbol"]}/extract')["data"]
-    else:
+    if survey:
         survey["expiration"] = time.write(survey["expiration"])
         ret = self.request.post(f'my/ships/{self["symbol"]}/extract/survey', data=survey)
         if "data" not in ret:
-            # TODO: remove outdated survey from the cache?
+            # survey expired/exhausted
             if verbose:
                 ex = "expired" if survey["expiration"] < time.write() else "exhausted"
                 logger.info(f'Survey {survey["signature"]} has {ex}')
             return None
         data = ret["data"]
+    else:
+        data = self.request.post(f'my/ships/{self["symbol"]}/extract')["data"]
     self._update(data)
 
-    # TODO: log/use data["modifiers"]
-
-    # log data["extraction"]
-    mount = [
-        m["symbol"]
-        for m in self["mounts"]
-        if m["symbol"].startswith("MOUNT_MINING_LASER_")
-    ][0]
-    cargo_full = self["cargo"]["units"] == self["cargo"]["capacity"]
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        # log data["modifiers"]
+        for m in data["modifiers"]:
+            cur.execute(
+                """
+                INSERT INTO modifiers
+                ("symbol", "name", "description")
+                VALUES (%s, %s, %s)
+                ON CONFLICT ("symbol") DO NOTHING
+                """,
+                (
+                    m["symbol"],
+                    m["name"],
+                    m["description"],
+                ),
+            )
+
+        # log data["extraction"]
+        mount = [
+            m["symbol"]
+            for m in self["mounts"]
+            if m["symbol"].startswith("MOUNT_MINING_LASER_")
+        ][0]
+        cargo_full = self["cargo"]["units"] == self["cargo"]["capacity"]
         cur.execute(
             """
             INSERT INTO extraction

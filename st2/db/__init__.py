@@ -862,6 +862,18 @@ def db_tables_init(status=None):
                 """
             )
 
+        if "modifiers" not in tables:
+            cur.execute(
+                """
+                CREATE TABLE modifiers
+                (
+                    "symbol" text PRIMARY KEY,
+                    "name" text,
+                    "description" text
+                )
+                """
+            )
+
         if "events" not in tables:
             cur.execute(
                 """
