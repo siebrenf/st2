@@ -132,8 +132,10 @@ class Ship(dict):
                 )
                 transaction["id"] = cur.fetchone()[0]
 
+            if "events" in data:
+                # only way to get the updated conditions
+                self.refresh()
             for event in data.get("events", []):
-                # TODO: use self.refresh() to get the condition after?
                 activity = None
                 if "fuel" in data:
                     activity = "navigate"

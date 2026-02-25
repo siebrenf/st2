@@ -64,7 +64,10 @@ if __name__ == "__main__":
         gate = system.gate["symbol"]
         _ = system.get_construction(gate)
         # send the probe to a shipyard with additional probes
-        waypoint_symbol = list(system.shipyards_with("SHIP_PROBE"))[0]
+        waypoint_symbol = (
+                set(system.shipyards_with("SHIP_PROBE")) &
+                set(system.shipyards_with('SHIP_LIGHT_SHUTTLE'))
+        ).pop()
         task = f"probe shipyard {waypoint_symbol}"
         with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
             cur.execute(
