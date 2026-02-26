@@ -52,11 +52,21 @@ async def detective(request, priority=3, verbose=True):
                     n += 1
             page += 1
             await sleep(0)  # give other processes a turn
+        # record the last time the detective completed its run
+        # assumes the table was already created by the ai_advisor_controller()
+        cur.execute(
+            """
+            UPDATE detective
+            SET timestamp = %s
+            WHERE id = %s;
+            """,
+            (time.now(), True),
+        )
     if verbose:
         logger.info(f"The Detective identified {n:_} active agents")
 
 
-def private_eye(request, priority=3, verbose=True):
+async def private_eye(request, priority=3, verbose=True):
     """
     Update public agents that are already known to be active.
     """
@@ -64,7 +74,12 @@ def private_eye(request, priority=3, verbose=True):
     n = 0
     with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
         for (agent_symbol,) in cur.execute(
-            """SELECT DISTINCT symbol FROM agents_public WHERE credits > 175000"""
+            """
+            SELECT DISTINCT ON (symbol) symbol 
+            FROM agents_public 
+            WHERE credits > 175000
+            ORDER BY symbol, timestamp DESC
+            """
         ).fetchall():
             agent = request.get(f"agents/{agent_symbol}", priority, token)["data"]
             timestamp = time.now()
@@ -85,5 +100,31 @@ def private_eye(request, priority=3, verbose=True):
                 ),
             )
             n += 1
+            await sleep(0)  # give other processes a turn
     if verbose:
         logger.info(f"The private eye tracked all {n:_} active agents")
+
+
+def get_last_detective_run():
+    with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS detective
+            (
+                id boolean PRIMARY KEY,
+                timestamp timestamptz
+            )
+            """
+        )
+        ret = cur.execute("""SELECT * FROM detective""").fetchone()
+        if ret is None:
+            ret = (True, time.read("2025-01-01T00:00:00.000Z"))
+            cur.execute(
+                """
+                INSERT INTO detective (id, timestamp)
+                VALUES (%s, %s);
+                """,
+                ret,
+            )
+    seconds_passed = (time.now() - ret[1]).total_seconds()
+    return seconds_passed

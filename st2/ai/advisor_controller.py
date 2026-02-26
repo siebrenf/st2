@@ -1,6 +1,6 @@
 from asyncio import sleep
 
-from st2.investigators import detective, private_eye
+from st2.investigators import detective, get_last_detective_run, private_eye
 from st2.request import RequestMp
 from st2.stargazers import ambassador, astronomer, cartographer, merchant
 
@@ -14,19 +14,19 @@ async def ai_advisor_controller(qa_pairs, priority=3, interval=3600, verbose=Fal
     await astronomer(request, priority, verbose)
     await cartographer(request, priority, "start systems", verbose)
     await cartographer(request, priority, "gate systems", verbose)
-    await detective(request, priority, verbose)
     # too many API requests!
     # await spymaster(request, priority, verbose)
 
-    n = 0
+    # number of intervals since the last detective run
+    n = round(get_last_detective_run() / interval)
     while True:
-        await sleep(interval)
-        if n == 6:
+        if n >= 6:
             await detective(request, priority, verbose)
             n = 0
         else:
-            private_eye(request, priority, verbose)
+            await private_eye(request, priority, verbose)
             n += 1
+        await sleep(interval)
 
 
 # too many API requests!

@@ -332,6 +332,7 @@ async def _chart_systems(request, priority, token, index, query, verbose):
                             """,
                             (t["symbol"], t["name"], t["description"]),
                         )
+                await sleep(0)  # give other processes a turn
             current += 1
             # log progress
             cur.execute(
@@ -343,7 +344,6 @@ async def _chart_systems(request, priority, token, index, query, verbose):
                 (current, index),
             )
             conn.commit()
-            await sleep(0)  # give other processes a turn
         return True
 
 
