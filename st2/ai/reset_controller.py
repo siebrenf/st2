@@ -30,6 +30,11 @@ def ai_reset_controller():
                     continue  # probes may continue
                 # destroy controller tasks, terminate ship tasks
                 if "_controller" in ship_symbol:
+                    if DEBUG:
+                        reason = f"inactive agent {agent_symbol}"
+                        logger.debug(
+                            f"Reset Controller: Destroying {ship_symbol} {reason=}"
+                        )
                     cur.execute(
                         """
                         DELETE FROM tasks
@@ -38,6 +43,11 @@ def ai_reset_controller():
                         (ship_symbol,),
                     )
                 else:
+                    if (current_task or queued_task) and DEBUG:
+                        reason = f"inactive agent {agent_symbol}"
+                        logger.debug(
+                            f"Reset Controller: Cleared the tasks of {ship_symbol} {reason=}"
+                        )
                     current_task = None
                     queued_task = None
                     cancel_task = False
@@ -50,11 +60,6 @@ def ai_reset_controller():
                         WHERE symbol = %s
                         """,
                         (current_task, queued_task, cancel_task, ship_symbol),
-                    )
-                if DEBUG:
-                    reason = "inactive agent"
-                    logger.debug(
-                        f"Reset Controller: Cleared the tasks of {ship_symbol} {reason=}"
                     )
 
             if cancel_task:
