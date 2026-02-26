@@ -17,6 +17,7 @@ async def ai_advisor_controller(qa_pairs, priority=3, interval=3600, verbose=Fal
     # too many API requests!
     # await spymaster(request, priority, verbose)
 
+    # TODO: also set a timer for private_eye
     # number of intervals since the last detective run
     n = round(get_last_detective_run() / interval)
     while True:

@@ -92,7 +92,7 @@ def ai_reset_controller():
                         if DEBUG:
                             task = " ".join(args)
                             logger.debug(
-                                f"Reset Controller: cleared current {task=} for {ship_symbol} {reason=}"
+                                f"Reset Controller: Cleared current {task=} for {ship_symbol} {reason=}"
                             )
 
             if queued_task:

@@ -20,7 +20,10 @@ def navigate(self, waypoint, verbose=True):
         if error_code == 4200:
             raise e  # TODO: navigateInTransitError
         elif error_code == 4204:
-            # Ship is currently located at the destination
+            logger.warning(
+                f"Caught error: Ship {self['symbol']} "
+                f"is currently located at the destination"
+            )
             self.refresh()
             return
         else:

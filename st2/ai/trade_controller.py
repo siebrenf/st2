@@ -38,17 +38,13 @@ async def ai_trade_controller(
     await chart_system_marketplaces(system, interval)
     await scout_system_marketplaces(system, interval)
     while True:
+        queued_tasks = {}  # queued tasks that can be overwritten
+        blacklisted_goods = set()  # max one trader per good
         assigned_ships = get_tasks(
             system_symbol=system_symbol,
             agent_symbol=agent_symbol,
             pname=pname,
         )
-        if len(assigned_ships) == 0:
-            await sleep(interval)
-            continue
-
-        queued_tasks = {}  # queued tasks that can be overwritten
-        blacklisted_goods = set()  # max one trader per good
         for task in assigned_ships:
             ship = task["symbol"]
             if task["current"] is not None:
