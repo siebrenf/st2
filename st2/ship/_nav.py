@@ -1,18 +1,30 @@
 from psycopg import connect
 
 from st2 import time
+from st2.exceptions import GameError
 from st2.logging import logger
 from st2.pathing.utils import dist
 
 
 def navigate(self, waypoint, verbose=True):
     """navigate to a waypoint in the same system"""
-    # TODO: raises error code 42.. with an incorrect DB
     self.orbit()
 
-    data = self.request.post(
-        f'my/ships/{self["symbol"]}/navigate', data={"waypointSymbol": waypoint}
-    )["data"]
+    try:
+        data = self.request.post(
+            f'my/ships/{self["symbol"]}/navigate', data={"waypointSymbol": waypoint}
+        )["data"]
+    except GameError as e:
+        # TODO: raises error code 42.. with an incorrect DB
+        error_code = e.args[0].get("error", {}).get("code", 0)
+        if error_code == 4200:
+            raise e  # TODO: navigateInTransitError
+        elif error_code == 4204:
+            # Ship is currently located at the destination
+            self.refresh()
+            return
+        else:
+            raise e
     self._update(data)
 
     # Log travel distance/travel time/fuel use etc.

@@ -93,14 +93,14 @@ class Request:
         if status_code == 204:  # no-content
             logger.debug(f"Endpoint '{endpoint}' returned no content (204)")
         elif error_code in [4221, 4224]:  # survey expired/exhausted
-            pass
+            pass  # TODO: capture /w try-except in ship.extract()
         # elif status_code == 401:  # server reset, token outdated
         #     message = resp_json.get("error", {}).get("message", "")
         #     raise ServerResetError(
         #         f"request_{endpoint=} error_{message=} {self.headers=}"
         #     )
         elif "error" in resp_json:
-            self._raise_formatted_error(resp_json["error"], url, data, status_code)
+            self._raise_formatted_error(resp_json, url, data, status_code)
         else:
             raise NotImplementedError(
                 f"Unknown situation. Status code: {status_code}. "
@@ -121,11 +121,14 @@ class Request:
                 resp_json = response.json()
             except JSONDecodeError:
                 resp_json = {}
+            status_code = response.status_code
             error = resp_json.get("error", {})
             if not isinstance(error, dict):
-                raise GameError(resp_json)
-            error_code = error.get("code")
-            status_code = response.status_code
+                msg = f"An error occurred but no error dict was returned.\n\t"
+                req = f"Request: {url[8:]}\n\t"
+                udata = "" if data is None else f"Request data: {data}\n\t"
+                api_code = f"Request error code: {status_code}\n\t"
+                raise GameError(resp_json, f"\n\n\t{msg}{req}{udata}{api_code}")
             if status_code in self.rate_limit_codes:
                 logger.debug(resp_json.get("error", {}).get("message", resp_json))
                 sleep(resp_json.get("error", {}).get("data", {}).get("retryAfter", 1))
@@ -139,10 +142,12 @@ class Request:
                 )
                 sleep(self.server_down_sleep)
             else:
+                error_code = error.get("code")
                 return status_code, error_code, resp_json
 
     @staticmethod
-    def _raise_formatted_error(resp_error, url, data, status_code):
+    def _raise_formatted_error(resp_json, url, data, status_code):
+        resp_error = resp_json["error"]
         msg = f'Message: {resp_error["message"]}\n\t'
         req = f"Request: {url[8:]}\n\t"
         udata = "" if data is None else f"Request data: {data}\n\t"
@@ -154,7 +159,7 @@ class Request:
             game_code = f'Game error code: {resp_error["code"]}\n\t'
         # https://docs.spacetraders.io/api-guide/response-errors
         raise GameError(
-            f"{resp_error}\n\n\t{msg}{req}{udata}{edata}{api_code}{game_code}"
+            resp_json, f"\n\n\t{msg}{req}{udata}{edata}{api_code}{game_code}"
         )
 
     def get(self, endpoint, priority=None, token=None, params=None):
@@ -275,7 +280,9 @@ def messenger(qa_pairs):
                 uuid, method, endpoint, token, data, params = queue.get()
             except (ConnectionResetError, EOFError) as e:
                 if DEBUG:
-                    logger.debug(f"{str(type(e)).split("'")[1]} from messenger(): {e}")
+                    logger.debug(
+                        f"""{str(type(e)).split("'")[1]} from messenger(): {e}"""
+                    )
                 return  # script killed
             except Exception as e:
                 raise e
