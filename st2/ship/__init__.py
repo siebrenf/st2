@@ -98,11 +98,14 @@ class Ship(dict):
     #             cur.execute(query, params)
 
     def _update(self, data):
-        keys = set(data.keys()) & set(self.keys())
-        keys.discard("symbol")
-        for key in keys:
-            self[key] = data[key]
-
+        if len(data.get("events", [])) != 0:
+            self.refresh()  # get the updated conditions
+            keys = set()
+        else:
+            keys = set(data.keys()) & set(self.keys())
+            keys.discard("symbol")
+            for key in keys:
+                self[key] = data[key]
         with connect("dbname=st2 user=postgres") as conn, conn.cursor() as cur:
             if keys:
                 updates = ", ".join([f'"{key}" = %s' for key in keys])
@@ -155,9 +158,6 @@ class Ship(dict):
                 )
                 transaction["id"] = cur.fetchone()[0]
 
-            if len(data.get("events", [])) != 0:
-                # only way to get the updated conditions
-                self.refresh()
             for event in data.get("events", []):
                 activity = None
                 if "fuel" in data:
