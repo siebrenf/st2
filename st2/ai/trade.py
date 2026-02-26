@@ -116,7 +116,7 @@ async def ai_trade_system(
             )
         )
 
-    travel_time = (time.now() - t0).seconds
+    travel_time = (time.now() - t0).total_seconds()
     total_profit = round(sp - pp - fp)
     if purchase_units != units:
         return_on_investment = None

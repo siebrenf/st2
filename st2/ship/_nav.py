@@ -38,7 +38,7 @@ def navigate(self, waypoint, verbose=True):
     )
     t0 = time.read(self["nav"]["route"]["departureTime"])
     t1 = time.read(self["nav"]["route"]["arrival"])
-    travel_time = (t1 - t0).seconds
+    travel_time = (t1 - t0).total_seconds()
     with connect("dbname=st2 user=postgres") as conn:
         with conn.cursor() as cur:
             cur.execute(

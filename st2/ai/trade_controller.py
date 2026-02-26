@@ -185,7 +185,7 @@ def _get_trade_goods(system_symbol, blacklisted_goods=None, max_age=3600):
         blacklisted_goods = set()
     time_now = time.now()
     for row in ret:
-        age = (time_now - row["timestamp"]).seconds
+        age = (time_now - row["timestamp"]).total_seconds()
         if age > max_age:
             outdated_markets[row["waypointSymbol"]] = age
             continue
