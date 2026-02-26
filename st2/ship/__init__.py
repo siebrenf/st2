@@ -37,6 +37,29 @@ class Ship(dict):
     def nav_remaining(self):
         return time.remaining(self["nav"]["route"]["arrival"])
 
+    def nav_status(self):
+        """log the ship's current navigation status"""
+        self._nav_status()
+        status = self["nav"]["status"]
+        if status == "IN_TRANSIT":
+            mode = self["nav"]["flightMode"]
+            if mode == "CRUISE":
+                mode = mode[:-1]
+            mode += "ING"
+            origin = self["nav"]["route"]["origin"]["symbol"]
+            destination = self["nav"]["route"]["destination"]["symbol"]
+            t = round(self.nav_remaining())
+            msg = (
+                f"{mode} from {origin} to {destination} and will arrive in {t} seconds"
+            )
+        else:
+            wp = self["nav"]["waypointSymbol"]
+            msg = f"{status.lower()} at {wp}"
+            t = round(self.cooldown_remaining())
+            if t:
+                msg += f" with {t} seconds cooldown"
+        logger.info(f"{self.name()} is " + msg)
+
     def cooldown_remaining(self):
         return time.remaining(self["cooldown"]["expiration"])
 
@@ -183,6 +206,11 @@ class Ship(dict):
     def refresh(self, online=True):
         if online:
             data = self.request.get(f'my/ships/{self["symbol"]}')["data"]
+            if "expiration" not in data["cooldown"]:
+                s = data["cooldown"]["remainingSeconds"]
+                data["cooldown"]["expiration"] = time.write(
+                    time.now() + time.datetime.timedelta(s)
+                )
             self._update(data)
         else:
             with connect("dbname=st2 user=postgres", row_factory=dict_row) as conn:
