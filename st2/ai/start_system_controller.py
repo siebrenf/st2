@@ -152,6 +152,7 @@ async def ai_start_system_controller(
         logger.debug(
             f"Start System Controller {system_symbol}: drones_required={remaining}"
         )
+    available = []
     for task in get_tasks(
         system_symbol=system.symbol,
         agent_symbol=agent_symbol,
@@ -161,6 +162,12 @@ async def ai_start_system_controller(
             if task[key]:
                 action, trait = str(task[key]).split(" ")[0:2]
                 remaining[action][trait] -= 1
+                break
+        else:
+            available.append(task["symbol"])
+    for ship_symbol in available:
+        # ship = Ship(ship_symbol, request)
+        print(ship_symbol)  # TODO: re-assign probes
     if DEBUG:
         logger.debug(f"Start System Controller {system_symbol}: drones_{remaining=}")
 
@@ -190,17 +197,12 @@ async def ai_start_system_controller(
             task = f"siphon GAS_GIANT {action_wp} {sell_wp}"
         elif action == "extract":
             ship_type = "SHIP_MINING_DRONE"
-            # list or worthwhile goods at the waypoint
-            whitelist = set()
-            for t in set(system.waypoints[action_wp]["traits"]) & set(  # noqa
-                trait2raw_goods
-            ):
-                whitelist.update(trait2raw_goods[t])
-            whitelist = ",".join(sorted(whitelist))
+            whitelist = get_whitelist(system, action_wp, trait2raw_goods)
             task = f"extract {trait} {action_wp} {sell_wp} {whitelist}"
         elif action == "survey":
             ship_type = "SHIP_SURVEYOR"
-            task = f"survey {trait} {action_wp}"
+            whitelist = get_whitelist(system, action_wp, trait2raw_goods)
+            task = f"survey {trait} {action_wp} {sell_wp} {whitelist}"
         else:
             raise ValueError
         if DEBUG:
@@ -327,3 +329,12 @@ def get_raw_and_product_goods(system):
         update_raw2product(good, good)
 
     return raw2products
+
+
+def get_whitelist(system, action_wp, trait2raw_goods):
+    """list of worthwhile goods at the waypoint"""
+    whitelist = set()
+    for t in set(system.waypoints[action_wp]["traits"]) & set(trait2raw_goods):
+        whitelist.update(trait2raw_goods[t])
+    whitelist = ",".join(sorted(whitelist))
+    return whitelist

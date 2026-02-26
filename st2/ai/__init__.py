@@ -16,6 +16,7 @@ from st2.ai.scout import ai_scout_waypoint
 from st2.ai.siphon import ai_siphon_start_system
 from st2.ai.start_system_controller import ai_start_system_controller
 from st2.ai.supply import ai_supply_system
+from st2.ai.survey import ai_survey_start_system
 from st2.ai.trade import ai_trade_system
 from st2.ai.trade_controller import ai_trade_controller
 from st2.logging import logger
@@ -323,7 +324,15 @@ class TaskMaster:
                 )
 
             case "survey":
-                coro = _test_coroutine(ship_symbol, 1e999)  # TODO
+                coro = ai_survey_start_system(
+                    ship_symbol=ship_symbol,
+                    trait=task[1],
+                    extract_wp=task[2],
+                    sell_wp=task[3],
+                    whitelist=task[4],
+                    qa_pairs=self.qa_pairs,
+                    verbose=True,  # TODO: remove
+                )
 
             case "test":
                 coro = _test_coroutine(*task[1:])

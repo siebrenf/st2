@@ -46,7 +46,7 @@ async def ai_survey_start_system(
     while True:
         await sleep(ship.cooldown_remaining())
 
-        surveys = ship.survey(verbose=False)
+        surveys = ship.survey(verbose=verbose)
         current_survey = get_waypoint_survey(extract_wp)
         if current_survey is None or current_survey["expiration"] > time.now():
             # no active survey: compare all surveys

@@ -160,7 +160,7 @@ def siphon(self, verbose=True):
             cur.execute(
                 """
                 INSERT INTO extraction
-                ("symbol", "units", "survey", "cargo_full", "mount", 
+                ("symbol", "units", "survey_signature", "cargo_full", "mount", 
                 "frame", "frame_condition", "frame_integrity", 
                 "reactor", "reactor_condition", "reactor_integrity", 
                 "engine", "engine_condition", "engine_integrity")
