@@ -132,7 +132,7 @@ class Ship(dict):
                 )
                 transaction["id"] = cur.fetchone()[0]
 
-            if "events" in data:
+            if len(data.get("events", [])) != 0:
                 # only way to get the updated conditions
                 self.refresh()
             for event in data.get("events", []):
