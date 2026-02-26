@@ -1,7 +1,5 @@
 from asyncio import sleep
 
-from psycopg import connect
-
 from st2.agent import get_agent, get_agent_public
 from st2.ai.utils import get_tasks, queue_task
 from st2.db.static import SUPPLY_CHAIN
@@ -167,7 +165,7 @@ async def ai_start_system_controller(
             available.append(task["symbol"])
     for ship_symbol in available:
         # ship = Ship(ship_symbol, request)
-        print(ship_symbol)  # TODO: re-assign probes
+        print(f"Drone {ship_symbol} must be reassigned")  # TODO: re-assign drones
     if DEBUG:
         logger.debug(f"Start System Controller {system_symbol}: drones_{remaining=}")
 

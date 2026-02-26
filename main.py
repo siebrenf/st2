@@ -89,7 +89,8 @@ if __name__ == "__main__":
             INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT ("symbol") DO UPDATE
-            SET "current" = EXCLUDED."current"
+            SET "current" = EXCLUDED."current",
+            "agentSymbol" = EXCLUDED."agentSymbol"
             """,
             (symbol, agent_symbol, symbol, None, False, "traders", None),
         )
@@ -109,7 +110,8 @@ if __name__ == "__main__":
             INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT ("symbol") DO UPDATE
-            SET "current" = EXCLUDED."current"
+            SET "current" = EXCLUDED."current",
+            "agentSymbol" = EXCLUDED."agentSymbol"
             """,
             (symbol, agent_symbol, symbol, None, False, "traders", None),
         )
@@ -140,7 +142,8 @@ if __name__ == "__main__":
             INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT ("symbol") DO UPDATE
-            SET "current" = EXCLUDED."current"
+            SET "current" = EXCLUDED."current",
+            "agentSymbol" = EXCLUDED."agentSymbol"
             """,
             (symbol, agent_symbol, symbol, None, False, "probes", None),
         )
@@ -150,7 +153,8 @@ if __name__ == "__main__":
             INSERT INTO tasks ("symbol", "agentSymbol", "current", "queued", "cancel", "pname", "pid")
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT ("symbol") DO UPDATE
-            SET "current" = EXCLUDED."current"
+            SET "current" = EXCLUDED."current",
+            "agentSymbol" = EXCLUDED."agentSymbol"
             """,
             (symbol, agent_symbol, symbol, None, False, "drones", None),
         )

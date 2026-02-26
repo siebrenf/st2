@@ -44,27 +44,33 @@ async def ai_probe_controller(
 
     # load probes from the database
     shipyards_selling_probes2probes = dict()
-    for task in get_tasks(pname="probes"):
+    for task in get_tasks(system_symbol=system_symbol, pname="probes"):
         # check assumptions
-        if task["current"] is not None:
-            pass
+        if task["current"] is not None and task["queued"] is None:
+            key = "current"
+        elif task["current"] is None and task["queued"] is not None:
+            key = "queued"
         elif task["current"] is None and task["queued"] is None:
             raise NotImplementedError("Probes should be assigned already")
-        elif task["queued"] is not None and task["current"] is not None:
-            raise NotImplementedError("Probes should not have queued tasks")
+        elif task["current"] is not None and task["queued"] is not None:
+            if task["cancel"] is False:
+                raise NotImplementedError("Probes should not have queued tasks")
+            key = "queued"
+        else:
+            raise AssertionError("Unreachable code reached")
+        assert task[key].startswith("probe "), f"Unexpected value for {key=} in {task=}"
         # update unprobed waypoints
-        if task["current"].startswith("probe "):
-            wp_type, waypoint_symbol = task["current"].split(" ")[1:]
-            if wp_type == "shipyard":
-                if task["agentSymbol"] != agent_symbol:
-                    continue  # embed agent probes in all shipyards
-                if waypoint_symbol in shipyards_selling_probes:
-                    shipyards_selling_probes2probes[waypoint_symbol] = task["symbol"]
-                    unprobed_shipyards_selling_probes.discard(waypoint_symbol)
-                else:
-                    unprobed_shipyards.discard(waypoint_symbol)
+        wp_type, waypoint_symbol = task[key].split(" ")[1:]
+        if wp_type == "shipyard":
+            if task["agentSymbol"] != agent_symbol:
+                continue  # embed agent probes in all shipyards
+            if waypoint_symbol in shipyards_selling_probes:
+                shipyards_selling_probes2probes[waypoint_symbol] = task["symbol"]
+                unprobed_shipyards_selling_probes.discard(waypoint_symbol)
             else:
-                unprobed_markets.discard(waypoint_symbol)
+                unprobed_shipyards.discard(waypoint_symbol)
+        else:
+            unprobed_markets.discard(waypoint_symbol)
 
     probe_purchases_remaining = (
         len(unprobed_shipyards)

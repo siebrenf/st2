@@ -26,6 +26,8 @@ def ai_reset_controller():
             pid,
         ) in cur.execute("""SELECT * FROM tasks""").fetchall():
             if agent_symbol not in active_agents:
+                if pname == "probes" and not ship_symbol.startswith("probe_controller"):
+                    continue  # probes may continue
                 # destroy controller tasks, terminate ship tasks
                 if "_controller" in ship_symbol:
                     cur.execute(
