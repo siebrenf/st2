@@ -2,6 +2,7 @@ from psycopg import connect
 from psycopg.types.json import Jsonb
 
 from st2 import time
+from st2.exceptions import GameError
 from st2.logging import logger
 
 
@@ -69,16 +70,21 @@ def extract(self, survey=None, verbose=True):
     if survey:
         if not isinstance(survey["expiration"], str):
             survey["expiration"] = time.write(survey["expiration"])
-        ret = self.request.post(
-            f'my/ships/{self["symbol"]}/extract/survey', data=survey
-        )
-        if "data" not in ret:
-            # survey expired/exhausted
-            if verbose:
-                ex = "expired" if survey["expiration"] < time.write() else "exhausted"
-                logger.info(f'Survey {survey["signature"]} has {ex}')
-            return None
-        data = ret["data"]
+        try:
+            logger.warning(self["symbol"], self["nav"]["waypointSymbol"])
+            logger.warning(survey)
+            data = self.request.post(
+                f'my/ships/{self["symbol"]}/extract/survey', data=survey
+            )["data"]
+        except GameError as e:
+            error_code = e.args[0].get("error", {}).get("code", 0)
+            if error_code in [4221, 4224]:
+                if verbose:
+                    ex = "expired" if error_code == 4221 else "exhausted"
+                    logger.info(f'Survey {survey["signature"]} has {ex}')
+                return None
+            else:
+                raise e
     else:
         data = self.request.post(f'my/ships/{self["symbol"]}/extract')["data"]
     self._update(data)

@@ -934,7 +934,7 @@ def get_table(table, n=None, ascending=True, header=True, as_dict=True):
 
         # get a table's rows
         query = f"SELECT * FROM {table}"
-        for col in ["timestamp", "deadlineToAccept", "symbol", "type"]:
+        for col in ["timestamp", "deadlineToAccept", "expiration", "symbol", "type"]:
             if col in columns:
                 query = f'SELECT * FROM "{table}" ORDER BY "{col}"'
                 if not ascending:
