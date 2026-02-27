@@ -71,8 +71,6 @@ def extract(self, survey=None, verbose=True):
         if not isinstance(survey["expiration"], str):
             survey["expiration"] = time.write(survey["expiration"])
         try:
-            logger.warning(self["symbol"], self["nav"]["waypointSymbol"])
-            logger.warning(survey)
             data = self.request.post(
                 f'my/ships/{self["symbol"]}/extract/survey', data=survey
             )["data"]

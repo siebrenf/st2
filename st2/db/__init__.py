@@ -141,6 +141,14 @@ def db_tables_init(status=None):
                 (version, session),
             )
 
+            # set the timestamptz output to UTC
+            cur.execute(
+                """
+                ALTER DATABASE st2 
+                SET timezone TO 'UTC';
+                """
+            )
+
         # Create missing tables
         if "agents" not in tables:
             cur.execute(

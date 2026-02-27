@@ -1,4 +1,3 @@
-from json import dumps
 from time import sleep
 from uuid import uuid1
 
@@ -72,7 +71,6 @@ class Request:
             "Accept": "application/json",
         }
         if data:
-            data = dumps(data)
             headers["Content-Type"] = "application/json"
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -103,7 +101,7 @@ class Request:
         """Make the request until a response is given"""
         while True:
             try:
-                response = method(url, headers=headers, data=data, params=params)
+                response = method(url, headers=headers, json=data, params=params)
             except ConnectionError:
                 # Server is still processing the request. Patience...
                 sleep(0.1)
