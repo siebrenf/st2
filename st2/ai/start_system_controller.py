@@ -163,9 +163,35 @@ async def ai_start_system_controller(
                 break
         else:
             available.append(task["symbol"])
+    # assign available drones (can happen after an error)
     for ship_symbol in available:
-        # ship = Ship(ship_symbol, request)
-        print(f"Drone {ship_symbol} must be reassigned")  # TODO: re-assign drones
+        ship = Ship(ship_symbol, request)
+        ship_wp = ship["nav"]["waypointSymbol"]
+        if ship["mounts"][0]["symbol"].startswith("MOUNT_GAS_SIPHON_I"):
+            # drone is a siphoner
+            action_wp, sell_wp, trait = assign_drone(
+                ship_wp, remaining, "siphon", trait2waypoints, system
+            )
+            task = f"siphon GAS_GIANT {action_wp} {sell_wp}"
+            queue_task(ship["symbol"], task, pname="drones")
+        elif ship["mounts"][0]["symbol"].startswith("MOUNT_MINING_LASER_I"):
+            # drone is an extractor
+            action_wp, sell_wp, trait = assign_drone(
+                ship_wp, remaining, "extract", trait2waypoints, system
+            )
+            whitelist = get_whitelist(system, action_wp, trait2raw_goods)
+            task = f"extract {trait} {action_wp} {sell_wp} {whitelist}"
+            queue_task(ship["symbol"], task, pname="drones")
+        elif ship["mounts"][0]["symbol"].startswith("MOUNT_SURVEYOR_I"):
+            # drone is a surveyor
+            action_wp, sell_wp, trait = assign_drone(
+                ship_wp, remaining, "survey", trait2waypoints, system
+            )
+            whitelist = get_whitelist(system, action_wp, trait2raw_goods)
+            task = f"survey {trait} {action_wp} {sell_wp} {whitelist}"
+            queue_task(ship["symbol"], task, pname="drones")
+        else:
+            raise AssertionError
     if DEBUG:
         logger.debug(f"Start System Controller {system_symbol}: drones_{remaining=}")
 
@@ -327,6 +353,25 @@ def get_raw_and_product_goods(system):
         update_raw2product(good, good)
 
     return raw2products
+
+
+def assign_drone(ship_wp, remaining, key, trait2waypoints, system):
+    best = None, None, None, float("inf")
+    for trait, n in remaining[key].items():
+        action_wp, sell_wp = trait2waypoints[trait]
+        dist = 0
+        if ship_wp != action_wp:
+            dist = round(system.graph[ship_wp][action_wp]["distance"])
+        # tiebreaker: number of required drones
+        dist -= n / 100
+        # assign extra drones only if not needed elsewhere
+        if n == 0:
+            dist += 1_000_000
+        if dist < best[3]:
+            best = action_wp, sell_wp, trait, dist
+    action_wp, sell_wp, trait, dist = best
+    remaining[key][trait] -= 1
+    return action_wp, sell_wp, trait
 
 
 def get_whitelist(system, action_wp, trait2raw_goods):
