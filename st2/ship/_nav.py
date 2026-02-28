@@ -15,11 +15,9 @@ def navigate(self, waypoint, verbose=True):
             f'my/ships/{self["symbol"]}/navigate', data={"waypointSymbol": waypoint}
         )["data"]
     except GameError as e:
-        # TODO: raises error code 42.. with an incorrect DB
+        # raises error code 42** with DB mismatches
         error_code = e.args[0].get("error", {}).get("code", 0)
-        if error_code == 4200:
-            raise e  # TODO: navigateInTransitError
-        elif error_code == 4204:
+        if error_code == 4204:
             logger.warning(
                 f"Caught error: Ship {self['symbol']} "
                 f"is currently located at the destination"

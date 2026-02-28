@@ -191,7 +191,7 @@ async def ai_start_system_controller(
             task = f"survey {trait} {action_wp} {sell_wp} {whitelist}"
             queue_task(ship["symbol"], task, pname="drones")
         else:
-            raise AssertionError
+            raise AssertionError("Unreachable code reached")
     if DEBUG:
         logger.debug(f"Start System Controller {system_symbol}: drones_{remaining=}")
 

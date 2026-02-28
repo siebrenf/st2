@@ -85,15 +85,22 @@ class Request:
             method, url, headers, data, params
         )
         if status_code in [200, 201]:
-            return resp_json
-
-        # check for errors
-        if status_code == 204:  # no-content
-            logger.debug(f"Endpoint '{endpoint}' returned no content (204)")
+            pass
+        elif status_code == 204:  # no-content
+            logger.debug(
+                f"204 no content. {status_code=} "
+                f"{endpoint=} {data=} {params=} {resp_json=}"
+            )
+        elif status_code == 400:  # "error" in resp_json
+            resp_json["request"] = url[8:]
+            if data:
+                resp_json["data"] = data
+            resp_json["status_code"] = status_code
+            raise GameError(resp_json)
         else:
             raise NotImplementedError(
-                f"Unknown situation. Status code: {status_code}. "
-                f"Endpoint: {endpoint} Data: {data} Params: {params}"
+                f"Unknown situation. {status_code=} "
+                f"{endpoint=} {data=} {params=} {resp_json=}"
             )
         return resp_json
 
@@ -111,13 +118,6 @@ class Request:
             except JSONDecodeError:
                 resp_json = {}
             status_code = response.status_code
-            if "error" in resp_json:
-                # malformed response suggests a server error
-                resp_json["request"] = url[8:]
-                if data:
-                    resp_json["data"] = data
-                resp_json["status_code"] = status_code
-                raise GameError(resp_json)
             if status_code in self.rate_limit_codes:
                 logger.debug(resp_json.get("error", {}).get("message", resp_json))
                 sleep(resp_json.get("error", {}).get("data", {}).get("retryAfter", 1))
@@ -130,6 +130,33 @@ class Request:
                     f"Retrying in {self.server_down_sleep} sec"
                 )
                 sleep(self.server_down_sleep)
+            elif status_code // 100 == 4 and resp_json["error"]["code"] in [
+                4000,
+                4200,
+                4214,
+            ]:
+                # catch and wait out time desync errors
+                if DEBUG:
+                    resp_json["request"] = url[8:]
+                    if data:
+                        resp_json["data"] = data
+                    resp_json["status_code"] = status_code
+                    logger.debug(resp_json)
+                error_code = resp_json["error"]["code"]
+                if error_code == 4000:
+                    # cooldownConflictError: Ship action is still on cooldown
+                    t = resp_json["error"]["data"]["cooldown"]["remainingSeconds"]
+                elif error_code == 4200:
+                    # navigateInTransitError
+                    raise NotImplementedError(
+                        "TODO: extract the time to arrival from resp_json:", resp_json
+                    )
+                elif error_code == 4214:
+                    # shipInTransitError
+                    t = resp_json["error"]["data"]["secondsToArrival"]
+                else:
+                    raise AssertionError("Unreachable code reached")
+                sleep(t)
             else:
                 return status_code, resp_json
 

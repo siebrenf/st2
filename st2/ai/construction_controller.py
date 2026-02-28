@@ -127,6 +127,5 @@ async def ai_construction_controller(
         await sleep(interval)
         construction = system.get_construction(gate_symbol)
 
-    if DEBUG:
-        logger.debug(f"Construction Controller {system_symbol}: task completed")
+    logger.critical(f"Construction Controller {system_symbol}: task completed")
     return "self destruct"
