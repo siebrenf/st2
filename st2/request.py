@@ -136,12 +136,11 @@ class Request:
                 4214,
             ]:
                 # catch and wait out time desync errors
-                if DEBUG:
-                    resp_json["request"] = url[8:]
-                    if data:
-                        resp_json["data"] = data
-                    resp_json["status_code"] = status_code
-                    logger.debug(resp_json)
+                resp_json["request"] = url[8:]
+                if data:
+                    resp_json["data"] = data
+                resp_json["status_code"] = status_code
+                logger.warning(resp_json)
                 error_code = resp_json["error"]["code"]
                 if error_code == 4000:
                     # cooldownConflictError: Ship action is still on cooldown

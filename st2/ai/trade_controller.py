@@ -85,19 +85,24 @@ async def ai_trade_controller(
         #         )
         cargo_capacity_max = max([v["cargo"] for v in ships.values()])
         for good, (_, seller, buyer) in trades.items():
+            # TODO: take into account
+            #   - current trader locations
+            #   - trader cargo capacity (no estimations)
+            #   - accept high-profit trades for consumer goods
+            #   - accept low-profit trades for the supply chain
             max_units, purchase_price, sell_price = _get_trade_units(
                 seller, buyer, agent_symbol, cargo_capacity_max
             )
             # if sell_price - purchase_price < 1000:
             #     break  # no worthwhile trades left
 
-            # beeline distance * 3 to account for
+            # beeline distance * 2 to account for
             #  - trader traveling to the seller first
             #  - detours due to fuel limitations
             seller_wp = seller["waypointSymbol"]
             buyer_wp = buyer["waypointSymbol"]
-            distance = system.graph[seller_wp][buyer_wp]["distance"] * 3  # noqa
-            estimated_time_cost = nav_time(distance) * TIME_WEIGHT
+            distance = system.graph[seller_wp][buyer_wp]["distance"] * 2  # noqa
+            # estimated_time_cost = nav_time(distance) * TIME_WEIGHT
             estimated_fuel_cost = nav_fuel(distance) * FUEL_WEIGHT
             # estimated_max_profit = (
             #     sell_price - purchase_price - estimated_fuel_cost - estimated_time_cost
@@ -105,8 +110,8 @@ async def ai_trade_controller(
             # if estimated_max_profit < 1000:
             #     continue  # unworthwhile trade
             estimated_return_on_investment = (
-                sell_price - purchase_price - estimated_fuel_cost - estimated_time_cost
-            ) / (purchase_price + estimated_fuel_cost + estimated_time_cost)
+                sell_price - purchase_price - estimated_fuel_cost  #- estimated_time_cost
+            ) / (purchase_price + estimated_fuel_cost)  # + estimated_time_cost)
             if estimated_return_on_investment < 0.05:
                 continue  # unsafe trade
 
