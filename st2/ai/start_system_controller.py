@@ -292,7 +292,7 @@ async def ai_start_system_controller(
 
 def get_raw_and_product_goods(system):
     """
-    Identify why tradeGoods are desired and can be produced in-system.
+    Identify which tradeGoods are desired and can be produced in-system.
     Returns a dict of raw goods and their final products
     """
     # categorize each tradeGood
