@@ -4,56 +4,12 @@ from st2.agent import get_agent, get_agent_public
 from st2.ai.utils import get_tasks, queue_task
 from st2.db.static import SUPPLY_CHAIN
 from st2.logging import logger
+from st2.mining import TRAIT2EXTRACT
 from st2.request import RequestMp
 from st2.ship import Ship, buy_ship
 from st2.system import System
 
 DEBUG = True
-TRAIT2EXTRACT = {
-    "COMMON_METAL_DEPOSITS": [
-        "ALUMINUM_ORE",
-        "COPPER_ORE",
-        "ICE_WATER",
-        "IRON_ORE",
-        "QUARTZ_SAND",
-        "SILICON_CRYSTALS",
-    ],
-    "MINERAL_DEPOSITS": [
-        "AMMONIA_ICE",
-        "DIAMONDS",
-        "ICE_WATER",
-        "IRON_ORE",
-        "PRECIOUS_STONES",
-        "QUARTZ_SAND",
-        "SILICON_CRYSTALS",
-    ],
-    "PRECIOUS_METAL_DEPOSITS": [
-        "ALUMINUM_ORE",
-        "COPPER_ORE",
-        "GOLD_ORE",
-        "ICE_WATER",
-        "PLATINUM_ORE",
-        "QUARTZ_SAND",
-        "SILICON_CRYSTALS",
-        "SILVER_ORE",
-    ],
-    "RARE_METAL_DEPOSITS": [
-        "ALUMINUM_ORE",
-        "COPPER_ORE",
-        "GOLD_ORE",
-        "ICE_WATER",
-        "MERITIUM_ORE",
-        "PLATINUM_ORE",
-        "QUARTZ_SAND",
-        "SILICON_CRYSTALS",
-        "URANITE_ORE",
-    ],
-}
-EXTRACT2TRAIT = {}
-for tr, es in TRAIT2EXTRACT.items():
-    for e in es:
-        EXTRACT2TRAIT.setdefault(e, []).append(tr)
-del tr, es, e
 
 
 @logger.catch  # catch errors in a separate thread

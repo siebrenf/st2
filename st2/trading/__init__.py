@@ -1,9 +1,9 @@
 from psycopg import connect
 
 from st2.db.static import GOODS, SHIPS
-from st2.trade.base_prices import BASE_PRICES
-from st2.trade.functions import A_VALUES, a_prior, x2y, y2x
-from st2.trade.price_ranges import PRICE_RANGES
+from st2.trading.base_prices import BASE_PRICES
+from st2.trading.functions import A_VALUES, a_prior, x2y, y2x
+from st2.trading.price_ranges import PRICE_RANGES
 
 
 def price_estimate(trade_good, units, action):

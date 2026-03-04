@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from st2.ship._cargo import a_posterior
-from st2.trade import get_base_price
-from st2.trade.functions import A_VALUES, x2supply, x2y, y2x
+from st2.trading import get_base_price
+from st2.trading.functions import A_VALUES, x2supply, x2y, y2x
 
 SUPPLY2COLOR = {
     "SCARCE": "red",

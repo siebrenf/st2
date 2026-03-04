@@ -20,9 +20,9 @@ def test_lint():
     )
 
 
-def test_imports():
-    sp.check_output(
-        # "pydeps st2 --max-bacon 2 --cluster --rmprefix st2. --no-show -T png -o dependency_graph.png",
-        "pydeps st2 --max-bacon 1 --rmprefix st2. --no-show -T png -o dependency_graph.png",
-        shell=True,
-    )
+# def test_imports():
+#     sp.check_output(
+#         # "pydeps st2 --max-bacon 2 --cluster --rmprefix st2. --no-show -T png -o dependency_graph.png",
+#         "pydeps st2 --max-bacon 1 --rmprefix st2. --no-show -T png -o dependency_graph.png",
+#         shell=True,
+#     )

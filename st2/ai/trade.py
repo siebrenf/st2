@@ -6,8 +6,8 @@ from st2 import time
 from st2.logging import logger
 from st2.pathing.travel import travel
 from st2.ship import Ship
-from st2.trade import get_a, get_base_price
-from st2.trade.functions import x2supply, x2y, y2x
+from st2.trading import get_a, get_base_price
+from st2.trading.functions import x2supply, x2y, y2x
 
 
 @logger.catch  # catch errors in a separate thread

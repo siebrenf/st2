@@ -10,6 +10,12 @@ from st2.logging import logger
 from st2.request import Request, messenger
 
 
+def reset_windows():
+    """returns all previous reset_windows with data on this device"""
+    data_dir = os.path.join(XDG_DATA_HOME, "st2")
+    return sorted(os.listdir(data_dir), reverse=True)
+
+
 def game_server():
     # load environmental variables from st2/.env
     load_dotenv()

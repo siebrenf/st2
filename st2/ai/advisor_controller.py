@@ -9,13 +9,11 @@ async def ai_advisor_controller(qa_pairs, priority=3, interval=3600, verbose=Fal
     """Perform all low-priority background tasks"""
     request = RequestMp(qa_pairs, priority)
 
-    merchant(request, priority)
-    ambassador(request, priority)
+    merchant(request, priority)  # TODO: run only once
+    ambassador(request, priority)  # TODO: run only once
     await astronomer(request, priority, verbose)
     await cartographer(request, priority, "start systems", verbose)
     await cartographer(request, priority, "gate systems", verbose)
-    # too many API requests!
-    # await spymaster(request, priority, verbose)
 
     # TODO: also set a timer for private_eye
     # number of intervals since the last detective run

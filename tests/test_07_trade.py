@@ -1,4 +1,4 @@
-from st2.trade.functions import *
+from st2.trading.functions import *
 
 
 def test_export():

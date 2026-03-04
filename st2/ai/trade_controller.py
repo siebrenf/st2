@@ -13,10 +13,10 @@ from st2.ai.utils import (
     scout_system_marketplaces,
 )
 from st2.logging import logger
-from st2.pathing.utils import FUEL_WEIGHT, TIME_WEIGHT, nav_fuel, nav_time
+from st2.pathing.utils import FUEL_WEIGHT, nav_fuel
 from st2.request import RequestMp
 from st2.system import System
-from st2.trade import price_estimate
+from st2.trading import price_estimate
 
 DEBUG = True
 
@@ -110,8 +110,12 @@ async def ai_trade_controller(
             # if estimated_max_profit < 1000:
             #     continue  # unworthwhile trade
             estimated_return_on_investment = (
-                sell_price - purchase_price - estimated_fuel_cost  #- estimated_time_cost
-            ) / (purchase_price + estimated_fuel_cost)  # + estimated_time_cost)
+                sell_price
+                - purchase_price
+                - estimated_fuel_cost  # - estimated_time_cost
+            ) / (
+                purchase_price + estimated_fuel_cost
+            )  # + estimated_time_cost)
             if estimated_return_on_investment < 0.05:
                 continue  # unsafe trade
 

@@ -5,8 +5,8 @@ from psycopg.types.json import Jsonb
 from st2 import time
 from st2.exceptions import ShipInTransitError
 from st2.logging import logger
-from st2.trade import get_a, get_base_price, set_a
-from st2.trade.functions import a_posterior2 as a_posterior
+from st2.trading import get_a, get_base_price, set_a
+from st2.trading.functions import a_posterior2 as a_posterior
 
 DEBUG = True
 

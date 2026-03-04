@@ -339,7 +339,7 @@ baseprices = {
     "FOOD": 1794,
     "FIREARMS": 3200,
 }
-# from st2.trade.base_prices import BASE_PRICES as baseprices
+# from st2.trading.base_prices import BASE_PRICES as baseprices
 s2c = {
     "SCARCE": "red",
     "LIMITED": "orange",
