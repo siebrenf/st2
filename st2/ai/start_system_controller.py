@@ -51,7 +51,7 @@ async def ai_start_system_controller(
         # minimize the number of traits needed
         if goods - seen:
             if deposit in ["PRECIOUS_METAL_DEPOSITS", "RARE_METAL_DEPOSITS"]:
-                goods -= seen & {"QUARTZ_SAND", "SILICON_CRYSTALS"}
+                goods -= (seen | {"QUARTZ_SAND", "SILICON_CRYSTALS"})
             trait2raw_goods[deposit] = goods
             seen.update(goods)
     if DEBUG:
