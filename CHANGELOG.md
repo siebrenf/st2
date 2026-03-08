@@ -15,6 +15,44 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 
+## [0.3]
+
+Implemented trade, contract, survey, mine & probe AI.
+Added controller tasks that oversee their respective sub-tasks:
+- the `trade_controller` assigns trade tasks to trading ships
+- the `contract_controller` assigns deliver tasks to trading ships
+- etc.
+
+This version can exploit the start system, and complete the JUMP_GATE eventually.
+
+
+### Added
+- `contracts` module
+- `investigators` module:
+  - `detective` goes over all agents, and logs the active agents
+  - `private_eye` goes over all active agents and logs them
+- `mining` module:
+  - copied over from ST1
+- `trading` module:
+  - trade price estimations (improved since ST1!)
+- `scripts` library for assorted scripts
+- `ui` module:
+  - `agents`: credit over time plot
+  - `bulk_transactions`: plot inferred and observed trades
+  - `contracts`: visualizes contract variables vs profit
+  - `supply chain`-related: WIP plots to understand the start system
+
+### Changed
+- `request` module:
+  - retry time-based exception
+  - returns better exceptions
+
+### Removed
+- `spymaster`: caused issues with the game server.
+
+### Fixed
+
+
 ## [0.2] - e98b03c
 
 The aim for this stage was to collect data from MARKETPLACEs and SHIPYARDs in start systems.
