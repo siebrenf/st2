@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 
-## [0.3]
+## [0.3] - 496af34
 
 Implemented trade, contract, survey, mine & probe AI.
 Added controller tasks that oversee their respective sub-tasks:
